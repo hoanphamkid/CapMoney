@@ -11,6 +11,8 @@ import { sendMail } from '../services/mailService.js';
 
 const registerSchema = z.object({ name: z.string().trim().min(2, 'Họ tên cần ít nhất 2 ký tự').max(80), email: z.string().trim().email('Email không hợp lệ'), password: z.string().min(8, 'Mật khẩu cần ít nhất 8 ký tự').max(128), phone: z.string().trim().max(24).optional().or(z.literal('')) });
 const loginSchema = z.object({ email: z.string().trim().email('Email không hợp lệ'), password: z.string().min(1, 'Vui lòng nhập mật khẩu'), remember: z.boolean().default(true) });
+const profileSchema = z.object({ name: z.string().trim().min(2).max(80), phone: z.string().trim().max(24).optional().or(z.literal('')), locale: z.string().trim().max(16).default('vi-VN'), currency: z.string().trim().length(3).default('VND'), timezone: z.string().trim().max(64).default('Asia/Ho_Chi_Minh') });
+const passwordSchema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8).max(128) });
 
 const ACCESS_COOKIE = 'capmoney_access';
 const REFRESH_COOKIE = 'capmoney_refresh';
@@ -76,6 +78,10 @@ export const me: RequestHandler = async (request, response) => {
   const profile = await ProfileModel.findOne({ userId: user._id }).lean();
   response.json({ user: publicUser(user), profile });
 };
+
+export const updateMe: RequestHandler = async (request, response) => { const input = profileSchema.parse(request.body); const user = await UserModel.findByIdAndUpdate(request.user!.id, { $set: { name: input.name, phone: input.phone || undefined } }, { new: true, runValidators: true }); if (!user) throw new AppError(404, 'Không tìm thấy tài khoản', 'USER_NOT_FOUND'); const profile = await ProfileModel.findOneAndUpdate({ userId: user._id }, { $set: { locale: input.locale, currency: input.currency.toUpperCase(), timezone: input.timezone } }, { new: true, upsert: true, runValidators: true }).lean(); response.json({ user: publicUser(user), profile }); };
+
+export const changePassword: RequestHandler = async (request, response) => { const input = passwordSchema.parse(request.body); const user = await UserModel.findById(request.user!.id).select('+passwordHash'); if (!user || !(await verifyPassword(input.currentPassword, user.passwordHash))) throw new AppError(400, 'Mật khẩu hiện tại không đúng', 'PASSWORD_INVALID'); user.passwordHash = await hashPassword(input.newPassword); await user.save(); response.status(204).send(); };
 
 export const sessions: RequestHandler = async (request, response) => {
   const rows = await SessionModel.find({ userId: request.user!.id }).sort({ lastActiveAt: -1 }).select('-tokenHash').lean();
