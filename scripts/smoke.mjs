@@ -24,5 +24,8 @@ await page.locator('textarea[placeholder="Hôm nay bạn đã mua gì?"]').fill(
 await page.getByRole('button', { name: /Lưu giao dịch/ }).click();
 await page.getByText('Đã lưu giao dịch. Lịch và số dư ví đã được cập nhật.').waitFor({ timeout: 10000 });
 await page.screenshot({ path: '.local/calendar-saved.png', fullPage: true });
+await page.locator('.gallery-tile').first().click();
+await page.locator('.expense-detail').waitFor({ timeout: 10000 });
+await page.getByRole('button', { name: 'Đóng' }).click();
 console.log('smoke ok', page.url());
 await browser.close();
