@@ -1,0 +1,28 @@
+import { chromium } from 'playwright';
+
+const browser = await chromium.launch({ headless: true, executablePath: 'C:/Users/Acer/AppData/Local/ms-playwright/chromium-1248/chrome-win64/chrome.exe' });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, permissions: [] });
+await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle' });
+await page.screenshot({ path: '.local/login.png', fullPage: true });
+await page.getByRole('link', { name: 'Tạo tài khoản' }).first().click();
+await page.getByPlaceholder('Nguyễn Minh Anh').fill('Người dùng Calendar');
+await page.getByPlaceholder('ban@email.com').fill(`calendar-${Date.now()}@example.test`);
+await page.locator('input[autocomplete="new-password"]').first().fill('CapMoney-test-123');
+await page.locator('input[autocomplete="new-password"]').nth(1).fill('CapMoney-test-123');
+await page.getByRole('button', { name: 'Tạo tài khoản' }).click();
+await page.waitForURL('**/app', { timeout: 15000 });
+await page.goto('http://127.0.0.1:5173/app/calendar', { waitUntil: 'networkidle' });
+await page.screenshot({ path: '.local/calendar.png', fullPage: true });
+await page.getByRole('button', { name: 'Ghi chi tiêu' }).first().click();
+await page.locator('input[type="file"]').setInputFiles('.local/login.png');
+await page.screenshot({ path: '.local/expense-form.png', fullPage: true });
+console.log('wallet button state', await page.locator('.create-wallet-link').isDisabled());
+console.log('wallets response', await page.evaluate(async () => { const response = await fetch('/api/wallets', { credentials: 'include' }); return { status: response.status, body: await response.text() }; }));
+await page.locator('.create-wallet-link').click();
+await page.locator('input[placeholder="0"]').fill('45000');
+await page.locator('textarea[placeholder="Hôm nay bạn đã mua gì?"]').fill('Bữa trưa bằng ảnh');
+await page.getByRole('button', { name: /Lưu giao dịch/ }).click();
+await page.getByText('Đã lưu giao dịch. Lịch và số dư ví đã được cập nhật.').waitFor({ timeout: 10000 });
+await page.screenshot({ path: '.local/calendar-saved.png', fullPage: true });
+console.log('smoke ok', page.url());
+await browser.close();

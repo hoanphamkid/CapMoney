@@ -1,0 +1,25 @@
+{
+  "name": "capmoney-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["frontend", "backend"],
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "node scripts/dev.mjs",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "db": "node scripts/database.mjs",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspace backend",
+    "test:e2e": "playwright test",
+    "start": "npm run start --workspace backend"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "dotenv": "^17.2.3",
+    "mongodb-memory-server": "^10.3.0"
+  }
+}
