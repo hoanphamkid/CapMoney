@@ -1,4 +1,5 @@
 import type { MeResponse, User } from '../types/auth';
+export type { MeResponse } from '../types/auth';
 
 const API_ROOT = '/api';
 
@@ -30,11 +31,17 @@ export const api = {
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
   sessions: () => request<{ sessions: Array<{ id: string; deviceName: string; lastActiveAt: string; current: boolean }> }>('/auth/sessions'),
   logoutOthers: () => request<void>('/auth/sessions/others', { method: 'DELETE' }),
-  wallets: () => request<{ wallets: Array<{ id: string; name: string; balance: number; currency: string; color: string }> }>('/wallets'),
-  createWallet: (input: { name: string; type: string; openingBalance: number; color: string }) => request<{ wallet: { id: string; name: string; balance: number } }>('/wallets', { method: 'POST', body: JSON.stringify(input) }),
-  createTransaction: (input: { type: string; amount: number; note: string; categoryId: string; walletId: string; transactionDate: string; image?: File | null; idempotencyKey?: string }) => { const form = new FormData(); form.set('type', input.type); form.set('amount', String(input.amount)); form.set('note', input.note); form.set('categoryId', input.categoryId); form.set('walletId', input.walletId); form.set('transactionDate', input.transactionDate); form.set('idempotencyKey', input.idempotencyKey ?? crypto.randomUUID()); if (input.image) form.set('image', input.image); return upload<{ transaction: { id: string; dateKey: string; imageUrl: string | null } }>('/transactions', form); },
+  wallets: () => request<{ wallets: Wallet[] }>('/wallets'),
+  createWallet: (input: { name: string; type: string; openingBalance: number; color: string }) => request<{ wallet: Wallet }>('/wallets', { method: 'POST', body: JSON.stringify(input) }),
+  updateWallet: (id: string, input: { name?: string; type?: string; color?: string }) => request<{ wallet: Wallet }>('/wallets/' + id, { method: 'PATCH', body: JSON.stringify(input) }),
+  archiveWallet: (id: string) => request<void>('/wallets/' + id + '/archive', { method: 'PATCH' }),
+  deleteWallet: (id: string) => request<void>('/wallets/' + id, { method: 'DELETE' }),
+  createTransaction: (input: { type: string; amount: number; note: string; categoryId: string; walletId: string; toWalletId?: string; transactionDate: string; image?: File | null; idempotencyKey?: string }) => { const form = new FormData(); form.set('type', input.type); form.set('amount', String(input.amount)); form.set('note', input.note); form.set('categoryId', input.categoryId); form.set('walletId', input.walletId); if (input.toWalletId) form.set('toWalletId', input.toWalletId); form.set('transactionDate', input.transactionDate); form.set('idempotencyKey', input.idempotencyKey ?? crypto.randomUUID()); if (input.image) form.set('image', input.image); return upload<{ transaction: { id: string; dateKey: string; imageUrl: string | null } }>('/transactions', form); },
   updateTransaction: (id: string, input: { type: string; amount: number; note: string; categoryId: string; walletId: string; transactionDate: string; image?: File | null }) => { const form = new FormData(); form.set('type', input.type); form.set('amount', String(input.amount)); form.set('note', input.note); form.set('categoryId', input.categoryId); form.set('walletId', input.walletId); form.set('transactionDate', input.transactionDate); if (input.image) form.set('image', input.image); return upload<{ transaction: { id: string; dateKey: string; imageUrl: string | null } }>(`/transactions/${id}`, form, 'PUT'); },
   deleteTransaction: (id: string) => request<void>(`/transactions/${id}`, { method: 'DELETE' }),
+  transactions: (params: { from?: string; to?: string; walletId?: string } = {}) => { const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value) as Array<[string, string]>); return request<{ transactions: Transaction[] }>('/transactions' + (query.size ? `?${query}` : '')); },
+  updateMe: (input: { name: string; phone: string; locale: string; currency: string; timezone: string }) => request<MeResponse>('/auth/me', { method: 'PATCH', body: JSON.stringify(input) }),
+  changePassword: (input: { currentPassword: string; newPassword: string }) => request<void>('/auth/password', { method: 'POST', body: JSON.stringify(input) }),
   calendarEvents: (from: string, to: string, selectedFilters: string[]) => request<{ events: CalendarEvent[]; byDay: Record<string, CalendarEvent[]>; summary: CalendarSummary }>(`/calendar/events?from=${from}&to=${to}${selectedFilters.length ? `&filters=${selectedFilters.join(',')}` : ''}`),
   calendarDay: (dateKey: string) => request<{ dateKey: string; summary: { income: number; expense: number; net: number; transactionCount: number }; transactions: CalendarEvent[]; reminders: CalendarEvent[] }>(`/calendar/day/${dateKey}`),
   createReminder: (input: { title: string; note: string; dateKey: string; time: string; kind: string; repeat: string; channels: string[] }) => request<{ reminder: CalendarEvent }>('/calendar/reminders', { method: 'POST', body: JSON.stringify(input) }),
@@ -44,3 +51,5 @@ export const api = {
 
 export type CalendarEvent = { id: string; kind: string; type: string; title: string; amount?: number; amountMinor?: number; dateKey: string; note?: string; categoryId?: string; walletId?: string; imageUrl?: string | null; status: string; source: 'transaction' | 'reminder'; time?: string; repeat?: string; channels?: string[] };
 export type CalendarSummary = { income: number; expense: number; transfers: number; transactionCount: number; busiestExpenseDay: string | null; highestIncomeDay: string | null };
+export type Wallet = { id: string; name: string; type: string; balance: number; balanceMinor: number; currency: string; color: string };
+export type Transaction = { id: string; type: 'income' | 'expense' | 'transfer'; amount: number; amountMinor: number; note: string; categoryId: string; walletId: string; toWalletId?: string; dateKey: string; status: string; imageUrl: string | null; createdAt?: string };
