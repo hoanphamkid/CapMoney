@@ -52,7 +52,21 @@ function saveDb(db: LocalDb) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
   } catch {
-    // Ignore storage quota errors
+    // If mobile localStorage hits the 5MB quota, strip/shrink oldest transaction images so new bills always save
+    try {
+      const txsWithImages = [...db.transactions].reverse().filter(t => t.imageUrl && t.imageUrl.length > 80_000);
+      for (const tx of txsWithImages) {
+        tx.imageUrl = null;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+          return;
+        } catch {
+          // Continue freeing space
+        }
+      }
+    } catch {
+      // Ignore fallback errors
+    }
   }
 }
 
@@ -99,7 +113,37 @@ function requireLocalUser(db: LocalDb): StoredUser {
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onload = () => {
+      const rawDataUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!rawDataUrl) {
+        resolve('');
+        return;
+      }
+      // Compress image to max 600x600 JPEG (0.74 quality, ~40KB) so mobile localStorage never overflows
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 600;
+          const scale = Math.min(1, maxDim / Math.max(img.naturalWidth || 600, img.naturalHeight || 600));
+          const w = Math.max(1, Math.round((img.naturalWidth || 600) * scale));
+          const h = Math.max(1, Math.round((img.naturalHeight || 600) * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.74));
+            return;
+          }
+        } catch {
+          // Fallback to rawDataUrl
+        }
+        resolve(rawDataUrl);
+      };
+      img.onerror = () => resolve(rawDataUrl);
+      img.src = rawDataUrl;
+    };
     reader.onerror = () => reject(new Error('Không thể đọc file ảnh'));
     reader.readAsDataURL(file);
   });

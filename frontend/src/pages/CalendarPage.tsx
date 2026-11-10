@@ -1,10 +1,12 @@
 import {
+  AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   Eye,
   EyeOff,
+  Flame,
   Image as ImageIcon,
   Landmark,
   LayoutGrid,
@@ -13,7 +15,9 @@ import {
   Plus,
   ReceiptText,
   Search,
-  SquarePen,
+  ShieldCheck,
+  Sparkles,
+  Target,
   UserRound,
   X,
 } from 'lucide-react';
@@ -21,6 +25,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
+import { LookbackModal } from '../components/LookbackModal';
+import { loadBudget, SpendingLimitModal, type BudgetConfig } from '../components/SpendingLimitModal';
 import { useAuth } from '../contexts/AuthContext';
 import { api, type CalendarEvent, type Transaction, type Wallet } from '../services/api';
 
@@ -62,6 +68,9 @@ export function CalendarPage() {
   const [hideIncome, setHideIncome] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [lookbackPeriod, setLookbackPeriod] = useState<1 | 3 | 7 | null>(null);
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [budget, setBudget] = useState<BudgetConfig>(() => loadBudget());
 
   const monthRange = useMemo(() => {
     const year = cursor.getFullYear();
@@ -177,6 +186,36 @@ export function CalendarPage() {
 
   const isCurrentMonth = cursor.getFullYear() === new Date().getFullYear() && cursor.getMonth() === new Date().getMonth();
 
+  // Budget & Safe Daily Allowance calculations
+  const budgetMetrics = useMemo(() => {
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const currentDay = Math.max(1, now.getDate());
+    const remainingDays = Math.max(1, daysInMonth - currentDay + 1);
+    const remainingBudget = Math.max(0, budget.monthlyLimit - totals.expense);
+    const safeDailySpend = Math.round(remainingBudget / remainingDays);
+    const monthPercent = budget.monthlyLimit > 0 ? Math.min(100, Math.round((totals.expense / budget.monthlyLimit) * 100)) : 0;
+    const isOverMonth = budget.monthlyLimit > 0 && totals.expense > budget.monthlyLimit;
+    const isOverDay = budget.dailyLimit > 0 && todayExpense > budget.dailyLimit;
+
+    // Count days within daily budget in the last 7 days
+    let safeDaysCount = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const k = toDateKey(d);
+      const dayExp = (byDay[k] ?? []).reduce((s, e) => s + (e.kind === 'expense' ? e.amount ?? 0 : 0), 0);
+      if (dayExp <= budget.dailyLimit) safeDaysCount++;
+    }
+
+    return {
+      safeDailySpend,
+      monthPercent,
+      isOverMonth,
+      isOverDay,
+      safeDaysCount,
+    };
+  }, [budget, totals.expense, todayExpense, byDay]);
+
   return (
     <div className="cm-home-screen">
       {/* Top User Greeting Header */}
@@ -191,9 +230,22 @@ export function CalendarPage() {
               <Leaf size={12} />
               {todayExpense === 0 ? 'Hôm nay chưa chi tiêu' : `Hôm nay chi ${todayExpense.toLocaleString('vi-VN')}đ`}
             </span>
-            <span className="cm-badge-blue">
-              <SquarePen size={12} /> 3/3
-            </span>
+            <button
+              type="button"
+              className="cm-badge-blue clickable"
+              onClick={() => setBudgetModalOpen(true)}
+              title="Đặt hạn mức chi tiêu"
+            >
+              <Target size={12} /> Hạn mức {budgetMetrics.monthPercent}%
+            </button>
+            <button
+              type="button"
+              className="cm-badge-purple clickable"
+              onClick={() => setLookbackPeriod(3)}
+              title="Nhìn lại kỷ niệm chi tiêu"
+            >
+              <Sparkles size={12} /> Nhìn lại
+            </button>
           </div>
         </div>
 
@@ -341,6 +393,75 @@ export function CalendarPage() {
             </button>
           );
         })}
+      </div>
+
+      {/* Lookback Story Reel Strip (1 Ngày • 3 Ngày • 1 Tuần) */}
+      <div className="cm-lookback-strip">
+        <div className="cm-lookback-label">
+          <Sparkles size={14} />
+          <span>Nhìn lại:</span>
+        </div>
+        <div className="cm-lookback-pills">
+          <button type="button" className="cm-lookback-pill" onClick={() => setLookbackPeriod(1)}>
+            Sau 1 ngày
+          </button>
+          <button type="button" className="cm-lookback-pill" onClick={() => setLookbackPeriod(3)}>
+            Sau 3 ngày
+          </button>
+          <button type="button" className="cm-lookback-pill" onClick={() => setLookbackPeriod(7)}>
+            Sau 1 tuần
+          </button>
+        </div>
+      </div>
+
+      {/* Spending Limit & Safe Daily Allowance Bar */}
+      <div
+        className={`cm-budget-home-card ${
+          budgetMetrics.isOverMonth ? 'danger' : budgetMetrics.monthPercent >= 75 ? 'warning' : 'safe'
+        }`}
+        onClick={() => setBudgetModalOpen(true)}
+        role="button"
+        tabIndex={0}
+      >
+        <div className="cm-budget-home-top">
+          <div className="cm-budget-home-title">
+            {budgetMetrics.isOverMonth ? (
+              <AlertTriangle size={15} />
+            ) : budgetMetrics.monthPercent >= 75 ? (
+              <Flame size={15} />
+            ) : (
+              <ShieldCheck size={15} />
+            )}
+            <strong>
+              {budgetMetrics.isOverMonth
+                ? 'Vượt hạn mức tháng!'
+                : `An toàn tiêu: ${hideAll ? '••••' : `${budgetMetrics.safeDailySpend.toLocaleString('vi-VN')}đ/ngày`}`}
+            </strong>
+          </div>
+          <span className="cm-budget-home-tag">
+            🔥 {budgetMetrics.safeDaysCount}/7 ngày chuẩn • Chỉnh hạn mức ›
+          </span>
+        </div>
+
+        <div className="cm-budget-home-track">
+          <div
+            className={`cm-budget-home-fill ${
+              budgetMetrics.isOverMonth ? 'danger' : budgetMetrics.monthPercent >= 75 ? 'warning' : 'safe'
+            }`}
+            style={{ width: `${budgetMetrics.monthPercent}%` }}
+          />
+        </div>
+
+        <div className="cm-budget-home-foot">
+          <small>
+            Tháng: {hideAll ? '••••' : `${totals.expense.toLocaleString('vi-VN')}đ`} /{' '}
+            {budget.monthlyLimit.toLocaleString('vi-VN')}đ ({budgetMetrics.monthPercent}%)
+          </small>
+          <small className={budgetMetrics.isOverDay ? 'danger-text' : ''}>
+            Hôm nay: {hideAll ? '••••' : `${todayExpense.toLocaleString('vi-VN')}đ`} /{' '}
+            {budget.dailyLimit.toLocaleString('vi-VN')}đ
+          </small>
+        </div>
       </div>
 
       {/* Main Monthly Calendar Card */}
@@ -607,6 +728,29 @@ export function CalendarPage() {
           onChanged={() => {
             setDetailEvent(null);
             void reload();
+          }}
+        />
+      )}
+
+      {/* Lookback / Flashback Story Reel Modal */}
+      {lookbackPeriod !== null && (
+        <LookbackModal
+          initialPeriod={lookbackPeriod}
+          transactions={transactions}
+          onClose={() => setLookbackPeriod(null)}
+        />
+      )}
+
+      {/* Spending Limit & Budget Advisor Modal */}
+      {budgetModalOpen && (
+        <SpendingLimitModal
+          transactions={transactions}
+          todayExpense={todayExpense}
+          monthExpense={totals.expense}
+          onClose={() => setBudgetModalOpen(false)}
+          onSaved={nextConfig => {
+            setBudget(nextConfig);
+            setBudgetModalOpen(false);
           }}
         />
       )}

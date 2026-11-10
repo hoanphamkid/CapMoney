@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
   CalendarDays,
@@ -9,6 +10,7 @@ import {
   Plus,
   ReceiptText,
   Share,
+  ShieldCheck,
   ShoppingCart,
   SquarePen,
 } from 'lucide-react';
@@ -16,6 +18,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api, type Wallet } from '../services/api';
 import { CameraView } from './CameraView';
 import { ImageCropModal } from './ImageCropModal';
+import { loadBudget } from './SpendingLimitModal';
+
+const quickAmounts = [
+  { label: '+15k', value: 15_000 },
+  { label: '+25k', value: 25_000 },
+  { label: '+35k', value: 35_000 },
+  { label: '+50k', value: 50_000 },
+  { label: '+100k', value: 100_000 },
+  { label: '+200k', value: 200_000 },
+  { label: '+500k', value: 500_000 },
+];
 
 const expenseCategories = [
   { id: 'food', label: 'Ăn uống' },
@@ -107,12 +120,37 @@ export function ExpenseCapture({
   };
 
   const categories = type === 'income' ? incomeCategories : expenseCategories;
-  const formattedAmount = amount ? Number(amount.replace(/[^0-9]/g, '')).toLocaleString('vi-VN') : '';
+  const rawNumericAmount = Number(amount.replace(/[^0-9]/g, '')) || 0;
+  const formattedAmount = rawNumericAmount ? rawNumericAmount.toLocaleString('vi-VN') : '';
+  const budget = useMemo(() => loadBudget(), []);
+
+  const parseAmountFromNote = (text: string): number => {
+    const matchK = text.match(/(\d+(?:[.,]\d+)?)\s*(k|nghin|nghìn|ngàn)/i);
+    if (matchK) {
+      return Math.round(parseFloat(matchK[1].replace(',', '.')) * 1_000);
+    }
+    const matchTr = text.match(/(\d+(?:[.,]\d+)?)\s*(tr|trieu|triệu|củ)/i);
+    if (matchTr) {
+      return Math.round(parseFloat(matchTr[1].replace(',', '.')) * 1_000_000);
+    }
+    const matchRaw = text.match(/\b(\d{4,9})\b/);
+    if (matchRaw) {
+      return Number(matchRaw[1]);
+    }
+    return 0;
+  };
 
   const saveTransaction = async (keepOpenForNextShot = false) => {
-    const numericAmount = Number(amount.replace(/[^0-9]/g, ''));
+    let numericAmount = Number(amount.replace(/[^0-9]/g, '')) || 0;
+    if (!numericAmount && note.trim()) {
+      const guessed = parseAmountFromNote(note);
+      if (guessed > 0) {
+        numericAmount = guessed;
+        setAmount(String(guessed));
+      }
+    }
     if (!numericAmount) {
-      setError('Vui lòng nhập số tiền.');
+      setError('Vui lòng nhập số tiền hoặc chọn nhanh mệnh giá bên dưới.');
       return;
     }
     let targetWalletId = walletId || wallets[0]?.id || '';
@@ -226,22 +264,78 @@ export function ExpenseCapture({
                 inputMode="numeric"
                 className="cm-amount-input"
                 value={formattedAmount}
-                onChange={event => setAmount(event.target.value.replace(/[^0-9]/g, ''))}
+                onChange={event => {
+                  setError('');
+                  setAmount(event.target.value.replace(/[^0-9]/g, ''));
+                }}
                 placeholder="0"
               />
               <span className="cm-amount-currency">đ</span>
+            </div>
+
+            <div className="cm-quick-amounts">
+              {quickAmounts.map(chip => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  className="cm-quick-chip"
+                  onClick={() => {
+                    setError('');
+                    setAmount(String(rawNumericAmount + chip.value));
+                  }}
+                >
+                  {chip.label}
+                </button>
+              ))}
+              {rawNumericAmount > 0 && rawNumericAmount < 10_000 && (
+                <button
+                  type="button"
+                  className="cm-quick-chip highlight"
+                  onClick={() => setAmount(String(rawNumericAmount * 1_000))}
+                >
+                  .000đ
+                </button>
+              )}
+              {rawNumericAmount > 0 && (
+                <button
+                  type="button"
+                  className="cm-quick-chip clear"
+                  onClick={() => setAmount('')}
+                >
+                  Xoá
+                </button>
+              )}
             </div>
 
             <input
               type="text"
               className="cm-detail-input"
               value={note}
-              onChange={event => setNote(event.target.value)}
-              placeholder="Thêm chi tiết"
+              onChange={event => {
+                setError('');
+                setNote(event.target.value);
+              }}
+              placeholder="Thêm chi tiết (VD: Cà phê 35k)"
               onKeyDown={event => {
                 if (event.key === 'Enter') void saveTransaction(false);
               }}
             />
+
+            {type === 'expense' && rawNumericAmount > 0 && budget.dailyLimit > 0 && (
+              <div className={`cm-entry-budget-hint ${rawNumericAmount > budget.dailyLimit ? 'warn' : 'ok'}`}>
+                {rawNumericAmount > budget.dailyLimit ? (
+                  <>
+                    <AlertTriangle size={12} /> Vượt hạn mức ngày ({budget.dailyLimit.toLocaleString('vi-VN')}đ)
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={12} /> Trong hạn mức ngày ({Math.round((rawNumericAmount / budget.dailyLimit) * 100)}%)
+                  </>
+                )}
+              </div>
+            )}
+
+            {error && <div className="cm-entry-inline-error">{error}</div>}
           </div>
         </div>
 
