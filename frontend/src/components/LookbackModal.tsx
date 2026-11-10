@@ -6,18 +6,21 @@ import {
   Camera,
   ChevronLeft,
   ChevronRight,
+  Download,
   Flame,
   Pause,
   Play,
   Sparkles,
   TrendingDown,
   Trophy,
+  WandSparkles,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Transaction } from '../services/api';
 
 type LookbackPeriod = 1 | 3 | 7;
+type FxMode = 'auto' | 'flip3d' | 'cinema' | 'polaroid' | 'neon';
 
 type LookbackModalProps = {
   initialPeriod?: LookbackPeriod;
@@ -39,14 +42,26 @@ const categoryNames: Record<string, string> = {
   other: '✨ Khác',
 };
 
+const fxList: Array<{ id: FxMode; label: string }> = [
+  { id: 'auto', label: '🌈 Tự đổi FX' },
+  { id: 'flip3d', label: '🃏 Lật 3D' },
+  { id: 'cinema', label: '🎬 Zoom Flash' },
+  { id: 'polaroid', label: '📸 Tung ảnh' },
+  { id: 'neon', label: '⚡ Sóng Neon' },
+];
+
+const activeFxCycle: Array<'flip3d' | 'cinema' | 'polaroid' | 'neon'> = ['flip3d', 'cinema', 'polaroid', 'neon'];
+
 export function LookbackModal({ initialPeriod = 3, transactions, onClose }: LookbackModalProps) {
   const [period, setPeriod] = useState<LookbackPeriod>(initialPeriod);
   const [slideIndex, setSlideIndex] = useState(0); // 0: Photo Reel, 1: Daily Rhythm, 2: Insights
   const [photoIdx, setPhotoIdx] = useState(0);
   const [playing, setPlaying] = useState(true);
+  const [fxMode, setFxMode] = useState<FxMode>('auto');
   const [isTouching, setIsTouching] = useState(false);
   const [dragX, setDragX] = useState(0);
   const [slideDir, setSlideDir] = useState<'next' | 'prev'>('next');
+  const [pulseTick, setPulseTick] = useState(0);
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -125,12 +140,14 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   const goNextPhoto = () => {
     if (displayTxs.length <= 1) return;
     setSlideDir('next');
+    setPulseTick(t => t + 1);
     setPhotoIdx(prev => (prev + 1) % displayTxs.length);
   };
 
   const goPrevPhoto = () => {
     if (displayTxs.length <= 1) return;
     setSlideDir('prev');
+    setPulseTick(t => t + 1);
     setPhotoIdx(prev => (prev - 1 + displayTxs.length) % displayTxs.length);
   };
 
@@ -139,6 +156,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
     if (!playing || isTouching || slideIndex !== 0 || displayTxs.length <= 1) return;
     const timer = setInterval(() => {
       setSlideDir('next');
+      setPulseTick(t => t + 1);
       setPhotoIdx(prev => (prev + 1) % displayTxs.length);
     }, 1000);
     return () => clearInterval(timer);
@@ -154,7 +172,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   const handleSwipeMove = (clientX: number) => {
     if (!touchStartRef.current) return;
     const deltaX = clientX - touchStartRef.current.x;
-    setDragX(Math.max(-140, Math.min(140, deltaX)));
+    setDragX(Math.max(-150, Math.min(150, deltaX)));
   };
 
   const handleSwipeEnd = (clientX: number, clientY: number) => {
@@ -169,8 +187,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
     setIsTouching(false);
     setDragX(0);
 
-    // Horizontal swipe or vertical swipe
-    if (Math.abs(dx) > 32 || Math.abs(dy) > 42) {
+    if (Math.abs(dx) > 30 || Math.abs(dy) > 40) {
       if (navigator.vibrate) navigator.vibrate(15);
       if (Math.abs(dx) >= Math.abs(dy)) {
         if (dx < 0) goNextPhoto();
@@ -183,15 +200,92 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   };
 
   const currentTx = displayTxs[photoIdx] ?? displayTxs[0] ?? null;
+  const nextTx = displayTxs.length > 1 ? displayTxs[(photoIdx + 1) % displayTxs.length] : null;
+  const thirdTx = displayTxs.length > 2 ? displayTxs[(photoIdx + 2) % displayTxs.length] : null;
+
+  const resolvedFx = fxMode === 'auto' ? activeFxCycle[photoIdx % activeFxCycle.length] : fxMode;
+
   const periodTitle =
     period === 1 ? '24 Giờ Qua (1 Ngày)' : period === 3 ? '3 Ngày Gần Nhất' : 'Hành Trình 1 Tuần (7 Ngày)';
   const maxDayExpense = Math.max(1, ...Object.values(stats.dayTotals).map(d => Math.max(d.expense, d.income)));
-
   const barCount = slideIndex === 0 ? Math.max(1, Math.min(displayTxs.length, 12)) : 3;
+
+  // Export Story Card as PNG Image
+  const downloadStoryCard = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 720;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const grad = ctx.createLinearGradient(0, 0, 720, 1080);
+    grad.addColorStop(0, '#271d47');
+    grad.addColorStop(0.5, '#151824');
+    grad.addColorStop(1, '#0e1017');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 720, 1080);
+
+    ctx.fillStyle = '#cdb4ff';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText(`✨ CAPMONEY • NHÌN LẠI ${periodTitle.toUpperCase()}`, 48, 76);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 54px sans-serif';
+    ctx.fillText(`Tổng chi: −${stats.expense.toLocaleString('vi-VN')}đ`, 48, 155);
+
+    ctx.fillStyle = '#7CE3A6';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillText(`Tổng thu: +${stats.income.toLocaleString('vi-VN')}đ`, 48, 210);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.roundRect?.(48, 260, 624, 520, 28);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffd166';
+    ctx.font = 'bold 30px sans-serif';
+    ctx.fillText(`🌱 Ngày không chi tiêu: ${stats.noSpendDays}/${period} ngày`, 80, 340);
+
+    ctx.fillStyle = '#ff9e99';
+    ctx.fillText(
+      `🔥 Chi nhiều nhất: ${
+        stats.topCategory ? `${categoryNames[stats.topCategory.id] ?? 'Khác'} (${stats.topCategory.amount.toLocaleString('vi-VN')}đ)` : '0đ'
+      }`,
+      80,
+      415,
+    );
+
+    if (currentTx) {
+      ctx.fillStyle = '#e5eaf5';
+      ctx.font = 'bold 32px sans-serif';
+      ctx.fillText(`📸 Kỷ niệm nổi bật (${formatVNDate(currentTx.dateKey)}):`, 80, 510);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 46px sans-serif';
+      ctx.fillText(
+        `${currentTx.type === 'income' ? '+' : '−'}${currentTx.amount.toLocaleString('vi-VN')}đ — ${currentTx.note || 'Giao dịch'}`,
+        80,
+        575,
+      );
+    }
+
+    ctx.fillStyle = '#8d96ab';
+    ctx.font = '24px sans-serif';
+    ctx.fillText('cap-money.vercel.app • Quản lý chi tiêu bằng hình ảnh', 48, 1020);
+
+    const link = document.createElement('a');
+    link.download = `capmoney-lookback-${period}d.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
 
   return (
     <div className="cm-story-overlay" onClick={onClose}>
-      <div className="cm-story-card" onClick={e => e.stopPropagation()}>
+      <div className={`cm-story-card fx-stage-${resolvedFx}`} onClick={e => e.stopPropagation()}>
+        {/* Ambient Floating Orbs & 1-Second Beat Pulse */}
+        <div className="cm-story-ambient-orbs" aria-hidden="true">
+          <span className="orb orb-1" />
+          <span className="orb orb-2" />
+        </div>
+
         {/* 1-Second Story Progress Bars */}
         <div
           className="cm-story-bars"
@@ -227,21 +321,30 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
           })}
         </div>
 
-        {/* Top Header & Play/Pause (1s Auto-Scroll Toggle) */}
+        {/* Top Header & Play/Pause + Download Story */}
         <header className="cm-story-header">
           <div className="cm-story-brand">
-            <span className="cm-story-sparkle">
+            <span className={`cm-story-sparkle ${playing && slideIndex === 0 ? 'beat-1s' : ''}`}>
               <Sparkles size={15} />
             </span>
             <div>
               <strong>Nhìn lại kỷ niệm thu chi</strong>
               <small>
-                {periodTitle} • {playing ? 'Tự lướt 1s/ảnh' : 'Đang tạm dừng (Vuốt để xem)'}
+                {periodTitle} • {playing ? '⚡ Tự lướt 1s/ảnh' : 'Đang dừng (Vuốt tay)'}
               </small>
             </div>
           </div>
 
           <div className="cm-story-header-actions">
+            <button
+              type="button"
+              className="cm-story-icon-btn"
+              onClick={downloadStoryCard}
+              title="Tải ảnh Story tổng kết về máy"
+              aria-label="Tải ảnh Story"
+            >
+              <Download size={15} />
+            </button>
             <button
               type="button"
               className="cm-story-icon-btn"
@@ -271,7 +374,24 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
           ))}
         </div>
 
-        {/* SLIDE 0: PHOTO FLASHBACK REEL (1S AUTO-SLIDE + TOUCH SWIPE) */}
+        {/* FX Selector Bar for 1-Second Auto Transition */}
+        {slideIndex === 0 && (
+          <div className="cm-fx-selector-row">
+            <WandSparkles size={13} className="cm-fx-icon" />
+            {fxList.map(item => (
+              <button
+                key={item.id}
+                type="button"
+                className={`cm-fx-chip ${fxMode === item.id ? 'active' : ''}`}
+                onClick={() => setFxMode(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* SLIDE 0: PHOTO FLASHBACK REEL (3D STACK + 1S FX + TOUCH SWIPE) */}
         {slideIndex === 0 && (
           <div className="cm-story-slide fade-in">
             <div
@@ -299,71 +419,103 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
               }}
             >
               {currentTx ? (
-                <div
-                  className={`cm-story-polaroid ${currentTx.type} slide-${slideDir}`}
-                  key={`${currentTx.id}-${photoIdx}`}
-                  style={
-                    dragX !== 0
-                      ? {
-                          transform: `translateX(${dragX}px) rotate(${dragX * 0.04}deg)`,
-                          transition: 'none',
-                        }
-                      : undefined
-                  }
-                >
-                  <div className="cm-polaroid-media">
-                    {currentTx.imageUrl ? (
-                      <img src={currentTx.imageUrl} alt={currentTx.note} draggable={false} />
-                    ) : (
-                      <div className={`cm-polaroid-placeholder ${currentTx.type}`}>
-                        {currentTx.type === 'income' ? <ArrowDownLeft size={48} /> : <ArrowUpRight size={48} />}
-                        <span>{categoryNames[currentTx.categoryId] ?? 'Khoảnh khắc thu chi'}</span>
-                      </div>
-                    )}
-                    <span className="cm-polaroid-date">
-                      <Calendar size={12} /> {formatVNDate(currentTx.dateKey)}
-                    </span>
-                    <span className={`cm-polaroid-cat ${currentTx.type}`}>
-                      {categoryNames[currentTx.categoryId] ?? 'Giao dịch'}
-                    </span>
+                <div className="cm-polaroid-deck">
+                  {/* Background Stacked Cards for 3D Depth */}
+                  {thirdTx && (
+                    <div className="cm-polaroid-ghost ghost-2" aria-hidden="true">
+                      {thirdTx.imageUrl && <img src={thirdTx.imageUrl} alt="" />}
+                    </div>
+                  )}
+                  {nextTx && (
+                    <div className="cm-polaroid-ghost ghost-1" aria-hidden="true">
+                      {nextTx.imageUrl && <img src={nextTx.imageUrl} alt="" />}
+                    </div>
+                  )}
 
-                    {displayTxs.length > 1 && (
-                      <>
-                        <button
-                          type="button"
-                          className="cm-polaroid-side-arrow left"
-                          onClick={e => {
-                            e.stopPropagation();
-                            goPrevPhoto();
-                          }}
-                          aria-label="Ảnh trước"
-                        >
-                          <ChevronLeft size={20} />
-                        </button>
-                        <button
-                          type="button"
-                          className="cm-polaroid-side-arrow right"
-                          onClick={e => {
-                            e.stopPropagation();
-                            goNextPhoto();
-                          }}
-                          aria-label="Ảnh tiếp theo"
-                        >
-                          <ChevronRight size={20} />
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  {/* Floating 1s Beat Emojis */}
+                  {playing && !isTouching && (
+                    <div key={`particles-${pulseTick}`} className="cm-1s-particles" aria-hidden="true">
+                      <span className="p1">{currentTx.type === 'income' ? '💰' : '💸'}</span>
+                      <span className="p2">✨</span>
+                      <span className="p3">{currentTx.type === 'income' ? '🎉' : '🔥'}</span>
+                    </div>
+                  )}
 
-                  <div className="cm-polaroid-caption">
-                    <strong className={currentTx.type}>
-                      {currentTx.type === 'income' ? '+' : '−'}
-                      {currentTx.amount.toLocaleString('vi-VN')}đ
-                    </strong>
-                    <p>{currentTx.note || (currentTx.type === 'income' ? 'Khoản thu nhập' : 'Khoản chi tiêu')}</p>
-                    <small className="cm-swipe-hint">
-                      👆 Vuốt trái/phải để lướt tay • Ảnh {photoIdx + 1}/{displayTxs.length}
-                    </small>
+                  {/* Active Foreground Polaroid Card with 1s Transition Effect */}
+                  <div
+                    className={`cm-story-polaroid ${currentTx.type} fx-${resolvedFx} slide-${slideDir}`}
+                    key={`${currentTx.id}-${photoIdx}`}
+                    style={
+                      dragX !== 0
+                        ? {
+                            transform: `translateX(${dragX}px) rotate(${dragX * 0.045}deg)`,
+                            transition: 'none',
+                          }
+                        : undefined
+                    }
+                  >
+                    {/* Light Shimmer & Camera Flash Overlay on 1s Change */}
+                    <span className="cm-polaroid-shimmer" aria-hidden="true" />
+
+                    <div className="cm-polaroid-media">
+                      {currentTx.imageUrl ? (
+                        <img
+                          src={currentTx.imageUrl}
+                          alt={currentTx.note}
+                          className="cm-polaroid-zoom-img"
+                          draggable={false}
+                        />
+                      ) : (
+                        <div className={`cm-polaroid-placeholder ${currentTx.type}`}>
+                          {currentTx.type === 'income' ? <ArrowDownLeft size={48} /> : <ArrowUpRight size={48} />}
+                          <span>{categoryNames[currentTx.categoryId] ?? 'Khoảnh khắc thu chi'}</span>
+                        </div>
+                      )}
+                      <span className="cm-polaroid-date">
+                        <Calendar size={12} /> {formatVNDate(currentTx.dateKey)}
+                      </span>
+                      <span className={`cm-polaroid-cat ${currentTx.type}`}>
+                        {categoryNames[currentTx.categoryId] ?? 'Giao dịch'}
+                      </span>
+
+                      {displayTxs.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            className="cm-polaroid-side-arrow left"
+                            onClick={e => {
+                              e.stopPropagation();
+                              goPrevPhoto();
+                            }}
+                            aria-label="Ảnh trước"
+                          >
+                            <ChevronLeft size={20} />
+                          </button>
+                          <button
+                            type="button"
+                            className="cm-polaroid-side-arrow right"
+                            onClick={e => {
+                              e.stopPropagation();
+                              goNextPhoto();
+                            }}
+                            aria-label="Ảnh tiếp theo"
+                          >
+                            <ChevronRight size={20} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="cm-polaroid-caption">
+                      <strong className={`${currentTx.type} cm-price-pop`}>
+                        {currentTx.type === 'income' ? '+' : '−'}
+                        {currentTx.amount.toLocaleString('vi-VN')}đ
+                      </strong>
+                      <p>{currentTx.note || (currentTx.type === 'income' ? 'Khoản thu nhập' : 'Khoản chi tiêu')}</p>
+                      <small className="cm-swipe-hint">
+                        👆 Vuốt tay hoặc tự động lướt 1s • Ảnh {photoIdx + 1}/{displayTxs.length}
+                      </small>
+                    </div>
                   </div>
                 </div>
               ) : (

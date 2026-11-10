@@ -3783,3 +3783,568 @@ html:not(.dark-theme) .cm-app-shell {
   border-color: rgba(185, 145, 255, 0.5);
   color: #ffffff;
 }
+
+/* =========================================================
+   ENHANCED 1-SECOND LOOKBACK EFFECTS & STACKED POLAROID DECK
+   ========================================================= */
+.cm-story-ambient-orbs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.cm-story-ambient-orbs .orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(48px);
+  opacity: 0.35;
+}
+
+.cm-story-ambient-orbs .orb-1 {
+  width: 180px;
+  height: 180px;
+  background: #a855f7;
+  top: -30px;
+  left: -30px;
+  animation: orbPulse 2s ease-in-out infinite alternate;
+}
+
+.cm-story-ambient-orbs .orb-2 {
+  width: 200px;
+  height: 200px;
+  background: #ec4899;
+  bottom: 40px;
+  right: -40px;
+  animation: orbPulse 2.4s ease-in-out infinite alternate-reverse;
+}
+
+.cm-story-ambient-orbs .orb-3 {
+  width: 140px;
+  height: 140px;
+  background: #38bdf8;
+  top: 45%;
+  left: 35%;
+  animation: orbPulse 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes orbPulse {
+  from {
+    transform: scale(0.9) translate(0, 0);
+  }
+  to {
+    transform: scale(1.2) translate(12px, -12px);
+  }
+}
+
+.cm-story-badge.beat-1s {
+  animation: badgeBeat1s 1s ease-in-out infinite;
+}
+
+@keyframes badgeBeat1s {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.45);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 14px 3px rgba(236, 72, 153, 0.45);
+  }
+}
+
+.cm-fx-selector-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.cm-fx-selector-row::-webkit-scrollbar {
+  display: none;
+}
+
+.cm-fx-chip {
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.cm-fx-chip.active {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(236, 72, 153, 0.4));
+  border-color: rgba(236, 72, 153, 0.65);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(236, 72, 153, 0.35);
+}
+
+.cm-polaroid-deck {
+  position: relative;
+  width: 100%;
+  perspective: 1100px;
+}
+
+.cm-polaroid-ghost {
+  position: absolute;
+  inset: 10px 14px -8px 14px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #1a2130;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.cm-polaroid-ghost img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(2px) brightness(0.5);
+}
+
+.cm-polaroid-ghost.ghost-1 {
+  z-index: 1;
+  transform: translateY(8px) scale(0.94) rotate(2.5deg);
+  opacity: 0.55;
+}
+
+.cm-polaroid-ghost.ghost-2 {
+  z-index: 0;
+  transform: translateY(15px) scale(0.89) rotate(-3deg);
+  opacity: 0.3;
+}
+
+.cm-story-polaroid {
+  position: relative;
+  z-index: 2;
+  transform-style: preserve-3d;
+}
+
+/* 4 Distinct 1-Second Auto-Transition Animations */
+.cm-story-polaroid.fx-flip3d {
+  animation: fxFlip3D 0.52s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.cm-story-polaroid.fx-cinema {
+  animation: fxCinemaZoom 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.cm-story-polaroid.fx-polaroid {
+  animation: fxPolaroidToss 0.52s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.cm-story-polaroid.fx-neon {
+  animation: fxNeonPulse 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes fxFlip3D {
+  0% {
+    opacity: 0.25;
+    transform: perspective(1000px) rotateY(68deg) scale(0.86);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(1000px) rotateY(0deg) scale(1);
+  }
+}
+
+@keyframes fxCinemaZoom {
+  0% {
+    opacity: 0.3;
+    transform: scale(1.18);
+    filter: brightness(1.8) blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1) blur(0);
+  }
+}
+
+@keyframes fxPolaroidToss {
+  0% {
+    opacity: 0.25;
+    transform: translateY(42px) rotate(-9deg) scale(0.84);
+  }
+  70% {
+    transform: translateY(-4px) rotate(1.5deg) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+@keyframes fxNeonPulse {
+  0% {
+    opacity: 0.3;
+    transform: translateX(34px) skewX(-5deg) scale(0.92);
+    box-shadow: 0 0 36px rgba(236, 72, 153, 0.75), 0 0 60px rgba(56, 189, 248, 0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) skewX(0deg) scale(1);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* Shimmer / Flash sweep across photo every 1s */
+.cm-polaroid-shimmer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  background: linear-gradient(
+    115deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.34) 48%,
+    transparent 76%
+  );
+  transform: translateX(-120%);
+  animation: shimmerSweep1s 0.85s ease-out forwards;
+}
+
+@keyframes shimmerSweep1s {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+/* Ken Burns subtle zoom during the 1s display */
+.cm-polaroid-zoom-img {
+  animation: kenBurns1s 1.05s ease-out forwards;
+}
+
+@keyframes kenBurns1s {
+  from {
+    transform: scale(1.09);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Floating Emoji Particles on each 1s transition */
+.cm-1s-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  overflow: hidden;
+}
+
+.cm-1s-particle {
+  position: absolute;
+  bottom: 42px;
+  font-size: 18px;
+  opacity: 0;
+  animation: particleFloat1s 0.9s ease-out forwards;
+}
+
+.cm-1s-particle.p-0 {
+  left: 16%;
+  animation-delay: 0.02s;
+}
+.cm-1s-particle.p-1 {
+  left: 42%;
+  animation-delay: 0.08s;
+}
+.cm-1s-particle.p-2 {
+  left: 68%;
+  animation-delay: 0.04s;
+}
+.cm-1s-particle.p-3 {
+  left: 84%;
+  animation-delay: 0.12s;
+}
+
+@keyframes particleFloat1s {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.5);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-14px) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-64px) scale(0.85);
+  }
+}
+
+.cm-price-pop {
+  animation: pricePop1s 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pricePop1s {
+  0% {
+    transform: scale(0.75);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.cm-story-nav-btn.download {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: rgba(56, 189, 248, 0.38);
+  color: #bae6fd;
+}
+
+/* =========================================================
+   SMART TOOLKIT EXTRA TABS: SỔ NỢ, ĐỊNH KỲ & AI PHÁN
+   ========================================================= */
+.cm-toolkit-tabs-scroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.cm-toolkit-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.cm-toolkit-tabs-scroll button {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.cm-debt-form-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cm-debt-kind-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.cm-debt-kind-toggle button {
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #9ba5bc;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cm-debt-kind-toggle button.active.lend {
+  background: rgba(95, 194, 120, 0.2);
+  border-color: rgba(95, 194, 120, 0.5);
+  color: #8cf0a8;
+}
+
+.cm-debt-kind-toggle button.active.borrow {
+  background: rgba(224, 109, 100, 0.22);
+  border-color: rgba(224, 109, 100, 0.5);
+  color: #ff9c93;
+}
+
+.cm-debt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.cm-debt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cm-debt-row.settled {
+  opacity: 0.5;
+}
+
+.cm-debt-row.settled strong {
+  text-decoration: line-through;
+}
+
+.cm-debt-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.05);
+  color: #5fc278;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.cm-debt-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cm-debt-info strong {
+  font-size: 13px;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cm-debt-info small {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.cm-debt-amount {
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.cm-debt-amount.income {
+  color: #7de89a;
+}
+
+.cm-debt-amount.expense {
+  color: #ff8e85;
+}
+
+.cm-debt-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.cm-debt-action-btn.danger {
+  color: #fda4af;
+}
+
+.cm-sub-intro {
+  font-size: 12px;
+  color: #9ba5bc;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.cm-sub-emoji {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.cm-sub-record-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  background: rgba(250, 204, 21, 0.16);
+  color: #fef08a;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.cm-ai-coach-card {
+  border-radius: 18px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.cm-ai-coach-card.roast {
+  background: linear-gradient(145deg, rgba(224, 109, 100, 0.18), rgba(168, 85, 247, 0.14));
+  border-color: rgba(224, 109, 100, 0.38);
+}
+
+.cm-ai-coach-card.heal {
+  background: linear-gradient(145deg, rgba(95, 194, 120, 0.18), rgba(56, 189, 248, 0.14));
+  border-color: rgba(95, 194, 120, 0.38);
+}
+
+.cm-ai-coach-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cm-ai-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.1);
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+}
+
+.cm-ai-coach-head strong {
+  display: block;
+  font-size: 14px;
+  color: #ffffff;
+}
+
+.cm-ai-coach-head small {
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.cm-ai-coach-verdict {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #f8fafc;
+  background: rgba(10, 14, 22, 0.45);
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.cm-ai-tip-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #fde68a;
+  background: rgba(250, 204, 21, 0.1);
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  padding: 9px 11px;
+  border-radius: 12px;
+}
+

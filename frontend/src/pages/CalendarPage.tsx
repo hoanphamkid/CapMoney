@@ -785,11 +785,12 @@ export function CalendarPage() {
         />
       )}
 
-      {/* Smart Financial Toolkit Modal (Savings Jar, Bill Splitter, Badges) */}
+      {/* Smart Financial Toolkit Modal (Savings Jar, Debt Book, Subscriptions, AI Coach, Bill Splitter, Badges) */}
       {toolkitOpen && (
         <SmartToolkitModal
           transactions={transactions}
           onClose={() => setToolkitOpen(false)}
+          onTransactionAdded={() => void reload()}
         />
       )}
     </div>
