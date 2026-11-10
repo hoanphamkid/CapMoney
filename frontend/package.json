@@ -21,10 +21,6 @@
     "recharts": "^3.3.0",
     "zod": "^4.1.12"
   },
-  "optionalDependencies": {
-    "@esbuild/linux-x64": "0.28.2",
-    "@rollup/rollup-linux-x64-gnu": "4.68.1"
-  },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",
     "@types/node": "^22.19.0",
