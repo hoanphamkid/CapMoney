@@ -2,7 +2,6 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   CalendarDays,
-  Camera,
   Check,
   ChevronDown,
   LoaderCircle,
@@ -11,7 +10,6 @@ import {
   Share,
   ShoppingCart,
   SquarePen,
-  Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api, type Wallet } from '../services/api';
@@ -50,7 +48,8 @@ export function ExpenseCapture({
   onClose,
   onSaved,
 }: ExpenseCaptureProps) {
-  const [showCamera, setShowCamera] = useState(false);
+  // Step 1 is ALWAYS Camera first when clicking '+'
+  const [step, setStep] = useState<'camera' | 'form'>('camera');
   const [type, setType] = useState<'expense' | 'income'>(initialType);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -108,7 +107,7 @@ export function ExpenseCapture({
   const categories = type === 'income' ? incomeCategories : expenseCategories;
   const formattedAmount = amount ? Number(amount.replace(/[^0-9]/g, '')).toLocaleString('vi-VN') : '';
 
-  const saveTransaction = async (keepOpen = false) => {
+  const saveTransaction = async (keepOpenForNextShot = false) => {
     const numericAmount = Number(amount.replace(/[^0-9]/g, ''));
     if (!numericAmount) {
       setError('Vui lòng nhập số tiền.');
@@ -133,10 +132,11 @@ export function ExpenseCapture({
         transactionDate: dateKey,
         image,
       });
-      if (keepOpen) {
+      if (keepOpenForNextShot) {
         setAmount('');
         setNote('');
         setImage(null);
+        setStep('camera');
       } else {
         onSaved();
       }
@@ -147,88 +147,77 @@ export function ExpenseCapture({
     }
   };
 
-  if (showCamera) {
+  // STEP 1: Camera Screen
+  if (step === 'camera') {
     return (
-      <div className="capture-overlay">
-        <CameraView
-          onCaptured={file => {
-            setImage(file);
-            setShowCamera(false);
-          }}
-          onSelected={file => {
-            setImage(file);
-            setShowCamera(false);
-          }}
-          onManual={() => setShowCamera(false)}
-          onClose={() => setShowCamera(false)}
-        />
-      </div>
+      <CameraView
+        onCaptured={file => {
+          setImage(file);
+          setStep('form');
+        }}
+        onSelected={file => {
+          setImage(file);
+          setStep('form');
+        }}
+        onManual={() => setStep('form')}
+        onClose={onClose}
+      />
     );
   }
 
+  // STEP 2: Price & Details Screen overlaid on the captured photo
   const isToday = dateKey === todayKey();
   const displayDate = isToday ? 'Hôm nay' : formatShortDate(dateKey);
 
   return (
     <div className="cm-capture-modal" onClick={onClose}>
       <div className="cm-capture-sheet" onClick={event => event.stopPropagation()}>
-        <header className="cm-capture-top">
-          <button type="button" className="cm-pill-btn" onClick={onClose}>
-            Hủy
-          </button>
-          <div className="cm-capture-top-right">
+        {/* Top Photo Stage containing Hủy, 3/3, captured photo background, and frosted amount box */}
+        <div
+          className={`cm-photo-stage ${type}`}
+          style={previewUrl ? { backgroundImage: `url(${previewUrl})` } : undefined}
+        >
+          <header className="cm-capture-top">
             <button
               type="button"
-              className="cm-camera-trigger"
-              onClick={() => setShowCamera(true)}
-              title="Mở camera chụp hóa đơn"
+              className="cm-pill-btn"
+              onClick={() => {
+                setImage(null);
+                setStep('camera');
+              }}
             >
-              <Camera size={15} />
-              <span>Chụp bill</span>
+              Hủy
             </button>
             <span className="cm-quota-badge">
               <SquarePen size={13} /> 3/3
             </span>
-          </div>
-        </header>
+          </header>
 
-        <div className={`cm-entry-card ${type} ${previewUrl ? 'has-photo' : ''}`}>
-          {previewUrl && (
-            <div className="cm-entry-photo-bg">
-              <img src={previewUrl} alt="Ảnh đính kèm" />
-              <button
-                type="button"
-                className="cm-remove-photo"
-                aria-label="Xóa ảnh"
-                onClick={() => setImage(null)}
-              >
-                <Trash2 size={14} />
-              </button>
+          <div className={`cm-entry-card ${type}`}>
+            <div className="cm-amount-row">
+              <span className={`cm-amount-sign ${type}`}>{type === 'expense' ? '−' : '+'}</span>
+              <input
+                autoFocus
+                inputMode="numeric"
+                className="cm-amount-input"
+                value={formattedAmount}
+                onChange={event => setAmount(event.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="0"
+              />
+              <span className="cm-amount-currency">đ</span>
             </div>
-          )}
-          <div className="cm-amount-row">
-            <span className={`cm-amount-sign ${type}`}>{type === 'expense' ? '−' : '+'}</span>
-            <input
-              autoFocus
-              inputMode="numeric"
-              className="cm-amount-input"
-              value={formattedAmount}
-              onChange={event => setAmount(event.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="0"
-            />
-            <span className="cm-amount-currency">đ</span>
-          </div>
 
-          <input
-            type="text"
-            className="cm-detail-input"
-            value={note}
-            onChange={event => setNote(event.target.value)}
-            placeholder="Thêm chi tiết"
-            onKeyDown={event => {
-              if (event.key === 'Enter') void saveTransaction(false);
-            }}
-          />
+            <input
+              type="text"
+              className="cm-detail-input"
+              value={note}
+              onChange={event => setNote(event.target.value)}
+              placeholder="Thêm chi tiết"
+              onKeyDown={event => {
+                if (event.key === 'Enter') void saveTransaction(false);
+              }}
+            />
+          </div>
         </div>
 
         <div className="cm-Select-pills">
@@ -311,7 +300,7 @@ export function ExpenseCapture({
               type="button"
               className="cm-circle-action secondary"
               onClick={() => fileInputRef.current?.click()}
-              aria-label="Chọn ảnh hóa đơn"
+              aria-label="Đổi ảnh hoặc chia sẻ"
             >
               <Share size={20} />
             </button>
@@ -334,13 +323,13 @@ export function ExpenseCapture({
               className="cm-circle-action add-more"
               disabled={saving}
               onClick={() => {
-                if (!amount && !image) {
-                  fileInputRef.current?.click();
-                } else {
+                if (amount) {
                   void saveTransaction(true);
+                } else {
+                  setStep('camera');
                 }
               }}
-              aria-label="Thêm ảnh hoặc lưu và nhập tiếp"
+              aria-label="Lưu và chụp thêm"
             >
               <Plus size={22} />
             </button>
