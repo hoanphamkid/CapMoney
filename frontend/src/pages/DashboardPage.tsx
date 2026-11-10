@@ -1,6 +1,7 @@
 import { ArrowDownLeft, ArrowUpRight, BarChart3, CircleDollarSign, Plus, WalletCards } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ExpenseCapture } from '../components/ExpenseCapture';
 import { useAuth } from '../contexts/AuthContext';
 import { api, type Transaction, type Wallet } from '../services/api';
 
@@ -10,12 +11,20 @@ export function DashboardPage() {
   const name = user?.name.split(' ').slice(-1)[0] ?? 'bạn';
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [captureOpen, setCaptureOpen] = useState(false);
 
-  useEffect(() => {
-    void Promise.all([api.wallets(), api.transactions()]).then(([w, t]) => {
+  const load = async () => {
+    try {
+      const [w, t] = await Promise.all([api.wallets(), api.transactions()]);
       setWallets(w.wallets);
       setTransactions(t.transactions);
-    }).catch(() => {});
+    } catch {
+      // Ignore load errors
+    }
+  };
+
+  useEffect(() => {
+    void load();
   }, []);
 
   const stats = useMemo(() => {
@@ -35,12 +44,12 @@ export function DashboardPage() {
           </h1>
           <p className="page-subtitle">Tổng hợp số dư các ví và biến động thu chi của bạn.</p>
         </div>
-        <button className="add-calendar-button" onClick={() => navigate('/app')}>
+        <button className="add-calendar-button" onClick={() => setCaptureOpen(true)}>
           <Plus size={16} /> Ghi thu chi
         </button>
       </div>
 
-      <div className="metric-grid" style={{ marginTop: 24 }}>
+      <div className="metric-grid" style={{ marginTop: 20 }}>
         <Metric
           label="Tổng số dư ví"
           value={`${stats.totalBalance.toLocaleString('vi-VN')} ₫`}
@@ -71,7 +80,7 @@ export function DashboardPage() {
         />
       </div>
 
-      <section className="panel recent-panel" style={{ marginTop: 18 }}>
+      <section className="panel recent-panel" style={{ marginTop: 16 }}>
         <div className="panel-head">
           <div>
             <h2>Giao dịch gần đây</h2>
@@ -114,12 +123,24 @@ export function DashboardPage() {
               <strong>Chưa có giao dịch nào</strong>
               <p>Mọi khoản thu chi của bạn sẽ xuất hiện ở đây.</p>
             </div>
-            <button className="outline-button small" onClick={() => navigate('/app')}>
+            <button className="outline-button small" onClick={() => setCaptureOpen(true)}>
               Thêm giao dịch
             </button>
           </div>
         )}
       </section>
+
+      {captureOpen && (
+        <ExpenseCapture
+          selectedDate={todayKey()}
+          initialType="expense"
+          onClose={() => setCaptureOpen(false)}
+          onSaved={() => {
+            setCaptureOpen(false);
+            void load();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -135,4 +156,9 @@ function Metric({ label, value, icon, tone, note }: { label: string; value: stri
       <small>{note}</small>
     </div>
   );
+}
+
+function todayKey() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }

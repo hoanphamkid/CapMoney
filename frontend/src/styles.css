@@ -1497,3 +1497,249 @@ html.dark-theme { --ink: #e6eee6; --muted: #9eafa2; --line: #2d4940; --paper: #1
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
+
+
+/* =========================================================
+   DARK INPUTS, MODALS & SECONDARY SCREENS FIX
+   ========================================================= */
+.cm-app-shell .metric-grid,
+.cm-app-shell .wallet-summary-grid,
+.cm-app-shell .transaction-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cm-app-shell .settings-layout,
+.cm-app-shell .wallets-content,
+.cm-app-shell .settings-fields,
+.cm-app-shell .settings-side {
+  grid-template-columns: 1fr;
+}
+
+.cm-app-shell .page-heading {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Fix all inputs, selects, and textareas across Settings, Wallets, Transactions & Modals */
+.cm-app-shell .select-field input,
+.cm-app-shell .select-field select,
+.cm-app-shell .note-field textarea,
+.cm-app-shell .amount-field input,
+.reminder-modal .select-field input,
+.reminder-modal .select-field select,
+.reminder-modal .note-field textarea,
+.reminder-modal .amount-field input {
+  background: #232733 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #f4f6fa !important;
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 13px;
+}
+
+.cm-app-shell .select-field input::placeholder,
+.cm-app-shell .note-field textarea::placeholder,
+.cm-app-shell .amount-field input::placeholder,
+.reminder-modal .select-field input::placeholder,
+.reminder-modal .note-field textarea::placeholder {
+  color: #858b99 !important;
+}
+
+.cm-app-shell .select-field input:focus,
+.cm-app-shell .select-field select:focus,
+.cm-app-shell .note-field textarea:focus,
+.cm-app-shell .amount-field input:focus,
+.reminder-modal .select-field input:focus,
+.reminder-modal .select-field select:focus {
+  border-color: #6ea8fe !important;
+  box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.18) !important;
+}
+
+.cm-app-shell .select-field select option,
+.reminder-modal .select-field select option,
+.cm-app-shell .transaction-filters select option {
+  background: #1b1e28;
+  color: #f4f6fa;
+}
+
+.cm-app-shell .select-field > span,
+.cm-app-shell .amount-field > span,
+.cm-app-shell .note-field > span,
+.reminder-modal .select-field > span,
+.reminder-modal .amount-field > span,
+.reminder-modal .note-field > span {
+  color: #aeb4c2;
+  font-size: 11px;
+}
+
+/* Transaction Search & Filters */
+.cm-app-shell .transaction-toolbar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.cm-app-shell .transaction-search {
+  max-width: none;
+  background: #232733;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.cm-app-shell .transaction-search input {
+  color: #f4f6fa;
+  font-size: 12px;
+}
+
+.cm-app-shell .transaction-search input::placeholder {
+  color: #858b99;
+}
+
+.cm-app-shell .transaction-filters {
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.cm-app-shell .transaction-filters label {
+  background: #232733;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #cfd4e0;
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+
+.cm-app-shell .transaction-filters select {
+  color: #f4f6fa;
+  font-size: 11px;
+}
+
+/* Buttons on Dark Secondary Pages */
+.cm-app-shell .settings-save,
+.cm-app-shell .settings-action,
+.cm-app-shell .outline-button {
+  background: #242b38;
+  border: 1px solid rgba(110, 168, 254, 0.3);
+  color: #8ab8ec;
+  border-radius: 9px;
+  padding: 10px 15px;
+  font-size: 12px;
+}
+
+.cm-app-shell .settings-save:hover,
+.cm-app-shell .settings-action:hover,
+.cm-app-shell .outline-button:hover {
+  background: #2d3748;
+  border-color: #6ea8fe;
+  color: #ffffff;
+}
+
+.cm-app-shell .settings-action.muted {
+  background: #22252f;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #b8beca;
+}
+
+.cm-app-shell .logout-settings {
+  background: rgba(224, 109, 100, 0.14);
+  border: 1px solid rgba(224, 109, 100, 0.32);
+  color: #f28b82;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cm-app-shell .add-calendar-button {
+  background: #6ea2dc;
+  color: #ffffff;
+  border-radius: 10px;
+  padding: 10px 15px;
+  font-size: 12px;
+}
+
+/* Interactive Checkboxes in Settings */
+.settings-check-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: transparent;
+  color: #d6dae4;
+  font-size: 12px;
+  text-align: left;
+}
+
+.check-box {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: #232733;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.check-box.checked {
+  background: #58b970;
+  border-color: #58b970;
+}
+
+/* Dark Modals (WalletForm, TransferForm, ExpenseDetail, EditTransaction) */
+.cm-app-shell .reminder-modal,
+.cm-app-shell .expense-detail {
+  background: #1a1d26;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f4f6fa;
+  border-radius: 20px;
+}
+
+.cm-app-shell .reminder-modal h2,
+.cm-app-shell .expense-detail h2 {
+  color: #ffffff;
+}
+
+.cm-app-shell .detail-note {
+  color: #cfd4e0;
+}
+
+.cm-app-shell .detail-meta,
+.cm-app-shell .detail-actions,
+.cm-app-shell .appearance-row,
+.cm-app-shell .session-row,
+.cm-app-shell .transaction-list-head,
+.cm-app-shell .wallet-detail-head,
+.cm-app-shell .wallet-detail-stats,
+.cm-app-shell .wallet-history-row {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.cm-app-shell .detail-actions button {
+  background: #252936;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #e2e6f0;
+}
+
+.cm-app-shell .detail-actions button.danger {
+  background: rgba(224, 109, 100, 0.16);
+  border-color: rgba(224, 109, 100, 0.35);
+  color: #f28b82;
+}
+
+.cm-app-shell .save-expense {
+  background: #6ea2dc;
+  color: #ffffff;
+  border-radius: 10px;
+}
+
+/* Optional Light Theme Toggle Support */
+html:not(.dark-theme) .cm-app-shell {
+  background: #12141b;
+}
