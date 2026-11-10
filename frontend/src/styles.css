@@ -3698,3 +3698,88 @@ html:not(.dark-theme) .cm-app-shell {
   background: #5fc278;
   color: #0e2013;
 }
+
+/* =========================================================
+   1-SECOND LOOKBACK PHOTO REEL & SWIPE GESTURES
+   ========================================================= */
+.cm-story-bar-fill.active-1s {
+  width: 100%;
+  animation: storyProgress 1s linear forwards;
+}
+
+.cm-story-polaroid-wrap.swipeable {
+  touch-action: pan-y;
+  user-select: none;
+  cursor: grab;
+}
+
+.cm-story-polaroid-wrap.swipeable:active {
+  cursor: grabbing;
+}
+
+.cm-story-polaroid.slide-next {
+  animation: polaroidSlideNext 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cm-story-polaroid.slide-prev {
+  animation: polaroidSlidePrev 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes polaroidSlideNext {
+  from {
+    opacity: 0.3;
+    transform: translateX(36px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes polaroidSlidePrev {
+  from {
+    opacity: 0.3;
+    transform: translateX(-36px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.cm-polaroid-side-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(12, 14, 20, 0.55);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  z-index: 4;
+}
+
+.cm-polaroid-side-arrow.left {
+  left: 8px;
+}
+
+.cm-polaroid-side-arrow.right {
+  right: 8px;
+}
+
+.cm-swipe-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #9ba5bc;
+}
+
+.cm-story-nav-btn.active {
+  background: rgba(155, 107, 255, 0.32);
+  border-color: rgba(185, 145, 255, 0.5);
+  color: #ffffff;
+}

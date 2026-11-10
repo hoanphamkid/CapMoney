@@ -1,7 +1,9 @@
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  BarChart3,
   Calendar,
+  Camera,
   ChevronLeft,
   ChevronRight,
   Flame,
@@ -12,7 +14,7 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Transaction } from '../services/api';
 
 type LookbackPeriod = 1 | 3 | 7;
@@ -42,6 +44,11 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   const [slideIndex, setSlideIndex] = useState(0); // 0: Photo Reel, 1: Daily Rhythm, 2: Insights
   const [photoIdx, setPhotoIdx] = useState(0);
   const [playing, setPlaying] = useState(true);
+  const [isTouching, setIsTouching] = useState(false);
+  const [dragX, setDragX] = useState(0);
+  const [slideDir, setSlideDir] = useState<'next' | 'prev'>('next');
+
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const dateKeys = useMemo(() => {
     const list: string[] = [];
@@ -63,8 +70,12 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
       .sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }, [transactions, dateKeys]);
 
-  // If current period has 0 txs, fallback to recent transactions so the user can still enjoy the flashback reel
-  const displayTxs = periodTxs.length > 0 ? periodTxs : transactions.slice(0, 10);
+  // Prefer transactions with photos first, or fallback to all recent transactions so the reel is always rich
+  const displayTxs = useMemo(() => {
+    const source = periodTxs.length > 0 ? periodTxs : transactions.slice(0, 20);
+    const withPhotos = source.filter(tx => Boolean(tx.imageUrl));
+    return withPhotos.length > 0 ? [...withPhotos, ...source.filter(tx => !tx.imageUrl)] : source;
+  }, [periodTxs, transactions]);
 
   const stats = useMemo(() => {
     let income = 0;
@@ -107,51 +118,116 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   }, [periodTxs, dateKeys, period]);
 
   useEffect(() => {
-    setSlideIndex(0);
     setPhotoIdx(0);
+    setDragX(0);
   }, [period]);
 
-  // Auto-cycle photos & slides when playing
+  const goNextPhoto = () => {
+    if (displayTxs.length <= 1) return;
+    setSlideDir('next');
+    setPhotoIdx(prev => (prev + 1) % displayTxs.length);
+  };
+
+  const goPrevPhoto = () => {
+    if (displayTxs.length <= 1) return;
+    setSlideDir('prev');
+    setPhotoIdx(prev => (prev - 1 + displayTxs.length) % displayTxs.length);
+  };
+
+  // Auto-slide photos every 1 second (1000ms) when playing & not touching
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || isTouching || slideIndex !== 0 || displayTxs.length <= 1) return;
     const timer = setInterval(() => {
-      if (slideIndex === 0 && displayTxs.length > 1 && photoIdx < Math.min(displayTxs.length - 1, 4)) {
-        setPhotoIdx(p => p + 1);
-      } else {
-        setPhotoIdx(0);
-        setSlideIndex(s => (s + 1) % 3);
-      }
-    }, 3800);
+      setSlideDir('next');
+      setPhotoIdx(prev => (prev + 1) % displayTxs.length);
+    }, 1000);
     return () => clearInterval(timer);
-  }, [playing, slideIndex, photoIdx, displayTxs.length]);
+  }, [playing, isTouching, slideIndex, displayTxs.length]);
+
+  // Touch & Pointer Swipe handlers for manual swiping (left/right or up/down)
+  const handleSwipeStart = (clientX: number, clientY: number) => {
+    touchStartRef.current = { x: clientX, y: clientY };
+    setIsTouching(true);
+    setDragX(0);
+  };
+
+  const handleSwipeMove = (clientX: number) => {
+    if (!touchStartRef.current) return;
+    const deltaX = clientX - touchStartRef.current.x;
+    setDragX(Math.max(-140, Math.min(140, deltaX)));
+  };
+
+  const handleSwipeEnd = (clientX: number, clientY: number) => {
+    if (!touchStartRef.current) {
+      setIsTouching(false);
+      setDragX(0);
+      return;
+    }
+    const dx = clientX - touchStartRef.current.x;
+    const dy = clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+    setIsTouching(false);
+    setDragX(0);
+
+    // Horizontal swipe or vertical swipe
+    if (Math.abs(dx) > 32 || Math.abs(dy) > 42) {
+      if (navigator.vibrate) navigator.vibrate(15);
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        if (dx < 0) goNextPhoto();
+        else goPrevPhoto();
+      } else {
+        if (dy < 0) goNextPhoto();
+        else goPrevPhoto();
+      }
+    }
+  };
 
   const currentTx = displayTxs[photoIdx] ?? displayTxs[0] ?? null;
-  const periodTitle = period === 1 ? '24 Giờ Qua (1 Ngày)' : period === 3 ? '3 Ngày Gần Nhất' : 'Hành Trình 1 Tuần (7 Ngày)';
+  const periodTitle =
+    period === 1 ? '24 Giờ Qua (1 Ngày)' : period === 3 ? '3 Ngày Gần Nhất' : 'Hành Trình 1 Tuần (7 Ngày)';
   const maxDayExpense = Math.max(1, ...Object.values(stats.dayTotals).map(d => Math.max(d.expense, d.income)));
+
+  const barCount = slideIndex === 0 ? Math.max(1, Math.min(displayTxs.length, 12)) : 3;
 
   return (
     <div className="cm-story-overlay" onClick={onClose}>
       <div className="cm-story-card" onClick={e => e.stopPropagation()}>
-        {/* Story Progress Bars */}
-        <div className="cm-story-bars">
-          {[0, 1, 2].map(idx => (
-            <button
-              key={idx}
-              type="button"
-              className="cm-story-bar-track"
-              onClick={() => setSlideIndex(idx)}
-              aria-label={`Chuyển đến trang ${idx + 1}`}
-            >
-              <span
-                className={`cm-story-bar-fill ${
-                  idx < slideIndex ? 'done' : idx === slideIndex ? (playing ? 'active' : 'paused') : ''
-                }`}
-              />
-            </button>
-          ))}
+        {/* 1-Second Story Progress Bars */}
+        <div
+          className="cm-story-bars"
+          style={{ gridTemplateColumns: `repeat(${barCount}, 1fr)` }}
+        >
+          {Array.from({ length: barCount }, (_, idx) => {
+            const activeIdx = slideIndex === 0 ? photoIdx % barCount : slideIndex;
+            const stateClass =
+              idx < activeIdx
+                ? 'done'
+                : idx === activeIdx
+                  ? playing && !isTouching && slideIndex === 0
+                    ? 'active-1s'
+                    : 'done'
+                  : '';
+            return (
+              <button
+                key={idx}
+                type="button"
+                className="cm-story-bar-track"
+                onClick={() => {
+                  if (slideIndex === 0) setPhotoIdx(idx);
+                  else setSlideIndex(idx);
+                }}
+                aria-label={`Mục ${idx + 1}`}
+              >
+                <span
+                  key={idx === activeIdx ? `fill-${photoIdx}-${playing}` : `static-${idx}`}
+                  className={`cm-story-bar-fill ${stateClass}`}
+                />
+              </button>
+            );
+          })}
         </div>
 
-        {/* Top Header & Period Selector (1 Ngày | 3 Ngày | 1 Tuần) */}
+        {/* Top Header & Play/Pause (1s Auto-Scroll Toggle) */}
         <header className="cm-story-header">
           <div className="cm-story-brand">
             <span className="cm-story-sparkle">
@@ -159,7 +235,9 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
             </span>
             <div>
               <strong>Nhìn lại kỷ niệm thu chi</strong>
-              <small>{periodTitle}</small>
+              <small>
+                {periodTitle} • {playing ? 'Tự lướt 1s/ảnh' : 'Đang tạm dừng (Vuốt để xem)'}
+              </small>
             </div>
           </div>
 
@@ -168,6 +246,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
               type="button"
               className="cm-story-icon-btn"
               onClick={() => setPlaying(p => !p)}
+              title={playing ? 'Tạm dừng tự lướt' : 'Bật tự động lướt 1s'}
               aria-label={playing ? 'Tạm dừng' : 'Phát tiếp'}
             >
               {playing ? <Pause size={15} /> : <Play size={15} />}
@@ -178,7 +257,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
           </div>
         </header>
 
-        {/* Period Switcher Pills */}
+        {/* Period Switcher Pills (1 Ngày | 3 Ngày | 1 Tuần) */}
         <div className="cm-story-period-tabs">
           {([1, 3, 7] as LookbackPeriod[]).map(p => (
             <button
@@ -192,15 +271,49 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
           ))}
         </div>
 
-        {/* SLIDE 0: PHOTO FLASHBACK REEL */}
+        {/* SLIDE 0: PHOTO FLASHBACK REEL (1S AUTO-SLIDE + TOUCH SWIPE) */}
         {slideIndex === 0 && (
           <div className="cm-story-slide fade-in">
-            <div className="cm-story-polaroid-wrap">
+            <div
+              className="cm-story-polaroid-wrap swipeable"
+              onTouchStart={e => {
+                const t = e.touches[0];
+                if (t) handleSwipeStart(t.clientX, t.clientY);
+              }}
+              onTouchMove={e => {
+                const t = e.touches[0];
+                if (t) handleSwipeMove(t.clientX);
+              }}
+              onTouchEnd={e => {
+                const t = e.changedTouches[0];
+                if (t) handleSwipeEnd(t.clientX, t.clientY);
+              }}
+              onPointerDown={e => {
+                if (e.pointerType === 'mouse') handleSwipeStart(e.clientX, e.clientY);
+              }}
+              onPointerMove={e => {
+                if (e.pointerType === 'mouse' && isTouching) handleSwipeMove(e.clientX);
+              }}
+              onPointerUp={e => {
+                if (e.pointerType === 'mouse') handleSwipeEnd(e.clientX, e.clientY);
+              }}
+            >
               {currentTx ? (
-                <div className={`cm-story-polaroid ${currentTx.type}`} key={currentTx.id}>
+                <div
+                  className={`cm-story-polaroid ${currentTx.type} slide-${slideDir}`}
+                  key={`${currentTx.id}-${photoIdx}`}
+                  style={
+                    dragX !== 0
+                      ? {
+                          transform: `translateX(${dragX}px) rotate(${dragX * 0.04}deg)`,
+                          transition: 'none',
+                        }
+                      : undefined
+                  }
+                >
                   <div className="cm-polaroid-media">
                     {currentTx.imageUrl ? (
-                      <img src={currentTx.imageUrl} alt={currentTx.note} />
+                      <img src={currentTx.imageUrl} alt={currentTx.note} draggable={false} />
                     ) : (
                       <div className={`cm-polaroid-placeholder ${currentTx.type}`}>
                         {currentTx.type === 'income' ? <ArrowDownLeft size={48} /> : <ArrowUpRight size={48} />}
@@ -213,6 +326,33 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
                     <span className={`cm-polaroid-cat ${currentTx.type}`}>
                       {categoryNames[currentTx.categoryId] ?? 'Giao dịch'}
                     </span>
+
+                    {displayTxs.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          className="cm-polaroid-side-arrow left"
+                          onClick={e => {
+                            e.stopPropagation();
+                            goPrevPhoto();
+                          }}
+                          aria-label="Ảnh trước"
+                        >
+                          <ChevronLeft size={20} />
+                        </button>
+                        <button
+                          type="button"
+                          className="cm-polaroid-side-arrow right"
+                          onClick={e => {
+                            e.stopPropagation();
+                            goNextPhoto();
+                          }}
+                          aria-label="Ảnh tiếp theo"
+                        >
+                          <ChevronRight size={20} />
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   <div className="cm-polaroid-caption">
@@ -221,19 +361,25 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
                       {currentTx.amount.toLocaleString('vi-VN')}đ
                     </strong>
                     <p>{currentTx.note || (currentTx.type === 'income' ? 'Khoản thu nhập' : 'Khoản chi tiêu')}</p>
+                    <small className="cm-swipe-hint">
+                      👆 Vuốt trái/phải để lướt tay • Ảnh {photoIdx + 1}/{displayTxs.length}
+                    </small>
                   </div>
                 </div>
               ) : (
                 <div className="cm-story-empty-state">
                   <Sparkles size={36} />
                   <strong>Chưa có bill nào được chụp</strong>
-                  <p>Hãy bấm dấu + trên lịch để chụp lại các hóa đơn và xem thước phim nhìn lại sau 1 ngày, 3 ngày, 1 tuần!</p>
+                  <p>
+                    Hãy bấm dấu + trên lịch để chụp lại các hóa đơn và xem thước phim nhìn lại sau 1 ngày, 3 ngày, 1
+                    tuần!
+                  </p>
                 </div>
               )}
 
               {displayTxs.length > 1 && (
                 <div className="cm-polaroid-dots">
-                  {displayTxs.slice(0, 5).map((tx, idx) => (
+                  {displayTxs.slice(0, 10).map((tx, idx) => (
                     <button
                       key={tx.id}
                       type="button"
@@ -291,7 +437,9 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
                         )}
                         {d.expense === 0 && d.income === 0 && <span className="cm-bar-pill empty" />}
                       </div>
-                      <small>{k.slice(8, 10)}/{k.slice(5, 7)}</small>
+                      <small>
+                        {k.slice(8, 10)}/{k.slice(5, 7)}
+                      </small>
                     </div>
                   );
                 })}
@@ -347,24 +495,28 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
           </div>
         )}
 
-        {/* Footer Slide Navigation */}
+        {/* Footer View Mode Switcher (Ảnh Kỷ Niệm | Biểu Đồ | Tổng Kết) */}
         <footer className="cm-story-footer">
           <button
             type="button"
-            className="cm-story-nav-btn"
-            onClick={() => setSlideIndex(s => (s + 2) % 3)}
+            className={`cm-story-nav-btn ${slideIndex === 0 ? 'active' : ''}`}
+            onClick={() => setSlideIndex(0)}
           >
-            <ChevronLeft size={17} /> Trước
+            <Camera size={14} /> Ảnh ({displayTxs.length})
           </button>
-          <span className="cm-story-page-indicator">
-            Trang {slideIndex + 1} / 3 • {stats.txCount} giao dịch
-          </span>
           <button
             type="button"
-            className="cm-story-nav-btn"
-            onClick={() => setSlideIndex(s => (s + 1) % 3)}
+            className={`cm-story-nav-btn ${slideIndex === 1 ? 'active' : ''}`}
+            onClick={() => setSlideIndex(1)}
           >
-            Tiếp <ChevronRight size={17} />
+            <BarChart3 size={14} /> Biểu đồ
+          </button>
+          <button
+            type="button"
+            className={`cm-story-nav-btn ${slideIndex === 2 ? 'active' : ''}`}
+            onClick={() => setSlideIndex(2)}
+          >
+            <Trophy size={14} /> Điểm nhấn
           </button>
         </footer>
       </div>
