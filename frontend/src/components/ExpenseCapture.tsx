@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  Crop,
   LoaderCircle,
   Plus,
   ReceiptText,
@@ -14,6 +15,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api, type Wallet } from '../services/api';
 import { CameraView } from './CameraView';
+import { ImageCropModal } from './ImageCropModal';
 
 const expenseCategories = [
   { id: 'food', label: 'Ăn uống' },
@@ -48,7 +50,6 @@ export function ExpenseCapture({
   onClose,
   onSaved,
 }: ExpenseCaptureProps) {
-  // Step 1 is ALWAYS Camera first when clicking '+'
   const [step, setStep] = useState<'camera' | 'form'>('camera');
   const [type, setType] = useState<'expense' | 'income'>(initialType);
   const [amount, setAmount] = useState('');
@@ -58,6 +59,7 @@ export function ExpenseCapture({
   const [walletId, setWalletId] = useState(defaultWalletId && defaultWalletId !== 'all' ? defaultWalletId : '');
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [image, setImage] = useState<File | null>(null);
+  const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -147,7 +149,19 @@ export function ExpenseCapture({
     }
   };
 
-  // STEP 1: Camera Screen
+  if (pendingCropFile) {
+    return (
+      <ImageCropModal
+        file={pendingCropFile}
+        onCancel={() => setPendingCropFile(null)}
+        onConfirm={cropped => {
+          setPendingCropFile(null);
+          setImage(cropped);
+        }}
+      />
+    );
+  }
+
   if (step === 'camera') {
     return (
       <CameraView
@@ -165,14 +179,12 @@ export function ExpenseCapture({
     );
   }
 
-  // STEP 2: Price & Details Screen overlaid on the captured photo
   const isToday = dateKey === todayKey();
   const displayDate = isToday ? 'Hôm nay' : formatShortDate(dateKey);
 
   return (
     <div className="cm-capture-modal" onClick={onClose}>
       <div className="cm-capture-sheet" onClick={event => event.stopPropagation()}>
-        {/* Top Photo Stage containing Hủy, 3/3, captured photo background, and frosted amount box */}
         <div
           className={`cm-photo-stage ${type}`}
           style={previewUrl ? { backgroundImage: `url(${previewUrl})` } : undefined}
@@ -188,9 +200,22 @@ export function ExpenseCapture({
             >
               Hủy
             </button>
-            <span className="cm-quota-badge">
-              <SquarePen size={13} /> 3/3
-            </span>
+            <div className="cm-capture-top-right">
+              {image && (
+                <button
+                  type="button"
+                  className="cm-pill-btn"
+                  onClick={() => setPendingCropFile(image)}
+                  title="Cắt hoặc xoay lại ảnh"
+                >
+                  <Crop size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
+                  Cắt ảnh
+                </button>
+              )}
+              <span className="cm-quota-badge">
+                <SquarePen size={13} /> 3/3
+              </span>
+            </div>
           </header>
 
           <div className={`cm-entry-card ${type}`}>
@@ -300,7 +325,7 @@ export function ExpenseCapture({
               type="button"
               className="cm-circle-action secondary"
               onClick={() => fileInputRef.current?.click()}
-              aria-label="Đổi ảnh hoặc chia sẻ"
+              aria-label="Chọn ảnh từ album"
             >
               <Share size={20} />
             </button>
@@ -344,7 +369,7 @@ export function ExpenseCapture({
           className="visually-hidden"
           onChange={event => {
             const file = event.target.files?.[0];
-            if (file) setImage(file);
+            if (file) setPendingCropFile(file);
             event.target.value = '';
           }}
         />

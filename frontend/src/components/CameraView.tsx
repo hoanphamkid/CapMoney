@@ -1,5 +1,6 @@
 import { Camera, Flashlight, ImagePlus, RefreshCcw, SquarePen, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { ImageCropModal } from './ImageCropModal';
 
 type CameraViewProps = {
   onCaptured: (file: File) => void;
@@ -16,6 +17,7 @@ export function CameraView({ onCaptured, onSelected, onManual, onClose }: Camera
   const [flash, setFlash] = useState(false);
   const [permission, setPermission] = useState<'loading' | 'granted' | 'denied' | 'unsupported'>('loading');
   const [error, setError] = useState('');
+  const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,9 +60,12 @@ export function CameraView({ onCaptured, onSelected, onManual, onClose }: Camera
     const video = videoRef.current;
     if (permission === 'granted' && video && video.readyState >= 2) {
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 720;
-      canvas.height = video.videoHeight || 720;
-      canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const size = Math.min(video.videoWidth || 720, video.videoHeight || 720);
+      const sx = ((video.videoWidth || size) - size) / 2;
+      const sy = ((video.videoHeight || size) - size) / 2;
+      canvas.width = size;
+      canvas.height = size;
+      canvas.getContext('2d')?.drawImage(video, sx, sy, size, size, 0, 0, size, size);
       canvas.toBlob(
         blob => {
           if (blob) {
@@ -74,7 +79,6 @@ export function CameraView({ onCaptured, onSelected, onManual, onClose }: Camera
       );
       return;
     }
-    // If camera is unavailable/denied and user taps the shutter button, create a dark snapshot canvas so they immediately proceed to the price input screen
     const fallbackCanvas = document.createElement('canvas');
     fallbackCanvas.width = 720;
     fallbackCanvas.height = 720;
@@ -111,6 +115,19 @@ export function CameraView({ onCaptured, onSelected, onManual, onClose }: Camera
       // Ignore unsupported torch constraint
     }
   };
+
+  if (pendingCropFile) {
+    return (
+      <ImageCropModal
+        file={pendingCropFile}
+        onCancel={() => setPendingCropFile(null)}
+        onConfirm={cropped => {
+          setPendingCropFile(null);
+          onSelected(cropped);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="cm-camera-modal" onClick={onClose}>
@@ -197,7 +214,7 @@ export function CameraView({ onCaptured, onSelected, onManual, onClose }: Camera
           accept="image/jpeg,image/png,image/webp"
           onChange={event => {
             const file = event.target.files?.[0];
-            if (file) onSelected(file);
+            if (file) setPendingCropFile(file);
             event.target.value = '';
           }}
         />

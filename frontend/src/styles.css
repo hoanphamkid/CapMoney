@@ -1743,3 +1743,274 @@ html.dark-theme { --ink: #e6eee6; --muted: #9eafa2; --line: #2d4940; --paper: #1
 html:not(.dark-theme) .cm-app-shell {
   background: #12141b;
 }
+
+
+/* =========================================================
+   COMPLETE DARK OVERRIDES FOR EDIT MODAL & ALL WHITE BOXES
+   ========================================================= */
+.reminder-modal,
+.expense-detail,
+.edit-transaction,
+.wallet-modal {
+  background: #181b24 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f4f6fa !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7) !important;
+}
+
+.reminder-modal h2,
+.expense-detail h2,
+.edit-transaction h2,
+.wallet-modal h2 {
+  color: #ffffff !important;
+}
+
+.edit-transaction {
+  display: grid;
+  gap: 12px;
+}
+
+.type-toggle button {
+  background: #232733 !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #9ba1b0 !important;
+  font-weight: 600;
+}
+
+.type-toggle button.active.expense {
+  background: rgba(224, 109, 100, 0.22) !important;
+  border-color: #e06d64 !important;
+  color: #ff9d95 !important;
+}
+
+.type-toggle button.active.income {
+  background: rgba(95, 194, 120, 0.22) !important;
+  border-color: #5fc278 !important;
+  color: #84e39c !important;
+}
+
+.replace-image {
+  background: #232733 !important;
+  border: 1px dashed rgba(110, 168, 254, 0.45) !important;
+  color: #8ab8ec !important;
+  font-weight: 600;
+}
+
+.replace-image:hover {
+  background: #2b3242 !important;
+  color: #ffffff !important;
+}
+
+.detail-no-photo {
+  background: #202430 !important;
+  color: #969ca8 !important;
+}
+
+.detail-kind.income {
+  background: rgba(95, 194, 120, 0.2) !important;
+  color: #7ce095 !important;
+}
+
+.detail-kind.expense {
+  background: rgba(224, 109, 100, 0.2) !important;
+  color: #ff9b93 !important;
+}
+
+.cm-app-shell .metric-top i,
+.cm-app-shell .empty-circle,
+.cm-app-shell .empty-state-icon,
+.cm-app-shell .settings-heading > span,
+.cm-app-shell .settings-row-icon,
+.cm-app-shell .wallet-add-card span {
+  background: #242936 !important;
+  color: #7ab0f5 !important;
+}
+
+.cm-app-shell .recent-empty strong,
+.cm-app-shell .appearance-row strong,
+.cm-app-shell .session-row strong,
+.cm-app-shell .wallet-history-row strong {
+  color: #eef1f7 !important;
+}
+
+.cm-app-shell .color-picker button {
+  border-color: #181b24 !important;
+}
+
+/* =========================================================
+   IMAGE CROP & ROTATE MODAL (ALBUM PHOTO FIT TO FRAME)
+   ========================================================= */
+.cm-crop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(8, 9, 13, 0.92);
+  backdrop-filter: blur(12px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.cm-crop-modal {
+  width: min(100%, 420px);
+  background: #171922;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 26px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: #f4f6fa;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+}
+
+.cm-crop-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cm-crop-header > div {
+  text-align: center;
+  display: grid;
+  gap: 2px;
+}
+
+.cm-crop-header strong {
+  font-size: 14px;
+  color: #ffffff;
+}
+
+.cm-crop-header small {
+  font-size: 11px;
+  color: #8f95a3;
+}
+
+.cm-crop-icon-btn,
+.cm-crop-confirm-top {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+}
+
+.cm-crop-icon-btn {
+  background: #252834;
+  color: #cfd4e0;
+}
+
+.cm-crop-confirm-top {
+  background: #6ea2dc;
+  color: #ffffff;
+}
+
+.cm-crop-stage {
+  position: relative;
+  width: min(100%, 320px);
+  aspect-ratio: 1 / 1;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #0e1015;
+  border: 2px solid #6ea2dc;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.cm-crop-stage:active {
+  cursor: grabbing;
+}
+
+.cm-crop-image {
+  pointer-events: none;
+  user-select: none;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.cm-crop-grid-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, transparent 33.33%, rgba(255, 255, 255, 0.18) 33.33% 33.6%, transparent 33.6% 66.66%, rgba(255, 255, 255, 0.18) 66.66% 66.9%, transparent 66.9%),
+    linear-gradient(to bottom, transparent 33.33%, rgba(255, 255, 255, 0.18) 33.33% 33.6%, transparent 33.6% 66.66%, rgba(255, 255, 255, 0.18) 66.66% 66.9%, transparent 66.9%);
+}
+
+.cm-crop-zoom-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
+}
+
+.cm-crop-mini-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #232733;
+  color: #d5dae6;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.cm-crop-slider {
+  flex: 1;
+  accent-color: #6ea2dc;
+  cursor: pointer;
+}
+
+.cm-crop-tools {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.cm-crop-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #232733;
+  color: #dbe0ec;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cm-crop-tool-btn:hover {
+  background: #2c3242;
+  color: #ffffff;
+}
+
+.cm-crop-submit-btn {
+  width: 100%;
+  height: 46px;
+  border-radius: 14px;
+  border: 0;
+  background: #6ea2dc;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.cm-crop-submit-btn:hover {
+  background: #7fb0e6;
+}
