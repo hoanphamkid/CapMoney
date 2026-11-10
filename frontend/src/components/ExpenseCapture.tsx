@@ -1,40 +1,26 @@
 import {
-  AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
   CalendarDays,
   Check,
   ChevronDown,
   Crop,
+  Delete,
   LoaderCircle,
   Mic,
   MicOff,
   Plus,
   ReceiptText,
-  ScanLine,
+  ScanText,
   Share,
-  ShieldCheck,
   ShoppingCart,
-  Sparkles,
   SquarePen,
-  Users,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api, type Wallet } from '../services/api';
 import { scanReceiptImage } from '../utils/receiptOcr';
 import { CameraView } from './CameraView';
 import { ImageCropModal } from './ImageCropModal';
-import { loadBudget } from './SpendingLimitModal';
-
-const quickAmounts = [
-  { label: '+15k', value: 15_000 },
-  { label: '+25k', value: 25_000 },
-  { label: '+35k', value: 35_000 },
-  { label: '+50k', value: 50_000 },
-  { label: '+100k', value: 100_000 },
-  { label: '+200k', value: 200_000 },
-  { label: '+500k', value: 500_000 },
-];
 
 const expenseCategories = [
   { id: 'food', label: 'Ăn uống' },
@@ -71,7 +57,7 @@ export function ExpenseCapture({
 }: ExpenseCaptureProps) {
   const [step, setStep] = useState<'camera' | 'form'>('camera');
   const [type, setType] = useState<'expense' | 'income'>(initialType);
-  const [amount, setAmount] = useState('');
+  const [expr, setExpr] = useState(''); // calculator expression or plain digits
   const [note, setNote] = useState('');
   const [category, setCategory] = useState(initialType === 'income' ? 'salary' : 'food');
   const [dateKey, setDateKey] = useState(selectedDate || todayKey());
@@ -83,9 +69,10 @@ export function ExpenseCapture({
   const [error, setError] = useState('');
   const [ocrScanning, setOcrScanning] = useState(false);
   const [ocrCandidates, setOcrCandidates] = useState<number[]>([]);
+  const [showCandidates, setShowCandidates] = useState(false);
   const [ocrAutoFilled, setOcrAutoFilled] = useState(false);
   const [listening, setListening] = useState(false);
-  const [splitOpen, setSplitOpen] = useState(false);
+  const [keypadOpen, setKeypadOpen] = useState(true);
   const [celebrate, setCelebrate] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
@@ -95,49 +82,138 @@ export function ExpenseCapture({
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
+  useEffect(() => {
+    let active = true;
+    const initWallets = async () => {
+      try {
+        const result = await api.wallets();
+        let list = result.wallets;
+        if (!list.length) {
+          const w1 = await api.createWallet({ name: 'Wallet', type: 'cash', openingBalance: 0, color: '#163e36' });
+          const w2 = await api.createWallet({ name: 'Bank', type: 'bank', openingBalance: 0, color: '#3c6684' });
+          list = [w1.wallet, w2.wallet];
+        }
+        if (!active) return;
+        setWallets(list);
+        setWalletId(current => {
+          if (current && list.some(w => w.id === current)) return current;
+          return list[0]?.id ?? '';
+        });
+      } catch {
+        if (active) setError('Không tải được danh sách ví.');
+      }
+    };
+    void initWallets();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Automatically scan numbers on captured/selected bill photo
+  const triggerOcrScan = async (targetFile: File, forceOverwrite = false) => {
+    setOcrScanning(true);
+    setOcrAutoFilled(false);
+    try {
+      const result = await scanReceiptImage(targetFile);
+      setOcrCandidates(result.candidates);
+      if (result.bestAmount > 0) {
+        setExpr(current => {
+          if (forceOverwrite || !current || current === '0') {
+            setOcrAutoFilled(true);
+            if (navigator.vibrate) navigator.vibrate(45);
+            return String(result.bestAmount);
+          }
+          return current;
+        });
+      }
+      if (result.suggestedType) {
+        setType(result.suggestedType);
+      }
+      if (result.suggestedCategory) {
+        setCategory(result.suggestedCategory);
+      }
+      if (result.suggestedNote) {
+        setNote(current => current || result.suggestedNote || '');
+      }
+    } finally {
+      setOcrScanning(false);
+    }
+  };
+
   useEffect(() => {
     if (!image) {
       setOcrCandidates([]);
       setOcrScanning(false);
       return;
     }
-    let cancelled = false;
-    const runScan = async () => {
-      setOcrScanning(true);
-      setOcrAutoFilled(false);
-      try {
-        const result = await scanReceiptImage(image);
-        if (cancelled) return;
-        setOcrCandidates(result.candidates);
-        if (result.bestAmount > 0) {
-          setAmount(current => {
-            if (!current || current === '0') {
-              setOcrAutoFilled(true);
-              if (navigator.vibrate) navigator.vibrate(45);
-              return String(result.bestAmount);
-            }
-            return current;
-          });
-        }
-        if (result.suggestedType) {
-          setType(result.suggestedType);
-        }
-        if (result.suggestedCategory) {
-          setCategory(result.suggestedCategory);
-        }
-        if (result.suggestedNote) {
-          setNote(current => current || result.suggestedNote || '');
-        }
-      } finally {
-        if (!cancelled) setOcrScanning(false);
-      }
-    };
-    void runScan();
-    return () => {
-      cancelled = true;
-    };
+    void triggerOcrScan(image, false);
   }, [image]);
+
+  const switchType = (nextType: 'expense' | 'income') => {
+    setType(nextType);
+    if (nextType === 'income' && !incomeCategories.some(item => item.id === category)) {
+      setCategory('salary');
+    } else if (nextType === 'expense' && !expenseCategories.some(item => item.id === category)) {
+      setCategory('food');
+    }
+  };
+
+  const categories = type === 'income' ? incomeCategories : expenseCategories;
+
+  const evaluateExpression = (raw: string): number => {
+    const cleaned = raw.replace(/[^0-9+\-*/.]/g, '');
+    if (!cleaned) return 0;
+    try {
+      // Safe simple arithmetic evaluation (+, -, *, /)
+      const tokens = cleaned.match(/(\d+(?:\.\d+)?|[+\-*/])/g);
+      if (!tokens || tokens.length === 0) return 0;
+      let current = Number(tokens[0]) || 0;
+      for (let i = 1; i < tokens.length; i += 2) {
+        const op = tokens[i];
+        const nextVal = Number(tokens[i + 1]);
+        if (!Number.isFinite(nextVal)) break;
+        if (op === '+') current += nextVal;
+        else if (op === '-') current = Math.max(0, current - nextVal);
+        else if (op === '*') current = Math.round(current * nextVal);
+        else if (op === '/') current = nextVal !== 0 ? Math.round(current / nextVal) : current;
+      }
+      return Math.max(0, Math.round(current));
+    } catch {
+      return Number(raw.replace(/[^0-9]/g, '')) || 0;
+    }
+  };
+
+  const hasOperator = /[+\-*/]/.test(expr);
+  const rawNumericAmount = evaluateExpression(expr);
+
+  const formattedDisplay = useMemo(() => {
+    if (!expr) return '0';
+    if (!hasOperator) {
+      const n = Number(expr.replace(/[^0-9]/g, '')) || 0;
+      return n.toLocaleString('en-US');
+    }
+    // Format numbers inside expression with commas (e.g., 60,000÷2)
+    return expr
+      .replace(/\d+/g, m => Number(m).toLocaleString('en-US'))
+      .replace(/\*/g, '×')
+      .replace(/\//g, '÷');
+  }, [expr, hasOperator]);
+
+  const parseAmountFromNote = (text: string): number => {
+    const matchK = text.match(/(\d+(?:[.,]\d+)?)\s*(k|nghin|nghìn|ngàn)/i);
+    if (matchK) {
+      return Math.round(parseFloat(matchK[1].replace(',', '.')) * 1_000);
+    }
+    const matchTr = text.match(/(\d+(?:[.,]\d+)?)\s*(tr|trieu|triệu|củ)/i);
+    if (matchTr) {
+      return Math.round(parseFloat(matchTr[1].replace(',', '.')) * 1_000_000);
+    }
+    const matchRaw = text.match(/\b(\d{4,9})\b/);
+    if (matchRaw) {
+      return Number(matchRaw[1]);
+    }
+    return 0;
+  };
 
   const startVoiceInput = () => {
     const SpeechRec =
@@ -175,7 +251,7 @@ export function ExpenseCapture({
         if (!transcript) return;
         const parsedAmt = parseAmountFromNote(transcript);
         if (parsedAmt > 0) {
-          setAmount(String(parsedAmt));
+          setExpr(String(parsedAmt));
           setOcrAutoFilled(true);
           if (navigator.vibrate) navigator.vibrate([30, 50]);
         }
@@ -190,74 +266,57 @@ export function ExpenseCapture({
     }
   };
 
-  useEffect(() => {
-    let active = true;
-    const initWallets = async () => {
-      try {
-        const result = await api.wallets();
-        let list = result.wallets;
-        if (!list.length) {
-          const w1 = await api.createWallet({ name: 'Wallet', type: 'cash', openingBalance: 0, color: '#163e36' });
-          const w2 = await api.createWallet({ name: 'Bank', type: 'bank', openingBalance: 0, color: '#3c6684' });
-          list = [w1.wallet, w2.wallet];
+  const handleKeyPress = (key: string) => {
+    setError('');
+    setOcrAutoFilled(false);
+    if (navigator.vibrate) navigator.vibrate(12);
+
+    if (key === 'C') {
+      setExpr('');
+      return;
+    }
+    if (key === 'BACK') {
+      setExpr(prev => prev.slice(0, -1));
+      return;
+    }
+    if (['+', '-', '*', '/'].includes(key)) {
+      setExpr(prev => {
+        if (!prev) return '';
+        if (/[+\-*/]$/.test(prev)) {
+          return prev.slice(0, -1) + key;
         }
-        if (!active) return;
-        setWallets(list);
-        setWalletId(current => {
-          if (current && list.some(w => w.id === current)) return current;
-          return list[0]?.id ?? '';
-        });
-      } catch {
-        if (active) setError('Không tải được danh sách ví.');
-      }
-    };
-    void initWallets();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const switchType = (nextType: 'expense' | 'income') => {
-    setType(nextType);
-    if (nextType === 'income' && !incomeCategories.some(item => item.id === category)) {
-      setCategory('salary');
-    } else if (nextType === 'expense' && !expenseCategories.some(item => item.id === category)) {
-      setCategory('food');
+        return prev + key;
+      });
+      return;
     }
-  };
-
-  const categories = type === 'income' ? incomeCategories : expenseCategories;
-  const rawNumericAmount = Number(amount.replace(/[^0-9]/g, '')) || 0;
-  const formattedAmount = rawNumericAmount ? rawNumericAmount.toLocaleString('vi-VN') : '';
-  const budget = useMemo(() => loadBudget(), []);
-
-  const parseAmountFromNote = (text: string): number => {
-    const matchK = text.match(/(\d+(?:[.,]\d+)?)\s*(k|nghin|nghìn|ngàn)/i);
-    if (matchK) {
-      return Math.round(parseFloat(matchK[1].replace(',', '.')) * 1_000);
+    if (key === '000') {
+      setExpr(prev => {
+        if (!prev || prev === '0') return '';
+        if (/[+\-*/]$/.test(prev)) return prev;
+        return prev + '000';
+      });
+      return;
     }
-    const matchTr = text.match(/(\d+(?:[.,]\d+)?)\s*(tr|trieu|triệu|củ)/i);
-    if (matchTr) {
-      return Math.round(parseFloat(matchTr[1].replace(',', '.')) * 1_000_000);
-    }
-    const matchRaw = text.match(/\b(\d{4,9})\b/);
-    if (matchRaw) {
-      return Number(matchRaw[1]);
-    }
-    return 0;
+    // Digit 0-9
+    setExpr(prev => {
+      if (prev === '0') return key;
+      if (prev.length >= 15) return prev;
+      return prev + key;
+    });
   };
 
   const saveTransaction = async (keepOpenForNextShot = false) => {
-    let numericAmount = Number(amount.replace(/[^0-9]/g, '')) || 0;
+    let numericAmount = evaluateExpression(expr);
     if (!numericAmount && note.trim()) {
       const guessed = parseAmountFromNote(note);
       if (guessed > 0) {
         numericAmount = guessed;
-        setAmount(String(guessed));
+        setExpr(String(guessed));
       }
     }
     if (!numericAmount) {
-      setError('Vui lòng nhập số tiền hoặc chọn nhanh mệnh giá bên dưới.');
+      setError('Vui lòng nhập số tiền.');
+      setKeypadOpen(true);
       return;
     }
     let targetWalletId = walletId || wallets[0]?.id || '';
@@ -281,7 +340,7 @@ export function ExpenseCapture({
       });
       if (navigator.vibrate) navigator.vibrate([35, 50, 75]);
       if (keepOpenForNextShot) {
-        setAmount('');
+        setExpr('');
         setNote('');
         setImage(null);
         setStep('camera');
@@ -289,7 +348,7 @@ export function ExpenseCapture({
         setCelebrate(true);
         setTimeout(() => {
           onSaved();
-        }, 420);
+        }, 380);
       }
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Không thể lưu giao dịch.');
@@ -344,8 +403,10 @@ export function ExpenseCapture({
             <span>💎</span>
           </div>
         )}
+
+        {/* TOP ROUNDED PHOTO CARD WITH TRANSLUCENT FROSTED AMOUNT OVERLAY */}
         <div
-          className={`cm-photo-stage ${type} ${ocrScanning ? 'scanning' : ''} ${previewUrl ? 'has-photo' : 'no-photo'}`}
+          className={`cm-photo-stage ${type} ${ocrScanning ? 'scanning' : ''}`}
           style={previewUrl ? { backgroundImage: `url(${previewUrl})` } : undefined}
         >
           {ocrScanning && <div className="cm-ocr-laser-beam" aria-hidden="true" />}
@@ -379,172 +440,87 @@ export function ExpenseCapture({
             </div>
           </header>
 
-          <div className="cm-photo-stage-bottom">
-            {ocrScanning && (
-              <div className="cm-ocr-status-pill scanning">
-                <ScanLine size={13} className="spin" />
-                <span>Đang tự nhìn số tiền trên ảnh...</span>
-              </div>
-            )}
+          {/* Translucent ("mờ mờ") Frosted Glass Entry Box at Bottom of Photo */}
+          <div
+            className={`cm-entry-card frosted-glass ${type} ${ocrAutoFilled ? 'ocr-pop' : ''}`}
+            onClick={() => setKeypadOpen(true)}
+          >
+            <div className="cm-amount-row">
+              <span className={`cm-amount-sign ${type}`}>{type === 'expense' ? '−' : '+'}</span>
+              <span className="cm-amount-display">{formattedDisplay}</span>
+              <span className="cm-amount-currency">đ</span>
+            </div>
 
-            {!ocrScanning && ocrAutoFilled && rawNumericAmount > 0 && (
-              <div className="cm-ocr-status-pill success">
-                <Sparkles size={13} />
-                <span>Đã tự điền: {rawNumericAmount.toLocaleString('vi-VN')}đ</span>
-              </div>
-            )}
+            <div
+              className="cm-detail-input-wrap"
+              onClick={e => {
+                e.stopPropagation();
+                setKeypadOpen(false);
+              }}
+            >
+              <span className="cm-detail-angle">∠</span>
+              <input
+                type="text"
+                className="cm-detail-input"
+                value={note}
+                onFocus={() => setKeypadOpen(false)}
+                onChange={event => {
+                  setError('');
+                  setNote(event.target.value);
+                }}
+                placeholder={listening ? '🎙️ Đang nghe...' : 'Thêm chi tiết'}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') void saveTransaction(false);
+                }}
+              />
+            </div>
           </div>
         </div>
 
-        <div className={`cm-entry-card below-photo ${type} ${ocrAutoFilled ? 'ocr-pop' : ''}`}>
-          <div className="cm-amount-row">
-            <span className={`cm-amount-sign ${type}`}>{type === 'expense' ? '−' : '+'}</span>
-            <input
-              autoFocus
-              inputMode="numeric"
-              className="cm-amount-input"
-              value={formattedAmount}
-              onChange={event => {
-                setError('');
-                setOcrAutoFilled(false);
-                setAmount(event.target.value.replace(/[^0-9]/g, ''));
-              }}
-              placeholder="0"
-            />
-            <span className="cm-amount-currency">đ</span>
-          </div>
+        {/* "[🔍 Tự động nhận diện]" Pill Right Below Photo */}
+        <div className="cm-ocr-bar-below">
+          <button
+            type="button"
+            className={`cm-auto-detect-pill ${ocrScanning ? 'scanning' : ''}`}
+            onClick={() => {
+              if (ocrCandidates.length > 1) {
+                setShowCandidates(v => !v);
+              } else if (image) {
+                void triggerOcrScan(image, true);
+              }
+            }}
+          >
+            <ScanText size={13} className={ocrScanning ? 'spin' : ''} />
+            <span>
+              {ocrScanning
+                ? 'Đang nhận diện số...'
+                : ocrCandidates.length > 1
+                  ? `Tự động nhận diện (${ocrCandidates.length} số)`
+                  : 'Tự động nhận diện'}
+            </span>
+          </button>
 
-          <div className="cm-detail-input-wrap">
-            <input
-              type="text"
-              className="cm-detail-input"
-              value={note}
-              onChange={event => {
-                setError('');
-                setNote(event.target.value);
-              }}
-              placeholder={listening ? '🎙️ Đang nghe bạn nói...' : 'Thêm chi tiết (VD: Cà phê 35k)'}
-              onKeyDown={event => {
-                if (event.key === 'Enter') void saveTransaction(false);
-              }}
-            />
-            <button
-              type="button"
-              className={`cm-voice-mic-btn ${listening ? 'listening' : ''}`}
-              onClick={startVoiceInput}
-              title="Nhập bằng giọng nói (VD: Cà phê 35k)"
-              aria-label="Nhập bằng giọng nói"
-            >
-              {listening ? <MicOff size={15} /> : <Mic size={15} />}
-            </button>
-          </div>
-
-          {ocrCandidates.length > 0 && (
+          {showCandidates && ocrCandidates.length > 0 && (
             <div className="cm-ocr-candidates-row">
-              <small className="cm-ocr-candidates-label">🔍 Số trong ảnh:</small>
               {ocrCandidates.map(val => (
                 <button
                   key={val}
                   type="button"
                   className={`cm-ocr-candidate-chip ${rawNumericAmount === val ? 'active' : ''}`}
                   onClick={() => {
-                    setError('');
-                    setAmount(String(val));
+                    setExpr(String(val));
+                    setShowCandidates(false);
                     if (navigator.vibrate) navigator.vibrate(25);
                   }}
                 >
-                  {val.toLocaleString('vi-VN')}đ
+                  {val.toLocaleString('en-US')}đ
                 </button>
               ))}
             </div>
           )}
-
-          <div className="cm-quick-amounts">
-            {quickAmounts.map(chip => (
-              <button
-                key={chip.label}
-                type="button"
-                className="cm-quick-chip"
-                onClick={() => {
-                  setError('');
-                  setAmount(String(rawNumericAmount + chip.value));
-                }}
-              >
-                {chip.label}
-              </button>
-            ))}
-            {rawNumericAmount > 0 && rawNumericAmount < 10_000 && (
-              <button
-                type="button"
-                className="cm-quick-chip highlight"
-                onClick={() => setAmount(String(rawNumericAmount * 1_000))}
-              >
-                .000đ
-              </button>
-            )}
-            {rawNumericAmount > 0 && (
-              <button
-                type="button"
-                className={`cm-quick-chip ${splitOpen ? 'highlight' : ''}`}
-                onClick={() => setSplitOpen(v => !v)}
-                title="Chia tiền nhóm"
-              >
-                <Users size={11} style={{ marginRight: 3, verticalAlign: '-1px' }} />
-                Chia bill
-              </button>
-            )}
-            {rawNumericAmount > 0 && (
-              <button
-                type="button"
-                className="cm-quick-chip clear"
-                onClick={() => setAmount('')}
-              >
-                Xoá
-              </button>
-            )}
-          </div>
-
-          {splitOpen && rawNumericAmount > 0 && (
-            <div className="cm-inline-split-row">
-              <small>Chia đều cho:</small>
-              {[2, 3, 4, 5, 6].map(n => (
-                <button
-                  key={n}
-                  type="button"
-                  className="cm-quick-chip highlight"
-                  onClick={() => {
-                    const share = Math.ceil(rawNumericAmount / n / 1000) * 1000;
-                    setAmount(String(share));
-                    setNote(prev =>
-                      prev ? `${prev} (Chia ${n})` : `Chia ${n} từ bill ${rawNumericAmount.toLocaleString('vi-VN')}đ`,
-                    );
-                    setSplitOpen(false);
-                    if (navigator.vibrate) navigator.vibrate(30);
-                  }}
-                >
-                  ÷{n} người
-                </button>
-              ))}
-            </div>
-          )}
-
-          {type === 'expense' && rawNumericAmount > 0 && budget.dailyLimit > 0 && (
-            <div className={`cm-entry-budget-hint ${rawNumericAmount > budget.dailyLimit ? 'warn' : 'ok'}`}>
-              {rawNumericAmount > budget.dailyLimit ? (
-                <>
-                  <AlertTriangle size={12} /> Vượt hạn mức ngày ({budget.dailyLimit.toLocaleString('vi-VN')}đ)
-                </>
-              ) : (
-                <>
-                  <ShieldCheck size={12} /> Trong hạn mức ngày ({Math.round((rawNumericAmount / budget.dailyLimit) * 100)}%)
-                </>
-              )}
-            </div>
-          )}
-
-          {error && <div className="cm-entry-inline-error">{error}</div>}
         </div>
 
+        {/* Category & Wallet Select Pills */}
         <div className="cm-Select-pills">
           <label className="cm-select-pill">
             <ShoppingCart size={15} />
@@ -571,6 +547,7 @@ export function ExpenseCapture({
           </label>
         </div>
 
+        {/* Expense / Income Switcher */}
         <div className="cm-type-switcher">
           <button
             type="button"
@@ -590,7 +567,8 @@ export function ExpenseCapture({
           </button>
         </div>
 
-        <div className="cm-date-row">
+        {/* Date Pill & Blue Floating Mic Button */}
+        <div className="cm-date-mic-row">
           <button
             type="button"
             className="cm-date-pill"
@@ -615,52 +593,149 @@ export function ExpenseCapture({
               }}
             />
           </button>
+
+          <button
+            type="button"
+            className={`cm-floating-mic-btn ${listening ? 'listening' : ''}`}
+            onClick={startVoiceInput}
+            aria-label="Nhập bằng giọng nói"
+            title="Nhập bằng giọng nói"
+          >
+            {listening ? <MicOff size={18} /> : <Mic size={18} />}
+          </button>
         </div>
 
         {error && <div className="cm-capture-error">{error}</div>}
 
-        <div className="cm-action-row">
-          <div className="cm-action-item">
-            <button
-              type="button"
-              className="cm-circle-action secondary"
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Chọn ảnh từ album"
-            >
-              <Share size={20} />
+        {/* BUILT-IN CALCULATOR KEYPAD (Matches Screenshot 100%) */}
+        {keypadOpen ? (
+          <div className="cm-calc-grid">
+            <button type="button" className="cm-calc-key op-clear" onClick={() => handleKeyPress('C')}>
+              C
             </button>
-            <span>Share</span>
-          </div>
-
-          <button
-            type="button"
-            className="cm-circle-action primary"
-            disabled={saving}
-            onClick={() => void saveTransaction(false)}
-            aria-label="Lưu giao dịch"
-          >
-            {saving ? <LoaderCircle size={26} className="spin" /> : <Check size={28} strokeWidth={2.5} />}
-          </button>
-
-          <div className="cm-action-item">
+            <button type="button" className="cm-calc-key op-tint" onClick={() => handleKeyPress('/')}>
+              ÷
+            </button>
+            <button type="button" className="cm-calc-key op-tint" onClick={() => handleKeyPress('*')}>
+              ×
+            </button>
             <button
               type="button"
-              className="cm-circle-action add-more"
+              className="cm-calc-key"
+              onClick={() => handleKeyPress('BACK')}
+              aria-label="Xoá lùi"
+            >
+              <Delete size={19} />
+            </button>
+
+            <button type="button" className="cm-calc-key" onClick={() => handleKeyPress('7')}>
+              7
+            </button>
+            <button type="button" className="cm-calc-key" onClick={() => handleKeyPress('8')}>
+              8
+            </button>
+            <button type="button" className="cm-calc-key" onClick={() => handleKeyPress('9')}>
+              9
+            </button>
+            <button type="button" className="cm-calc-key op-tint" onClick={() => handleKeyPress('-')}>
+              −
+            </button>
+
+            <button type="button" className="cm-calc-key" onClick={() => handleKeyPress('4')}>
+              4
+            </button>
+            <button type="button" className="cm-calc-key" onClick={() => handleKeyPress('5')}>
+              5
+            </button>
+            <button type="button" className="cm-calc-key" onClick={() => handleKeyPress('6')}>
+              6
+            </button>
+            <button type="button" className="cm-calc-key op-tint" onClick={() => handleKeyPress('+')}>
+              +
+            </button>
+
+            <button type="button" className="cm-calc-key" onClick={() => handleKeyPress('1')}>
+              1
+            </button>
+            <button type="button" className="cm-calc-key" onClick={() => handleKeyPress('2')}>
+              2
+            </button>
+            <button type="button" className="cm-calc-key" onClick={() => handleKeyPress('3')}>
+              3
+            </button>
+            <button
+              type="button"
+              className={`cm-calc-key done-tall ${type}`}
               disabled={saving}
               onClick={() => {
-                if (amount) {
-                  void saveTransaction(true);
+                if (hasOperator) {
+                  setExpr(String(evaluateExpression(expr)));
                 } else {
-                  setStep('camera');
+                  void saveTransaction(false);
                 }
               }}
-              aria-label="Lưu và chụp thêm"
             >
-              <Plus size={22} />
+              {saving ? (
+                <LoaderCircle size={22} className="spin" />
+              ) : (
+                <>
+                  <Check size={22} strokeWidth={2.5} />
+                  <span>{hasOperator ? '=' : 'Xong'}</span>
+                </>
+              )}
             </button>
-            <span>Thêm</span>
+
+            <button type="button" className="cm-calc-key zero-wide" onClick={() => handleKeyPress('0')}>
+              0
+            </button>
+            <button type="button" className="cm-calc-key" onClick={() => handleKeyPress('000')}>
+              000
+            </button>
           </div>
-        </div>
+        ) : (
+          <div className="cm-action-row">
+            <div className="cm-action-item">
+              <button
+                type="button"
+                className="cm-circle-action secondary"
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Chọn ảnh từ album"
+              >
+                <Share size={20} />
+              </button>
+              <span>Share</span>
+            </div>
+
+            <button
+              type="button"
+              className="cm-circle-action primary"
+              disabled={saving}
+              onClick={() => void saveTransaction(false)}
+              aria-label="Lưu giao dịch"
+            >
+              {saving ? <LoaderCircle size={26} className="spin" /> : <Check size={28} strokeWidth={2.5} />}
+            </button>
+
+            <div className="cm-action-item">
+              <button
+                type="button"
+                className="cm-circle-action add-more"
+                disabled={saving}
+                onClick={() => {
+                  if (rawNumericAmount > 0) {
+                    void saveTransaction(true);
+                  } else {
+                    setStep('camera');
+                  }
+                }}
+                aria-label="Lưu và chụp thêm"
+              >
+                <Plus size={22} />
+              </button>
+              <span>Thêm</span>
+            </div>
+          </div>
+        )}
 
         <input
           ref={fileInputRef}

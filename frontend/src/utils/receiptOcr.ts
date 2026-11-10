@@ -180,14 +180,23 @@ export function parseReceiptText(rawText: string): OcrScanResult {
       addCandidate(num, baseWeight + 30);
     }
 
-    // Pattern 3: Plain 4 to 8 digit numbers (e.g. 35000, 746000, 1250000)
+    // Pattern 3: Plain 4 to 8 digit numbers (e.g. 35000, 746000, 1250000, 60852)
     const plainRegex = /\b(\d{4,8})\b/g;
     while ((m = plainRegex.exec(normalizedLine)) !== null) {
       const rawDigits = m[1];
       // Skip likely dates like 10112026 or 20261110
       if (/^(19|20)\d{6}$/.test(rawDigits) || /^\d{4}(19|20)\d{2}$/.test(rawDigits)) continue;
       const num = Number(rawDigits);
-      addCandidate(num, baseWeight + 10);
+      addCandidate(num, baseWeight + 12);
+    }
+
+    // Pattern 3b: Decimal or LCD display numbers (e.g. "60.85 2" or "60.85" or "125.5")
+    const decimalDisplayRegex = /\b(\d{1,5}[.,]\d{1,3}(?:\s*\d{1,2})?)\b/g;
+    while ((m = decimalDisplayRegex.exec(normalizedLine)) !== null) {
+      const joinedDigits = Number(m[1].replace(/[^0-9]/g, ''));
+      if (joinedDigits >= 1_000) {
+        addCandidate(joinedDigits, baseWeight + 18);
+      }
     }
 
     // Pattern 4: Small 2-3 digit numbers on menus/receipts where '000' is omitted (e.g. "35", "45", "125")
