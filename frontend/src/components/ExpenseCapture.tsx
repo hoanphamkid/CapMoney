@@ -7,15 +7,21 @@ import {
   ChevronDown,
   Crop,
   LoaderCircle,
+  Mic,
+  MicOff,
   Plus,
   ReceiptText,
+  ScanLine,
   Share,
   ShieldCheck,
   ShoppingCart,
+  Sparkles,
   SquarePen,
+  Users,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api, type Wallet } from '../services/api';
+import { scanReceiptImage } from '../utils/receiptOcr';
 import { CameraView } from './CameraView';
 import { ImageCropModal } from './ImageCropModal';
 import { loadBudget } from './SpendingLimitModal';
@@ -75,6 +81,12 @@ export function ExpenseCapture({
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [ocrScanning, setOcrScanning] = useState(false);
+  const [ocrCandidates, setOcrCandidates] = useState<number[]>([]);
+  const [ocrAutoFilled, setOcrAutoFilled] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,6 +94,101 @@ export function ExpenseCapture({
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
+
+  // Automatically scan numbers on captured/selected bill photo
+  useEffect(() => {
+    if (!image) {
+      setOcrCandidates([]);
+      setOcrScanning(false);
+      return;
+    }
+    let cancelled = false;
+    const runScan = async () => {
+      setOcrScanning(true);
+      setOcrAutoFilled(false);
+      try {
+        const result = await scanReceiptImage(image);
+        if (cancelled) return;
+        setOcrCandidates(result.candidates);
+        if (result.bestAmount > 0) {
+          setAmount(current => {
+            if (!current || current === '0') {
+              setOcrAutoFilled(true);
+              if (navigator.vibrate) navigator.vibrate(45);
+              return String(result.bestAmount);
+            }
+            return current;
+          });
+        }
+        if (result.suggestedType) {
+          setType(result.suggestedType);
+        }
+        if (result.suggestedCategory) {
+          setCategory(result.suggestedCategory);
+        }
+        if (result.suggestedNote) {
+          setNote(current => current || result.suggestedNote || '');
+        }
+      } finally {
+        if (!cancelled) setOcrScanning(false);
+      }
+    };
+    void runScan();
+    return () => {
+      cancelled = true;
+    };
+  }, [image]);
+
+  const startVoiceInput = () => {
+    const SpeechRec =
+      (window as unknown as { SpeechRecognition?: new () => unknown; webkitSpeechRecognition?: new () => unknown })
+        .SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: new () => unknown }).webkitSpeechRecognition;
+
+    if (!SpeechRec) {
+      setError('Trình duyệt này chưa hỗ trợ nhận diện giọng nói.');
+      return;
+    }
+
+    try {
+      const rec = new SpeechRec() as {
+        lang: string;
+        interimResults: boolean;
+        maxAlternatives: number;
+        onstart: () => void;
+        onend: () => void;
+        onerror: () => void;
+        onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
+        start: () => void;
+      };
+      rec.lang = 'vi-VN';
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.onstart = () => {
+        setListening(true);
+        if (navigator.vibrate) navigator.vibrate(30);
+      };
+      rec.onend = () => setListening(false);
+      rec.onerror = () => setListening(false);
+      rec.onresult = event => {
+        const transcript = event.results?.[0]?.[0]?.transcript?.trim() ?? '';
+        if (!transcript) return;
+        const parsedAmt = parseAmountFromNote(transcript);
+        if (parsedAmt > 0) {
+          setAmount(String(parsedAmt));
+          setOcrAutoFilled(true);
+          if (navigator.vibrate) navigator.vibrate([30, 50]);
+        }
+        const cleanedNote = transcript
+          .replace(/(\d+(?:[.,]\d+)?)\s*(k|nghin|nghìn|ngàn|tr|trieu|triệu|củ|đ|d|vnd)/gi, '')
+          .trim();
+        setNote(cleanedNote || transcript);
+      };
+      rec.start();
+    } catch {
+      setListening(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -172,13 +279,17 @@ export function ExpenseCapture({
         transactionDate: dateKey,
         image,
       });
+      if (navigator.vibrate) navigator.vibrate([35, 50, 75]);
       if (keepOpenForNextShot) {
         setAmount('');
         setNote('');
         setImage(null);
         setStep('camera');
       } else {
-        onSaved();
+        setCelebrate(true);
+        setTimeout(() => {
+          onSaved();
+        }, 420);
       }
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Không thể lưu giao dịch.');
@@ -222,11 +333,23 @@ export function ExpenseCapture({
 
   return (
     <div className="cm-capture-modal" onClick={onClose}>
-      <div className="cm-capture-sheet" onClick={event => event.stopPropagation()}>
+      <div className="cm-capture-sheet cm-spring-pop" onClick={event => event.stopPropagation()}>
+        {celebrate && (
+          <div className="cm-confetti-burst" aria-hidden="true">
+            <span>🎉</span>
+            <span>✨</span>
+            <span>💸</span>
+            <span>🌟</span>
+            <span>🎊</span>
+            <span>💎</span>
+          </div>
+        )}
         <div
-          className={`cm-photo-stage ${type}`}
+          className={`cm-photo-stage ${type} ${ocrScanning ? 'scanning' : ''}`}
           style={previewUrl ? { backgroundImage: `url(${previewUrl})` } : undefined}
         >
+          {ocrScanning && <div className="cm-ocr-laser-beam" aria-hidden="true" />}
+
           <header className="cm-capture-top">
             <button
               type="button"
@@ -256,7 +379,21 @@ export function ExpenseCapture({
             </div>
           </header>
 
-          <div className={`cm-entry-card ${type}`}>
+          <div className={`cm-entry-card ${type} ${ocrAutoFilled ? 'ocr-pop' : ''}`}>
+            {ocrScanning && (
+              <div className="cm-ocr-status-pill scanning">
+                <ScanLine size={13} className="spin" />
+                <span>Đang tự nhìn số tiền trên ảnh...</span>
+              </div>
+            )}
+
+            {!ocrScanning && ocrAutoFilled && rawNumericAmount > 0 && (
+              <div className="cm-ocr-status-pill success">
+                <Sparkles size={13} />
+                <span>Đã tự điền số tiền từ ảnh: {rawNumericAmount.toLocaleString('vi-VN')}đ</span>
+              </div>
+            )}
+
             <div className="cm-amount-row">
               <span className={`cm-amount-sign ${type}`}>{type === 'expense' ? '−' : '+'}</span>
               <input
@@ -266,12 +403,33 @@ export function ExpenseCapture({
                 value={formattedAmount}
                 onChange={event => {
                   setError('');
+                  setOcrAutoFilled(false);
                   setAmount(event.target.value.replace(/[^0-9]/g, ''));
                 }}
                 placeholder="0"
               />
               <span className="cm-amount-currency">đ</span>
             </div>
+
+            {ocrCandidates.length > 0 && (
+              <div className="cm-ocr-candidates-row">
+                <small className="cm-ocr-candidates-label">🔍 Số trong ảnh:</small>
+                {ocrCandidates.map(val => (
+                  <button
+                    key={val}
+                    type="button"
+                    className={`cm-ocr-candidate-chip ${rawNumericAmount === val ? 'active' : ''}`}
+                    onClick={() => {
+                      setError('');
+                      setAmount(String(val));
+                      if (navigator.vibrate) navigator.vibrate(25);
+                    }}
+                  >
+                    {val.toLocaleString('vi-VN')}đ
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="cm-quick-amounts">
               {quickAmounts.map(chip => (
@@ -299,6 +457,17 @@ export function ExpenseCapture({
               {rawNumericAmount > 0 && (
                 <button
                   type="button"
+                  className={`cm-quick-chip ${splitOpen ? 'highlight' : ''}`}
+                  onClick={() => setSplitOpen(v => !v)}
+                  title="Chia tiền nhóm"
+                >
+                  <Users size={11} style={{ marginRight: 3, verticalAlign: '-1px' }} />
+                  Chia bill
+                </button>
+              )}
+              {rawNumericAmount > 0 && (
+                <button
+                  type="button"
                   className="cm-quick-chip clear"
                   onClick={() => setAmount('')}
                 >
@@ -307,19 +476,54 @@ export function ExpenseCapture({
               )}
             </div>
 
-            <input
-              type="text"
-              className="cm-detail-input"
-              value={note}
-              onChange={event => {
-                setError('');
-                setNote(event.target.value);
-              }}
-              placeholder="Thêm chi tiết (VD: Cà phê 35k)"
-              onKeyDown={event => {
-                if (event.key === 'Enter') void saveTransaction(false);
-              }}
-            />
+            {splitOpen && rawNumericAmount > 0 && (
+              <div className="cm-inline-split-row">
+                <small>Chia đều cho:</small>
+                {[2, 3, 4, 5, 6].map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    className="cm-quick-chip highlight"
+                    onClick={() => {
+                      const share = Math.ceil(rawNumericAmount / n / 1000) * 1000;
+                      setAmount(String(share));
+                      setNote(prev =>
+                        prev ? `${prev} (Chia ${n})` : `Chia ${n} từ bill ${rawNumericAmount.toLocaleString('vi-VN')}đ`,
+                      );
+                      setSplitOpen(false);
+                      if (navigator.vibrate) navigator.vibrate(30);
+                    }}
+                  >
+                    ÷{n} người
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="cm-detail-input-wrap">
+              <input
+                type="text"
+                className="cm-detail-input"
+                value={note}
+                onChange={event => {
+                  setError('');
+                  setNote(event.target.value);
+                }}
+                placeholder={listening ? '🎙️ Đang nghe bạn nói...' : 'Thêm chi tiết (VD: Cà phê 35k)'}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') void saveTransaction(false);
+                }}
+              />
+              <button
+                type="button"
+                className={`cm-voice-mic-btn ${listening ? 'listening' : ''}`}
+                onClick={startVoiceInput}
+                title="Nhập bằng giọng nói (VD: Cà phê 35k)"
+                aria-label="Nhập bằng giọng nói"
+              >
+                {listening ? <MicOff size={15} /> : <Mic size={15} />}
+              </button>
+            </div>
 
             {type === 'expense' && rawNumericAmount > 0 && budget.dailyLimit > 0 && (
               <div className={`cm-entry-budget-hint ${rawNumericAmount > budget.dailyLimit ? 'warn' : 'ok'}`}>

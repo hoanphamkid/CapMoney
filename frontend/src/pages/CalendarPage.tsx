@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   Leaf,
   Paintbrush,
+  PiggyBank,
   Plus,
   ReceiptText,
   Search,
@@ -26,6 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
 import { LookbackModal } from '../components/LookbackModal';
+import { SmartToolkitModal } from '../components/SmartToolkitModal';
 import { loadBudget, SpendingLimitModal, type BudgetConfig } from '../components/SpendingLimitModal';
 import { useAuth } from '../contexts/AuthContext';
 import { api, type CalendarEvent, type Transaction, type Wallet } from '../services/api';
@@ -70,6 +72,7 @@ export function CalendarPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [lookbackPeriod, setLookbackPeriod] = useState<1 | 3 | 7 | null>(null);
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [toolkitOpen, setToolkitOpen] = useState(false);
   const [budget, setBudget] = useState<BudgetConfig>(() => loadBudget());
 
   const monthRange = useMemo(() => {
@@ -246,6 +249,14 @@ export function CalendarPage() {
             >
               <Sparkles size={12} /> Nhìn lại
             </button>
+            <button
+              type="button"
+              className="cm-badge-gold clickable"
+              onClick={() => setToolkitOpen(true)}
+              title="Hũ tiết kiệm, Chia tiền nhóm & Huy hiệu"
+            >
+              <PiggyBank size={12} /> Hũ & Chia bill
+            </button>
           </div>
         </div>
 
@@ -299,14 +310,10 @@ export function CalendarPage() {
           </button>
           <button
             type="button"
-            className="cm-icon-circle"
-            onClick={() => {
-              const nextMonth = new Date(cursor);
-              nextMonth.setMonth(cursor.getMonth() - 1);
-              setCursor(nextMonth);
-            }}
-            title="Xem tháng trước / đổi chủ đề"
-            aria-label="Tuỳ chỉnh"
+            className={`cm-icon-circle ${toolkitOpen ? 'active' : ''}`}
+            onClick={() => setToolkitOpen(true)}
+            title="Tiện ích, Hũ tiết kiệm & Chia bill"
+            aria-label="Tiện ích"
           >
             <Paintbrush size={17} />
           </button>
@@ -752,6 +759,14 @@ export function CalendarPage() {
             setBudget(nextConfig);
             setBudgetModalOpen(false);
           }}
+        />
+      )}
+
+      {/* Smart Financial Toolkit Modal (Savings Jar, Bill Splitter, Badges) */}
+      {toolkitOpen && (
+        <SmartToolkitModal
+          transactions={transactions}
+          onClose={() => setToolkitOpen(false)}
         />
       )}
     </div>
