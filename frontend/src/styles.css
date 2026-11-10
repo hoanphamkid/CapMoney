@@ -3481,3 +3481,64 @@ html:not(.dark-theme) .cm-app-shell {
   font-weight: 700;
   color: #ffd166;
 }
+
+/* =========================================================
+   LOWER ENTRY CARD BELOW PHOTO (NO OVERLAP ON BILL IMAGE)
+   ========================================================= */
+.cm-photo-stage {
+  min-height: 225px;
+  aspect-ratio: 16 / 11;
+  padding: 12px 14px;
+  border-radius: 26px;
+  background-color: #161820;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  gap: 12px;
+}
+
+.cm-photo-stage.no-photo {
+  min-height: 76px;
+  aspect-ratio: auto;
+}
+
+.cm-photo-stage::before {
+  background: linear-gradient(
+    180deg,
+    rgba(10, 11, 15, 0.35) 0%,
+    rgba(10, 11, 15, 0.02) 35%,
+    rgba(10, 11, 15, 0.02) 70%,
+    rgba(10, 11, 15, 0.4) 100%
+  );
+}
+
+.cm-photo-stage-bottom {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  min-height: 28px;
+}
+
+.cm-photo-stage-bottom .cm-ocr-status-pill {
+  margin-bottom: 0;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.cm-entry-card.below-photo {
+  width: 100%;
+  margin-top: -4px;
+  padding: 14px 14px 12px;
+  border-radius: 24px;
+  gap: 10px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
+.cm-entry-card.below-photo .cm-amount-input {
+  font-size: 36px;
+}
+
+.cm-entry-card.below-photo .cm-quick-amounts {
+  margin-bottom: 2px;
+}

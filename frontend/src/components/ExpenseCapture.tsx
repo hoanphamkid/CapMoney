@@ -345,7 +345,7 @@ export function ExpenseCapture({
           </div>
         )}
         <div
-          className={`cm-photo-stage ${type} ${ocrScanning ? 'scanning' : ''}`}
+          className={`cm-photo-stage ${type} ${ocrScanning ? 'scanning' : ''} ${previewUrl ? 'has-photo' : 'no-photo'}`}
           style={previewUrl ? { backgroundImage: `url(${previewUrl})` } : undefined}
         >
           {ocrScanning && <div className="cm-ocr-laser-beam" aria-hidden="true" />}
@@ -379,7 +379,7 @@ export function ExpenseCapture({
             </div>
           </header>
 
-          <div className={`cm-entry-card ${type} ${ocrAutoFilled ? 'ocr-pop' : ''}`}>
+          <div className="cm-photo-stage-bottom">
             {ocrScanning && (
               <div className="cm-ocr-status-pill scanning">
                 <ScanLine size={13} className="spin" />
@@ -390,157 +390,159 @@ export function ExpenseCapture({
             {!ocrScanning && ocrAutoFilled && rawNumericAmount > 0 && (
               <div className="cm-ocr-status-pill success">
                 <Sparkles size={13} />
-                <span>Đã tự điền số tiền từ ảnh: {rawNumericAmount.toLocaleString('vi-VN')}đ</span>
+                <span>Đã tự điền: {rawNumericAmount.toLocaleString('vi-VN')}đ</span>
               </div>
             )}
+          </div>
+        </div>
 
-            <div className="cm-amount-row">
-              <span className={`cm-amount-sign ${type}`}>{type === 'expense' ? '−' : '+'}</span>
-              <input
-                autoFocus
-                inputMode="numeric"
-                className="cm-amount-input"
-                value={formattedAmount}
-                onChange={event => {
-                  setError('');
-                  setOcrAutoFilled(false);
-                  setAmount(event.target.value.replace(/[^0-9]/g, ''));
-                }}
-                placeholder="0"
-              />
-              <span className="cm-amount-currency">đ</span>
-            </div>
+        <div className={`cm-entry-card below-photo ${type} ${ocrAutoFilled ? 'ocr-pop' : ''}`}>
+          <div className="cm-amount-row">
+            <span className={`cm-amount-sign ${type}`}>{type === 'expense' ? '−' : '+'}</span>
+            <input
+              autoFocus
+              inputMode="numeric"
+              className="cm-amount-input"
+              value={formattedAmount}
+              onChange={event => {
+                setError('');
+                setOcrAutoFilled(false);
+                setAmount(event.target.value.replace(/[^0-9]/g, ''));
+              }}
+              placeholder="0"
+            />
+            <span className="cm-amount-currency">đ</span>
+          </div>
 
-            {ocrCandidates.length > 0 && (
-              <div className="cm-ocr-candidates-row">
-                <small className="cm-ocr-candidates-label">🔍 Số trong ảnh:</small>
-                {ocrCandidates.map(val => (
-                  <button
-                    key={val}
-                    type="button"
-                    className={`cm-ocr-candidate-chip ${rawNumericAmount === val ? 'active' : ''}`}
-                    onClick={() => {
-                      setError('');
-                      setAmount(String(val));
-                      if (navigator.vibrate) navigator.vibrate(25);
-                    }}
-                  >
-                    {val.toLocaleString('vi-VN')}đ
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="cm-detail-input-wrap">
+            <input
+              type="text"
+              className="cm-detail-input"
+              value={note}
+              onChange={event => {
+                setError('');
+                setNote(event.target.value);
+              }}
+              placeholder={listening ? '🎙️ Đang nghe bạn nói...' : 'Thêm chi tiết (VD: Cà phê 35k)'}
+              onKeyDown={event => {
+                if (event.key === 'Enter') void saveTransaction(false);
+              }}
+            />
+            <button
+              type="button"
+              className={`cm-voice-mic-btn ${listening ? 'listening' : ''}`}
+              onClick={startVoiceInput}
+              title="Nhập bằng giọng nói (VD: Cà phê 35k)"
+              aria-label="Nhập bằng giọng nói"
+            >
+              {listening ? <MicOff size={15} /> : <Mic size={15} />}
+            </button>
+          </div>
 
-            <div className="cm-quick-amounts">
-              {quickAmounts.map(chip => (
+          {ocrCandidates.length > 0 && (
+            <div className="cm-ocr-candidates-row">
+              <small className="cm-ocr-candidates-label">🔍 Số trong ảnh:</small>
+              {ocrCandidates.map(val => (
                 <button
-                  key={chip.label}
+                  key={val}
                   type="button"
-                  className="cm-quick-chip"
+                  className={`cm-ocr-candidate-chip ${rawNumericAmount === val ? 'active' : ''}`}
                   onClick={() => {
                     setError('');
-                    setAmount(String(rawNumericAmount + chip.value));
+                    setAmount(String(val));
+                    if (navigator.vibrate) navigator.vibrate(25);
                   }}
                 >
-                  {chip.label}
+                  {val.toLocaleString('vi-VN')}đ
                 </button>
               ))}
-              {rawNumericAmount > 0 && rawNumericAmount < 10_000 && (
-                <button
-                  type="button"
-                  className="cm-quick-chip highlight"
-                  onClick={() => setAmount(String(rawNumericAmount * 1_000))}
-                >
-                  .000đ
-                </button>
-              )}
-              {rawNumericAmount > 0 && (
-                <button
-                  type="button"
-                  className={`cm-quick-chip ${splitOpen ? 'highlight' : ''}`}
-                  onClick={() => setSplitOpen(v => !v)}
-                  title="Chia tiền nhóm"
-                >
-                  <Users size={11} style={{ marginRight: 3, verticalAlign: '-1px' }} />
-                  Chia bill
-                </button>
-              )}
-              {rawNumericAmount > 0 && (
-                <button
-                  type="button"
-                  className="cm-quick-chip clear"
-                  onClick={() => setAmount('')}
-                >
-                  Xoá
-                </button>
-              )}
             </div>
+          )}
 
-            {splitOpen && rawNumericAmount > 0 && (
-              <div className="cm-inline-split-row">
-                <small>Chia đều cho:</small>
-                {[2, 3, 4, 5, 6].map(n => (
-                  <button
-                    key={n}
-                    type="button"
-                    className="cm-quick-chip highlight"
-                    onClick={() => {
-                      const share = Math.ceil(rawNumericAmount / n / 1000) * 1000;
-                      setAmount(String(share));
-                      setNote(prev =>
-                        prev ? `${prev} (Chia ${n})` : `Chia ${n} từ bill ${rawNumericAmount.toLocaleString('vi-VN')}đ`,
-                      );
-                      setSplitOpen(false);
-                      if (navigator.vibrate) navigator.vibrate(30);
-                    }}
-                  >
-                    ÷{n} người
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="cm-detail-input-wrap">
-              <input
-                type="text"
-                className="cm-detail-input"
-                value={note}
-                onChange={event => {
+          <div className="cm-quick-amounts">
+            {quickAmounts.map(chip => (
+              <button
+                key={chip.label}
+                type="button"
+                className="cm-quick-chip"
+                onClick={() => {
                   setError('');
-                  setNote(event.target.value);
+                  setAmount(String(rawNumericAmount + chip.value));
                 }}
-                placeholder={listening ? '🎙️ Đang nghe bạn nói...' : 'Thêm chi tiết (VD: Cà phê 35k)'}
-                onKeyDown={event => {
-                  if (event.key === 'Enter') void saveTransaction(false);
-                }}
-              />
+              >
+                {chip.label}
+              </button>
+            ))}
+            {rawNumericAmount > 0 && rawNumericAmount < 10_000 && (
               <button
                 type="button"
-                className={`cm-voice-mic-btn ${listening ? 'listening' : ''}`}
-                onClick={startVoiceInput}
-                title="Nhập bằng giọng nói (VD: Cà phê 35k)"
-                aria-label="Nhập bằng giọng nói"
+                className="cm-quick-chip highlight"
+                onClick={() => setAmount(String(rawNumericAmount * 1_000))}
               >
-                {listening ? <MicOff size={15} /> : <Mic size={15} />}
+                .000đ
               </button>
-            </div>
-
-            {type === 'expense' && rawNumericAmount > 0 && budget.dailyLimit > 0 && (
-              <div className={`cm-entry-budget-hint ${rawNumericAmount > budget.dailyLimit ? 'warn' : 'ok'}`}>
-                {rawNumericAmount > budget.dailyLimit ? (
-                  <>
-                    <AlertTriangle size={12} /> Vượt hạn mức ngày ({budget.dailyLimit.toLocaleString('vi-VN')}đ)
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck size={12} /> Trong hạn mức ngày ({Math.round((rawNumericAmount / budget.dailyLimit) * 100)}%)
-                  </>
-                )}
-              </div>
             )}
-
-            {error && <div className="cm-entry-inline-error">{error}</div>}
+            {rawNumericAmount > 0 && (
+              <button
+                type="button"
+                className={`cm-quick-chip ${splitOpen ? 'highlight' : ''}`}
+                onClick={() => setSplitOpen(v => !v)}
+                title="Chia tiền nhóm"
+              >
+                <Users size={11} style={{ marginRight: 3, verticalAlign: '-1px' }} />
+                Chia bill
+              </button>
+            )}
+            {rawNumericAmount > 0 && (
+              <button
+                type="button"
+                className="cm-quick-chip clear"
+                onClick={() => setAmount('')}
+              >
+                Xoá
+              </button>
+            )}
           </div>
+
+          {splitOpen && rawNumericAmount > 0 && (
+            <div className="cm-inline-split-row">
+              <small>Chia đều cho:</small>
+              {[2, 3, 4, 5, 6].map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  className="cm-quick-chip highlight"
+                  onClick={() => {
+                    const share = Math.ceil(rawNumericAmount / n / 1000) * 1000;
+                    setAmount(String(share));
+                    setNote(prev =>
+                      prev ? `${prev} (Chia ${n})` : `Chia ${n} từ bill ${rawNumericAmount.toLocaleString('vi-VN')}đ`,
+                    );
+                    setSplitOpen(false);
+                    if (navigator.vibrate) navigator.vibrate(30);
+                  }}
+                >
+                  ÷{n} người
+                </button>
+              ))}
+            </div>
+          )}
+
+          {type === 'expense' && rawNumericAmount > 0 && budget.dailyLimit > 0 && (
+            <div className={`cm-entry-budget-hint ${rawNumericAmount > budget.dailyLimit ? 'warn' : 'ok'}`}>
+              {rawNumericAmount > budget.dailyLimit ? (
+                <>
+                  <AlertTriangle size={12} /> Vượt hạn mức ngày ({budget.dailyLimit.toLocaleString('vi-VN')}đ)
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={12} /> Trong hạn mức ngày ({Math.round((rawNumericAmount / budget.dailyLimit) * 100)}%)
+                </>
+              )}
+            </div>
+          )}
+
+          {error && <div className="cm-entry-inline-error">{error}</div>}
         </div>
 
         <div className="cm-Select-pills">
