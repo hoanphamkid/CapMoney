@@ -56,6 +56,36 @@ function saveDb(db: LocalDb) {
   }
 }
 
+function ensureDefaultLocalWallets(db: LocalDb, userId: string) {
+  const existing = db.wallets.filter(w => w.userId === userId && w.active);
+  if (existing.length > 0) return;
+  db.wallets.push(
+    {
+      id: crypto.randomUUID(),
+      userId,
+      active: true,
+      name: 'Wallet',
+      type: 'cash',
+      balance: 0,
+      balanceMinor: 0,
+      currency: 'VND',
+      color: '#163e36',
+    },
+    {
+      id: crypto.randomUUID(),
+      userId,
+      active: true,
+      name: 'Bank',
+      type: 'bank',
+      balance: 0,
+      balanceMinor: 0,
+      currency: 'VND',
+      color: '#3c6684',
+    },
+  );
+  saveDb(db);
+}
+
 function publicUser(user: StoredUser): User {
   return { id: user.id, email: user.email, name: user.name, phone: user.phone, role: user.role, emailVerified: user.emailVerified };
 }
@@ -270,6 +300,7 @@ export const api = {
       () => {
         const db = loadDb();
         const user = requireLocalUser(db);
+        ensureDefaultLocalWallets(db, user.id);
         const wallets = db.wallets
           .filter(w => w.userId === user.id && w.active)
           .map(({ userId: _u, active: _a, ...wallet }) => wallet);

@@ -1,37 +1,648 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, ImagePlus, Plus, SlidersHorizontal, WalletCards, X } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
+  Landmark,
+  LayoutGrid,
+  Leaf,
+  Paintbrush,
+  Plus,
+  ReceiptText,
+  Search,
+  SquarePen,
+  UserRound,
+  X,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { api, type CalendarEvent, type CalendarSummary } from '../services/api';
+import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
+import { useAuth } from '../contexts/AuthContext';
+import { api, type CalendarEvent, type Transaction, type Wallet } from '../services/api';
 
-type CalendarMode = 'month' | 'week' | 'day' | 'year';
 const weekdayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-const filterOptions = [{ id: 'income', label: 'Thu nhập' }, { id: 'expense', label: 'Chi tiêu' }, { id: 'transfer', label: 'Chuyển tiền' }, { id: 'payment', label: 'Thanh toán' }, { id: 'reminder', label: 'Nhắc nhở' }];
+
+const categoryNames: Record<string, string> = {
+  food: 'Ăn uống',
+  shopping: 'Mua sắm',
+  transport: 'Di chuyển',
+  bills: 'Hóa đơn',
+  entertainment: 'Giải trí',
+  health: 'Sức khỏe',
+  salary: 'Lương',
+  bonus: 'Thưởng',
+  investment: 'Đầu tư',
+  gift: 'Được tặng',
+  transfer: 'Chuyển tiền',
+  other: 'Khác',
+};
 
 export function CalendarPage() {
-  const [mode, setMode] = useState<CalendarMode>('month'); const [cursor, setCursor] = useState(() => new Date()); const [selectedDate, setSelectedDate] = useState(todayKey()); const [byDay, setByDay] = useState<Record<string, CalendarEvent[]>>({}); const [dayEvents, setDayEvents] = useState<CalendarEvent[]>([]); const [summary, setSummary] = useState<CalendarSummary>({ income: 0, expense: 0, transfers: 0, transactionCount: 0, busiestExpenseDay: null, highestIncomeDay: null }); const [daySummary, setDaySummary] = useState({ income: 0, expense: 0, net: 0, transactionCount: 0 }); const [filters, setFilters] = useState<string[]>([]); const [loading, setLoading] = useState(true); const [capture, setCapture] = useState<'expense' | 'income' | null>(null); const [detail, setDetail] = useState<CalendarEvent | null>(null); const [reminderOpen, setReminderOpen] = useState(false); const [notice, setNotice] = useState('');
-  const range = useMemo(() => calendarRange(cursor, mode), [cursor, mode]);
-  const reload = async () => { setLoading(true); try { const result = await api.calendarEvents(range.from, range.to, filters); setByDay(result.byDay); setSummary(result.summary); const day = await api.calendarDay(selectedDate); setDaySummary(day.summary); setDayEvents([...day.transactions, ...day.reminders]); } catch { setNotice('Không thể tải dữ liệu lịch lúc này.'); } finally { setLoading(false); } };
-  useEffect(() => { void reload(); }, [range.from, range.to, filters.join(','), selectedDate]);
-  const changeCursor = (amount: number) => { const next = new Date(cursor); if (mode === 'year') next.setFullYear(next.getFullYear() + amount); else if (mode === 'month') next.setMonth(next.getMonth() + amount); else if (mode === 'week') next.setDate(next.getDate() + amount * 7); else next.setDate(next.getDate() + amount); setCursor(next); };
-  const selectDay = (dateKey: string) => { setSelectedDate(dateKey); setCursor(new Date(`${dateKey}T12:00:00`)); };
-  const saved = () => { setCapture(null); setNotice('Đã lưu giao dịch. Lịch và số dư ví đã được cập nhật.'); void reload(); };
-  const selectedEvents = dayEvents;
-  return <div className="calendar-page"><div className="calendar-heading"><div><p className="eyebrow dark">THEO DÕI DÒNG TIỀN</p><h1>Lịch tài chính</h1><p>Nhìn thấy thu chi, lịch thanh toán và những điều cần nhớ trong một nhịp.</p></div><div className="calendar-actions"><button className="today-button" onClick={() => { const now = new Date(); setCursor(now); setSelectedDate(todayKey()); }}>Hôm nay</button><button className="add-calendar-button" onClick={() => setCapture('expense')}><Plus size={16} /> Ghi chi tiêu</button></div></div><section className="calendar-summary"><Summary label="Tổng thu" value={summary.income} tone="income" /><Summary label="Tổng chi" value={summary.expense} tone="expense" /><Summary label="Dòng tiền ròng" value={summary.income - summary.expense} tone="net" /><Summary label="Giao dịch" value={summary.transactionCount} tone="count" suffix=" khoản" /></section><section className="calendar-layout"><div className="calendar-main panel"><div className="calendar-toolbar"><div className="calendar-title"><button className="calendar-nav" aria-label="Khoảng trước" onClick={() => changeCursor(-1)}><ChevronLeft size={18} /></button><h2>{titleFor(cursor, mode)}</h2><button className="calendar-nav" aria-label="Khoảng sau" onClick={() => changeCursor(1)}><ChevronRight size={18} /></button></div><div className="view-switcher">{(['month', 'week', 'day', 'year'] as CalendarMode[]).map(value => <button key={value} className={mode === value ? 'active' : ''} onClick={() => setMode(value)}>{modeLabel(value)}</button>)}</div></div><div className="calendar-filter-row"><div className="filter-label"><SlidersHorizontal size={14} /> Bộ lọc</div>{filterOptions.map(item => <button key={item.id} className={`filter-chip ${filters.includes(item.id) ? 'selected' : ''}`} onClick={() => setFilters(current => current.includes(item.id) ? current.filter(value => value !== item.id) : [...current, item.id])}><i className={`event-dot ${item.id}`} />{item.label}</button>)}<button className="clear-filters" onClick={() => setFilters([])} disabled={!filters.length}>Xóa lọc</button></div>{loading ? <div className="calendar-loading"><span className="loading-mark" /></div> : <CalendarGrid mode={mode} cursor={cursor} byDay={byDay} selectedDate={selectedDate} onSelect={selectDay} />}</div><aside className="calendar-side"><DayPanel dateKey={selectedDate} events={selectedEvents} summary={daySummary} onCapture={type => setCapture(type)} onReminder={() => setReminderOpen(true)} onDetail={setDetail} /><section className="calendar-note"><WalletCards size={17} /><div><strong>Dòng tiền rõ ràng hơn</strong><p>Ảnh, ghi chú và số tiền được lưu cùng giao dịch để bạn không bỏ lỡ ngữ cảnh.</p></div></section></aside></section>{notice && <div className="calendar-toast"><span>{notice}</span><button onClick={() => setNotice('')}><X size={14} /></button></div>}{capture && <ExpenseCapture selectedDate={selectedDate} initialType={capture} onClose={() => setCapture(null)} onSaved={saved} />}{detail && <ExpenseDetail event={detail} onClose={() => setDetail(null)} onChanged={() => { setDetail(null); void reload(); }} />}{reminderOpen && <ReminderModal selectedDate={selectedDate} onClose={() => setReminderOpen(false)} onSaved={() => { setReminderOpen(false); void reload(); setNotice('Đã tạo lời nhắc trong lịch.'); }} />}</div>;
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [cursor, setCursor] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(todayKey());
+  const [dayViewDate, setDayViewDate] = useState<string | null>(null);
+  const [dayViewLayout, setDayViewLayout] = useState<'grid' | 'list'>('grid');
+  const [captureDate, setCaptureDate] = useState<string | null>(null);
+  const [captureType, setCaptureType] = useState<'expense' | 'income'>('expense');
+  const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
+
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [selectedWallet, setSelectedWallet] = useState<string>('all');
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [hideAll, setHideAll] = useState(false);
+  const [hideExpense, setHideExpense] = useState(false);
+  const [hideIncome, setHideIncome] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const monthRange = useMemo(() => {
+    const year = cursor.getFullYear();
+    const month = cursor.getMonth();
+    const first = new Date(year, month, 1);
+    const last = new Date(year, month + 1, 0);
+    return { from: toDateKey(first), to: toDateKey(last), year, month, daysInMonth: last.getDate(), firstWeekdayOffset: (first.getDay() + 6) % 7 };
+  }, [cursor]);
+
+  const reload = async () => {
+    setLoading(true);
+    try {
+      const [walletRes, txRes] = await Promise.all([
+        api.wallets(),
+        api.transactions({ from: monthRange.from, to: monthRange.to }),
+      ]);
+      let walletList = walletRes.wallets;
+      if (!walletList.length) {
+        const w1 = await api.createWallet({ name: 'Wallet', type: 'cash', openingBalance: 0, color: '#163e36' });
+        const w2 = await api.createWallet({ name: 'Bank', type: 'bank', openingBalance: 0, color: '#3c6684' });
+        walletList = [w1.wallet, w2.wallet];
+      }
+      setWallets(walletList);
+      setTransactions(txRes.transactions);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void reload();
+  }, [monthRange.from, monthRange.to]);
+
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => {
+      if (selectedWallet !== 'all' && tx.walletId !== selectedWallet && tx.toWalletId !== selectedWallet) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const cat = (categoryNames[tx.categoryId] ?? tx.categoryId).toLowerCase();
+        if (!tx.note.toLowerCase().includes(q) && !cat.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [transactions, selectedWallet, searchQuery]);
+
+  const byDay = useMemo(() => {
+    const map: Record<string, CalendarEvent[]> = {};
+    for (const tx of filteredTransactions) {
+      const ev: CalendarEvent = {
+        id: tx.id,
+        kind: tx.type,
+        type: tx.type,
+        title: tx.note || categoryNames[tx.categoryId] || (tx.type === 'income' ? 'Thu nhập' : 'Chi tiêu'),
+        amount: tx.amount,
+        amountMinor: tx.amountMinor,
+        dateKey: tx.dateKey,
+        note: tx.note,
+        categoryId: tx.categoryId,
+        walletId: tx.walletId,
+        imageUrl: tx.imageUrl,
+        status: tx.status,
+        source: 'transaction',
+      };
+      map[tx.dateKey] = [...(map[tx.dateKey] ?? []), ev];
+    }
+    return map;
+  }, [filteredTransactions]);
+
+  const totals = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    for (const tx of filteredTransactions) {
+      if (tx.type === 'income') income += tx.amount;
+      else if (tx.type === 'expense') expense += tx.amount;
+    }
+    return { income, expense };
+  }, [filteredTransactions]);
+
+  const today = todayKey();
+  const todayExpense = useMemo(() => {
+    return transactions
+      .filter(tx => tx.dateKey === today && tx.type === 'expense')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  }, [transactions, today]);
+
+  const activeDaysCount = Object.keys(byDay).length;
+  const displayName = user?.name || 'Daryl';
+  const greeting = getGreeting();
+
+  const handleDayClick = (key: string) => {
+    setSelectedDate(key);
+    const dayEvents = byDay[key] ?? [];
+    if (dayEvents.length > 0) {
+      setDayViewDate(key);
+    } else {
+      setCaptureType('expense');
+      setCaptureDate(key);
+    }
+  };
+
+  const dayViewEvents = dayViewDate ? byDay[dayViewDate] ?? [] : [];
+  const dayViewNet = useMemo(() => {
+    let inc = 0;
+    let exp = 0;
+    for (const ev of dayViewEvents) {
+      if (ev.kind === 'income') inc += ev.amount ?? 0;
+      else if (ev.kind === 'expense') exp += ev.amount ?? 0;
+    }
+    return { income: inc, expense: exp, net: inc - exp };
+  }, [dayViewEvents]);
+
+  const isCurrentMonth = cursor.getFullYear() === new Date().getFullYear() && cursor.getMonth() === new Date().getMonth();
+
+  return (
+    <div className="cm-home-screen">
+      {/* Top User Greeting Header */}
+      <header className="cm-top-header">
+        <div className="cm-greeting-block">
+          <p className="cm-greeting-sub">
+            {greeting.text} <span>{greeting.emoji}</span>
+          </p>
+          <h1 className="cm-user-title">{displayName}</h1>
+          <div className="cm-status-badges">
+            <span className="cm-badge-green">
+              <Leaf size={12} />
+              {todayExpense === 0 ? 'Hôm nay chưa chi tiêu' : `Hôm nay chi ${todayExpense.toLocaleString('vi-VN')}đ`}
+            </span>
+            <span className="cm-badge-blue">
+              <SquarePen size={12} /> 3/3
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="cm-avatar-circle"
+          onClick={() => navigate('/app/settings')}
+          aria-label="Tài khoản và cài đặt"
+        >
+          <UserRound size={26} />
+        </button>
+      </header>
+
+      {/* Mode Switcher & Utility Icons */}
+      <div className="cm-toolbar-row">
+        <div className="cm-mode-switcher">
+          <button
+            type="button"
+            className={`cm-mode-btn ${dayViewDate ? 'active' : ''}`}
+            onClick={() => setDayViewDate(selectedDate)}
+          >
+            Ngày
+          </button>
+          <button
+            type="button"
+            className={`cm-mode-btn ${!dayViewDate ? 'active' : ''}`}
+            onClick={() => setDayViewDate(null)}
+          >
+            <span>{isCurrentMonth ? 'Tháng' : `T${cursor.getMonth() + 1}/${cursor.getFullYear()}`}</span>
+            <LayoutGrid size={13} />
+            <em className="cm-count-bubble">{activeDaysCount}</em>
+          </button>
+        </div>
+
+        <div className="cm-utility-icons">
+          <button
+            type="button"
+            className={`cm-icon-circle ${searchOpen ? 'active' : ''}`}
+            onClick={() => setSearchOpen(v => !v)}
+            aria-label="Tìm kiếm"
+          >
+            <Search size={17} />
+          </button>
+          <button
+            type="button"
+            className={`cm-icon-circle ${hideAll ? 'active' : ''}`}
+            onClick={() => setHideAll(v => !v)}
+            aria-label="Ẩn hoặc hiện tất cả số dư"
+          >
+            {hideAll ? <EyeOff size={17} /> : <Eye size={17} />}
+          </button>
+          <button
+            type="button"
+            className="cm-icon-circle"
+            onClick={() => {
+              const nextMonth = new Date(cursor);
+              nextMonth.setMonth(cursor.getMonth() - 1);
+              setCursor(nextMonth);
+            }}
+            title="Xem tháng trước / đổi chủ đề"
+            aria-label="Tuỳ chỉnh"
+          >
+            <Paintbrush size={17} />
+          </button>
+        </div>
+      </div>
+
+      {searchOpen && (
+        <div className="cm-search-bar">
+          <Search size={15} />
+          <input
+            autoFocus
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Tìm theo ghi chú hoặc danh mục..."
+          />
+          {searchQuery && (
+            <button type="button" onClick={() => setSearchQuery('')}>
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Expense & Income Summary Cards */}
+      <div className="cm-summary-cards">
+        <div className="cm-summary-card">
+          <span className="cm-summary-dot expense">
+            <ArrowUpRight size={17} />
+          </span>
+          <div className="cm-summary-copy">
+            <strong>{hideAll || hideExpense ? '••••••' : `${totals.expense.toLocaleString('vi-VN')}đ`}</strong>
+            <small>Chi</small>
+          </div>
+          <button
+            type="button"
+            className="cm-summary-eye"
+            onClick={() => setHideExpense(v => !v)}
+            aria-label="Ẩn hoặc hiện khoản chi"
+          >
+            {hideAll || hideExpense ? <EyeOff size={17} /> : <Eye size={17} />}
+          </button>
+        </div>
+
+        <div className="cm-summary-card">
+          <span className="cm-summary-dot income">
+            <ArrowDownLeft size={17} />
+          </span>
+          <div className="cm-summary-copy">
+            <strong>{hideAll || hideIncome ? '••••••' : `${totals.income.toLocaleString('vi-VN')}đ`}</strong>
+            <small>Thu</small>
+          </div>
+          <button
+            type="button"
+            className="cm-summary-eye"
+            onClick={() => setHideIncome(v => !v)}
+            aria-label="Ẩn hoặc hiện khoản thu"
+          >
+            {hideAll || hideIncome ? <EyeOff size={17} /> : <Eye size={17} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Wallet Filter Chips */}
+      <div className="cm-wallet-chips">
+        <button
+          type="button"
+          className={`cm-wallet-chip ${selectedWallet === 'all' ? 'active' : ''}`}
+          onClick={() => setSelectedWallet('all')}
+        >
+          <ReceiptText size={14} />
+          <span>Tất cả</span>
+        </button>
+        {wallets.map(wallet => {
+          const Icon = wallet.type === 'bank' ? Landmark : ReceiptText;
+          return (
+            <button
+              key={wallet.id}
+              type="button"
+              className={`cm-wallet-chip ${selectedWallet === wallet.id ? 'active' : ''}`}
+              onClick={() => setSelectedWallet(wallet.id)}
+            >
+              <Icon size={14} />
+              <span>{wallet.name}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Main Monthly Calendar Card */}
+      <section className="cm-calendar-board">
+        <div className="cm-month-nav-row">
+          <button
+            type="button"
+            className="cm-month-arrow"
+            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+            aria-label="Tháng trước"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="cm-month-label">
+            Tháng {cursor.getMonth() + 1}, {cursor.getFullYear()}
+          </span>
+          <button
+            type="button"
+            className="cm-month-arrow"
+            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+            aria-label="Tháng sau"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        <div className="cm-weekdays">
+          {weekdayLabels.map(label => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="cm-board-loading">
+            <span className="loading-mark" />
+          </div>
+        ) : (
+          <div className="cm-days-grid">
+            {Array.from({ length: monthRange.firstWeekdayOffset }, (_, idx) => (
+              <div key={`empty-${idx}`} className="cm-day-slot empty" />
+            ))}
+
+            {Array.from({ length: monthRange.daysInMonth }, (_, idx) => {
+              const dayNumber = idx + 1;
+              const dateObj = new Date(monthRange.year, monthRange.month, dayNumber);
+              const key = toDateKey(dateObj);
+              const events = byDay[key] ?? [];
+              const isToday = key === today;
+              const isPastOrToday = key <= today;
+              const hasEvents = events.length > 0;
+              const photoEvent = events.find(e => e.imageUrl) ?? events[0];
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className={`cm-day-slot ${isToday ? 'today' : ''} ${hasEvents ? 'has-events' : ''}`}
+                  onClick={() => handleDayClick(key)}
+                >
+                  <div className="cm-day-visual">
+                    {hasEvents ? (
+                      <div className={`cm-thumb-stack ${events.length > 1 ? 'multi' : ''}`}>
+                        {events.length > 1 && <span className="cm-thumb-back" />}
+                        <div className={`cm-thumb-card ${photoEvent.kind}`}>
+                          {photoEvent.imageUrl ? (
+                            <img src={photoEvent.imageUrl} alt={photoEvent.title} />
+                          ) : (
+                            <span className="cm-thumb-fallback">
+                              {photoEvent.kind === 'income' ? '+' : '−'}
+                              {formatCompact(photoEvent.amount ?? 0)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : isPastOrToday ? (
+                      <span className="cm-day-circle actionable">
+                        <Plus size={16} />
+                      </span>
+                    ) : (
+                      <span className="cm-day-circle future" />
+                    )}
+                  </div>
+
+                  <span className={`cm-day-number ${isToday ? 'today' : ''}`}>
+                    {dayNumber}
+                    {isToday && <i className="cm-today-dot" />}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Floating Quick Add Button on Calendar */}
+        <button
+          type="button"
+          className="cm-fab-add"
+          onClick={() => {
+            setCaptureType('expense');
+            setCaptureDate(selectedDate || today);
+          }}
+          aria-label="Thêm giao dịch"
+        >
+          <Plus size={28} />
+        </button>
+      </section>
+
+      {/* SCREEN 2: Selected Day Full-Screen View */}
+      {dayViewDate && (
+        <div className="cm-day-view-overlay">
+          <header className="cm-day-view-header">
+            <button
+              type="button"
+              className="cm-day-close"
+              onClick={() => setDayViewDate(null)}
+              aria-label="Đóng"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="cm-day-view-title">
+              <small>{formatWeekday(dayViewDate)}</small>
+              <h2>{formatShortDate(dayViewDate)}</h2>
+              <p className={dayViewNet.net >= 0 ? 'income' : 'expense'}>
+                {dayViewNet.net >= 0 ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
+                <span>{Math.abs(dayViewNet.net).toLocaleString('vi-VN')}đ</span>
+              </p>
+            </div>
+
+            <div className="cm-day-view-toggle">
+              <button
+                type="button"
+                className={dayViewLayout === 'grid' ? 'active' : ''}
+                onClick={() => setDayViewLayout('grid')}
+                aria-label="Chế độ lưới"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                type="button"
+                className={dayViewLayout === 'list' ? 'active' : ''}
+                onClick={() => setDayViewLayout('list')}
+                aria-label="Chế độ danh sách"
+              >
+                <ImageIcon size={16} />
+              </button>
+            </div>
+          </header>
+
+          <div className="cm-day-view-body">
+            {dayViewEvents.length === 0 ? (
+              <div className="cm-day-view-empty">
+                <p>Chưa có giao dịch nào trong ngày này.</p>
+                <button
+                  type="button"
+                  className="cm-empty-add-btn"
+                  onClick={() => {
+                    setCaptureType('expense');
+                    setCaptureDate(dayViewDate);
+                  }}
+                >
+                  <Plus size={16} /> Thêm giao dịch
+                </button>
+              </div>
+            ) : dayViewLayout === 'grid' ? (
+              <div className="cm-day-cards-grid">
+                {dayViewEvents.map(ev => {
+                  const tagLabel = ev.note || categoryNames[ev.categoryId ?? 'other'] || ev.title;
+                  const isIncome = ev.kind === 'income';
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      className={`cm-bill-card ${isIncome ? 'income' : 'expense'}`}
+                      onClick={() => setDetailEvent(ev)}
+                    >
+                      {ev.imageUrl ? (
+                        <img src={ev.imageUrl} alt={tagLabel} className="cm-bill-img" />
+                      ) : (
+                        <div className={`cm-bill-placeholder ${isIncome ? 'income' : 'expense'}`}>
+                          {isIncome ? <ArrowDownLeft size={32} /> : <ArrowUpRight size={32} />}
+                        </div>
+                      )}
+                      <span className={`cm-bill-badge ${isIncome ? 'income' : 'expense'}`}>
+                        {tagLabel}
+                      </span>
+                      <strong className="cm-bill-price">
+                        {isIncome ? '+' : '−'}
+                        {(ev.amount ?? 0).toLocaleString('vi-VN')}đ
+                      </strong>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="cm-day-cards-list">
+                {dayViewEvents.map(ev => {
+                  const tagLabel = ev.note || categoryNames[ev.categoryId ?? 'other'] || ev.title;
+                  const isIncome = ev.kind === 'income';
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      className="cm-day-list-row"
+                      onClick={() => setDetailEvent(ev)}
+                    >
+                      <span className={`cm-day-list-thumb ${isIncome ? 'income' : 'expense'}`}>
+                        {ev.imageUrl ? (
+                          <img src={ev.imageUrl} alt={tagLabel} />
+                        ) : isIncome ? (
+                          <ArrowDownLeft size={18} />
+                        ) : (
+                          <ArrowUpRight size={18} />
+                        )}
+                      </span>
+                      <span className="cm-day-list-info">
+                        <strong>{tagLabel}</strong>
+                        <small>{categoryNames[ev.categoryId ?? 'other'] ?? 'Giao dịch'}</small>
+                      </span>
+                      <b className={isIncome ? 'income' : 'expense'}>
+                        {isIncome ? '+' : '−'}
+                        {(ev.amount ?? 0).toLocaleString('vi-VN')}đ
+                      </b>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className="cm-fab-add day-view-fab"
+            onClick={() => {
+              setCaptureType('expense');
+              setCaptureDate(dayViewDate);
+            }}
+            aria-label="Thêm giao dịch vào ngày này"
+          >
+            <Plus size={28} />
+          </button>
+        </div>
+      )}
+
+      {/* SCREEN 3: Quick Add / Capture Modal */}
+      {captureDate && (
+        <ExpenseCapture
+          selectedDate={captureDate}
+          initialType={captureType}
+          defaultWalletId={selectedWallet}
+          onClose={() => setCaptureDate(null)}
+          onSaved={() => {
+            setCaptureDate(null);
+            void reload();
+          }}
+        />
+      )}
+
+      {/* Transaction Detail / Edit / Delete Modal */}
+      {detailEvent && (
+        <ExpenseDetail
+          event={detailEvent}
+          onClose={() => setDetailEvent(null)}
+          onChanged={() => {
+            setDetailEvent(null);
+            void reload();
+          }}
+        />
+      )}
+    </div>
+  );
 }
 
-function CalendarGrid({ mode, cursor, byDay, selectedDate, onSelect }: { mode: CalendarMode; cursor: Date; byDay: Record<string, CalendarEvent[]>; selectedDate: string; onSelect: (dateKey: string) => void }) { if (mode === 'year') return <div className="year-grid">{Array.from({ length: 12 }, (_, month) => { const date = new Date(cursor.getFullYear(), month, 1); const key = dateKey(date); return <button className={`year-month ${month === cursor.getMonth() ? 'current' : ''}`} key={key} onClick={() => onSelect(key)}><strong>Tháng {month + 1}</strong><span>{countMonthEvents(byDay, cursor.getFullYear(), month)} hoạt động</span><div className="mini-month">{Array.from({ length: new Date(cursor.getFullYear(), month + 1, 0).getDate() }, (_, day) => <i key={day} className={(byDay[dateKey(new Date(cursor.getFullYear(), month, day + 1))] ?? []).length ? 'has-events' : ''} />)}</div></button>; })}</div>; const dates = mode === 'month' ? monthDates(cursor) : mode === 'week' ? weekDates(cursor) : [new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate())]; const visibleWeekdays = mode === 'day' ? [weekdayLabels[(dates[0].getDay() + 6) % 7]] : weekdayLabels; return <div className={`calendar-grid mode-${mode}`}><div className="weekday-row">{visibleWeekdays.map(label => <span key={label}>{label}</span>)}</div><div className="date-cells">{dates.map(date => { const key = dateKey(date); const dayEvents = byDay[key] ?? []; return <button key={key} className={`date-cell ${key === todayKey() ? 'today' : ''} ${key === selectedDate ? 'selected' : ''} ${date.getMonth() !== cursor.getMonth() && mode === 'month' ? 'outside' : ''}`} onClick={() => onSelect(key)}><span className="cell-date">{mode === 'day' ? formatLongDate(date) : date.getDate()}</span><span className="cell-events">{dayEvents.slice(0, mode === 'day' ? 20 : 2).map(event => <i key={event.id} className={`event-pill ${event.kind}`}><span>{event.title}</span>{event.amount ? <b>{event.amount.toLocaleString('vi-VN')}₫</b> : null}</i>)}{dayEvents.length > 2 && <em>+{dayEvents.length - 2} hoạt động</em>}</span></button>; })}</div></div>; }
-function DayPanel({ dateKey: selectedDate, events, summary, onCapture, onReminder, onDetail }: { dateKey: string; events: CalendarEvent[]; summary: { income: number; expense: number; net: number; transactionCount: number }; onCapture: (type: 'income' | 'expense') => void; onReminder: () => void; onDetail: (event: CalendarEvent) => void }) { const transactionCount = events.filter(event => event.source === 'transaction').length; const imageEvents = events.filter(event => event.source === 'transaction' && event.kind === 'expense' && event.imageUrl); return <section className="day-panel panel"><div className="day-panel-head"><div><p className="eyebrow dark">CHI TIẾT NGÀY</p><h2>{formatLongDate(new Date(`${selectedDate}T12:00:00`))}</h2></div><CalendarDays size={18} /></div><div className="day-stats"><span><small>Thu</small><b className="income-text">+{summary.income.toLocaleString('vi-VN')}₫</b></span><span><small>Chi</small><b className="expense-text">−{summary.expense.toLocaleString('vi-VN')}₫</b></span><span><small>Ròng</small><b>{summary.net.toLocaleString('vi-VN')}₫</b></span></div><div className="day-actions"><button onClick={() => onCapture('expense')}><ImagePlus size={16} /> Ghi chi tiêu</button><button onClick={() => onCapture('income')}><Plus size={16} /> Thêm thu</button><button onClick={onReminder}><Clock3 size={16} /> Lời nhắc</button></div>{imageEvents.length > 0 && <div className="day-gallery"><div className="gallery-heading"><strong>Bill trong ngày</strong><span>{imageEvents.length} ảnh</span></div><div className="gallery-grid">{imageEvents.map(event => <button className="gallery-tile" key={event.id} onClick={() => onDetail(event)}><img src={event.imageUrl ?? ''} alt={event.note || 'Ảnh hóa đơn'} /><span className="gallery-overlay"><small>{event.note || 'Chi tiêu'}</small><b>−{event.amount?.toLocaleString('vi-VN')}₫</b></span></button>)}</div></div>}<div className="day-timeline"><div className="timeline-heading"><strong>Khoản trong ngày</strong><span>{transactionCount} giao dịch</span></div>{events.length ? events.map(event => <button className="timeline-item" key={`${event.source}-${event.id}`} onClick={() => event.source === 'transaction' ? onDetail(event) : undefined}><span className={`timeline-icon ${event.kind}`}>{event.imageUrl ? <img src={event.imageUrl} alt="" /> : event.kind === 'income' ? '↑' : event.kind === 'expense' ? '↓' : '•'}</span><span className="timeline-copy"><strong>{event.title}</strong><small>{event.note || event.time || (event.source === 'transaction' ? 'Đã ghi nhận' : 'Cần chú ý')}</small></span>{event.amount ? <b className={event.kind === 'income' ? 'income-text' : 'expense-text'}>{event.kind === 'income' ? '+' : '−'}{event.amount.toLocaleString('vi-VN')}₫</b> : <span className="reminder-status">{event.status === 'paid' ? 'Đã xong' : 'Nhắc'}</span>}</button>) : <div className="day-empty"><div><CalendarDays size={20} /></div><strong>Ngày này còn trống</strong><p>Ghi lại một khoản chi bằng ảnh để nhớ cả câu chuyện phía sau.</p></div>}</div></section>; }
-function Summary({ label, value, tone, suffix = ' ₫' }: { label: string; value: number; tone: string; suffix?: string }) { return <div className={`calendar-stat ${tone}`}><span>{label}</span><strong>{value.toLocaleString('vi-VN')}{suffix}</strong></div>; }
-function ReminderModal({ selectedDate, onClose, onSaved }: { selectedDate: string; onClose: () => void; onSaved: () => void }) { const [title, setTitle] = useState(''); const [kind, setKind] = useState('reminder'); const [time, setTime] = useState('09:00'); const [saving, setSaving] = useState(false); const [error, setError] = useState(''); const save = async () => { if (!title.trim()) { setError('Nhập nội dung lời nhắc.'); return; } setSaving(true); try { await api.createReminder({ title, note: '', dateKey: selectedDate, time, kind, repeat: 'none', channels: ['in_app'] }); onSaved(); } catch { setError('Không thể tạo lời nhắc.'); } finally { setSaving(false); } }; return <div className="detail-overlay" onClick={onClose}><section className="reminder-modal" onClick={event => event.stopPropagation()}><button className="detail-close" onClick={onClose}><X size={18} /></button><p className="eyebrow dark">LỊCH NHẮC</p><h2>Thêm lời nhắc</h2><p className="reminder-date">{formatLongDate(new Date(`${selectedDate}T12:00:00`))}</p><label className="select-field full"><span>Nội dung</span><input value={title} onChange={event => setTitle(event.target.value)} placeholder="Ví dụ: Thanh toán tiền điện" /></label><div className="form-two-columns"><label className="select-field"><span>Loại</span><select value={kind} onChange={event => setKind(event.target.value)}><option value="reminder">Nhắc nhở</option><option value="payment">Thanh toán</option><option value="income">Thu nhập dự kiến</option></select></label><label className="select-field"><span>Thời gian</span><input type="time" value={time} onChange={event => setTime(event.target.value)} /></label></div>{error && <div className="capture-error">{error}</div>}<button className="save-expense" disabled={saving} onClick={() => void save()}>{saving ? 'Đang lưu…' : 'Lưu lời nhắc'}<span>{selectedDate.slice(-2)}/{selectedDate.slice(5, 7)}</span></button></section></div>; }
+function toDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
-function titleFor(date: Date, mode: CalendarMode) { if (mode === 'year') return String(date.getFullYear()); if (mode === 'day') return formatLongDate(date); const month = new Intl.DateTimeFormat('vi-VN', { month: 'long' }).format(date); return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${date.getFullYear()}`; }
-function modeLabel(value: CalendarMode) { return ({ month: 'Tháng', week: 'Tuần', day: 'Ngày', year: 'Năm' } as Record<CalendarMode, string>)[value]; }
-function dateKey(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
-function todayKey() { return dateKey(new Date()); }
-function formatLongDate(date: Date) { return new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' }).format(date); }
-function monthDates(date: Date) { const start = new Date(date.getFullYear(), date.getMonth(), 1); const offset = (start.getDay() + 6) % 7; return Array.from({ length: 42 }, (_, index) => new Date(date.getFullYear(), date.getMonth(), index + 1 - offset)); }
-function weekDates(date: Date) { const start = new Date(date.getFullYear(), date.getMonth(), date.getDate() - ((date.getDay() + 6) % 7)); return Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index)); }
-function calendarRange(date: Date, mode: CalendarMode) { const dates = mode === 'month' ? monthDates(date) : mode === 'week' ? weekDates(date) : mode === 'day' ? [date] : [new Date(date.getFullYear(), 0, 1), new Date(date.getFullYear(), 11, 31)]; return { from: dateKey(dates[0]), to: dateKey(dates[dates.length - 1]) }; }
-function countMonthEvents(byDay: Record<string, CalendarEvent[]>, year: number, month: number) { return Object.entries(byDay).filter(([key, value]) => { const date = new Date(`${key}T12:00:00`); return date.getFullYear() === year && date.getMonth() === month && value.length > 0; }).length; }
+function todayKey() {
+  return toDateKey(new Date());
+}
 
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return { text: 'Chào buổi sáng', emoji: '☀️' };
+  if (hour >= 12 && hour < 18) return { text: 'Chào buổi chiều', emoji: '🌤️' };
+  return { text: 'Chào buổi tối', emoji: '🌙' };
+}
+
+function formatWeekday(dateKey: string) {
+  const date = new Date(`${dateKey}T12:00:00`);
+  const day = date.getDay();
+  const names = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+  return names[day] ?? '';
+}
+
+function formatShortDate(dateKey: string) {
+  const date = new Date(`${dateKey}T12:00:00`);
+  return `${date.getDate()} thg ${date.getMonth() + 1}, ${date.getFullYear()}`;
+}
+
+function formatCompact(amount: number) {
+  if (amount >= 1_000_000) return `${Math.round(amount / 100_000) / 10}tr`;
+  if (amount >= 1_000) return `${Math.round(amount / 1_000)}k`;
+  return String(amount);
+}
