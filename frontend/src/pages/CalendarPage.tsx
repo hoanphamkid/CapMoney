@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
+  CloudUpload,
   Eye,
   EyeOff,
   Flame,
@@ -73,6 +74,8 @@ export function CalendarPage() {
   const [lookbackPeriod, setLookbackPeriod] = useState<1 | 3 | 7 | null>(null);
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [toolkitOpen, setToolkitOpen] = useState(false);
+  const [syncingCloud, setSyncingCloud] = useState(false);
+  const [syncNotice, setSyncNotice] = useState('');
   const [budget, setBudget] = useState<BudgetConfig>(() => loadBudget());
 
   const monthRange = useMemo(() => {
@@ -256,6 +259,26 @@ export function CalendarPage() {
               title="Hũ tiết kiệm, Chia tiền nhóm & Huy hiệu"
             >
               <PiggyBank size={12} /> Hũ & Chia bill
+            </button>
+            <button
+              type="button"
+              className="cm-badge-blue clickable"
+              disabled={syncingCloud}
+              onClick={async () => {
+                setSyncingCloud(true);
+                try {
+                  await api.syncCloud();
+                  await reload();
+                  setSyncNotice('Đã đồng bộ!');
+                  setTimeout(() => setSyncNotice(''), 2500);
+                } finally {
+                  setSyncingCloud(false);
+                }
+              }}
+              title="Đồng bộ dữ liệu tài khoản giữa điện thoại và máy tính"
+            >
+              <CloudUpload size={12} />
+              {syncingCloud ? 'Đang đồng bộ...' : syncNotice || 'Đồng bộ'}
             </button>
           </div>
         </div>
