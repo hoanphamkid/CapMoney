@@ -74,6 +74,7 @@ export function ExpenseCapture({
   const [listening, setListening] = useState(false);
   const [keypadOpen, setKeypadOpen] = useState(true);
   const [celebrate, setCelebrate] = useState(false);
+  const [moodStamp, setMoodStamp] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
@@ -329,10 +330,13 @@ export function ExpenseCapture({
         setWallets([created.wallet]);
         setWalletId(targetWalletId);
       }
+      const baseNote = note.trim() || (categories.find(c => c.id === category)?.label ?? '');
+      const finalNote =
+        moodStamp && !baseNote.includes(moodStamp) ? `${moodStamp} ${baseNote}`.trim() : baseNote;
       await api.createTransaction({
         type,
         amount: numericAmount,
-        note: note.trim() || (categories.find(c => c.id === category)?.label ?? ''),
+        note: finalNote,
         categoryId: category,
         walletId: targetWalletId,
         transactionDate: dateKey,
@@ -342,6 +346,7 @@ export function ExpenseCapture({
       if (keepOpenForNextShot) {
         setExpr('');
         setNote('');
+        setMoodStamp('');
         setImage(null);
         setStep('camera');
       } else {
@@ -451,6 +456,14 @@ export function ExpenseCapture({
               <span className="cm-amount-currency">đ</span>
             </div>
 
+            {rawNumericAmount >= 15000 && (
+              <div className="cm-life-index-hint">
+                ≈ {Math.max(1, Math.round((rawNumericAmount / 50000) * 10) / 10)} bát phở 🍜 •{' '}
+                {Math.max(1, Math.round((rawNumericAmount / 35000) * 10) / 10)} trà sữa 🧋 •{' '}
+                {Math.max(0.5, Math.round((rawNumericAmount / 45000) * 10) / 10)}h cày ⏱️
+              </div>
+            )}
+
             <div
               className="cm-detail-input-wrap"
               onClick={e => {
@@ -475,10 +488,34 @@ export function ExpenseCapture({
               />
             </div>
           </div>
+
+          {moodStamp && <div className="cm-photo-mood-stamp">{moodStamp}</div>}
         </div>
 
-        {/* "[🔍 Tự động nhận diện]" Pill Right Below Photo */}
+        {/* "[🔍 Tự động nhận diện]" Pill + Mood Sticker Stamps Right Below Photo */}
         <div className="cm-ocr-bar-below">
+          <div className="cm-mood-stamp-row">
+            {[
+              { tag: '🤩 Đáng tiền', label: '🤩 Đáng tiền' },
+              { tag: '😭 Tiêu ngu', label: '😭 Tiêu ngu' },
+              { tag: '🧋 Tự thưởng', label: '🧋 Tự thưởng' },
+              { tag: '❤️ Hẹn hò', label: '❤️ Hẹn hò' },
+              { tag: '🔥 Cháy túi', label: '🔥 Cháy túi' },
+            ].map(item => (
+              <button
+                key={item.tag}
+                type="button"
+                className={`cm-mood-stamp-chip ${moodStamp === item.tag ? 'active' : ''}`}
+                onClick={() => {
+                  setMoodStamp(prev => (prev === item.tag ? '' : item.tag));
+                  if (navigator.vibrate) navigator.vibrate(15);
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
           <button
             type="button"
             className={`cm-auto-detect-pill ${ocrScanning ? 'scanning' : ''}`}

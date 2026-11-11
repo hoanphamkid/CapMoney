@@ -132,7 +132,7 @@ function saveSubs(list: SubscriptionItem[]) {
   }
 }
 
-type ToolkitTab = 'jar' | 'debts' | 'subs' | 'coach' | 'split' | 'badges';
+type ToolkitTab = 'jar' | 'tarot' | 'radar' | 'debts' | 'subs' | 'coach' | 'split' | 'badges';
 
 type SmartToolkitModalProps = {
   transactions: Transaction[];
@@ -163,6 +163,105 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
 
   // AI Coach state
   const [coachTone, setCoachTone] = useState<'roast' | 'heal'>('roast');
+
+  // Tarot 3-Card Flip state
+  const [flippedCards, setFlippedCards] = useState<Record<number, boolean>>({ 0: false, 1: false, 2: false });
+
+  // Regret vs Worth-It & Top Places Radar
+  const radarStats = useMemo(() => {
+    let worthItTotal = 0;
+    let regretTotal = 0;
+    let treatTotal = 0;
+    let totalExpense = 0;
+    const itemFreq: Record<string, { count: number; total: number }> = {};
+
+    for (const tx of transactions) {
+      if (tx.type !== 'expense') continue;
+      totalExpense += tx.amount;
+      const n = tx.note || '';
+      if (n.includes('🤩') || /đáng tiền/i.test(n)) worthItTotal += tx.amount;
+      else if (n.includes('😭') || /tiêu ngu|hối hận/i.test(n)) regretTotal += tx.amount;
+      else if (n.includes('🧋') || /tự thưởng|hẹn hò|❤️/i.test(n)) treatTotal += tx.amount;
+
+      const cleanName = n
+        .replace(/🤩\s*Đáng tiền|😭\s*Tiêu ngu|🧋\s*Tự thưởng|❤️\s*Hẹn hò|🔥\s*Cháy túi/g, '')
+        .trim() || 'Chi tiêu';
+      if (!itemFreq[cleanName]) itemFreq[cleanName] = { count: 0, total: 0 };
+      itemFreq[cleanName].count += 1;
+      itemFreq[cleanName].total += tx.amount;
+    }
+
+    const topFavorites = Object.entries(itemFreq)
+      .sort((a, b) => b[1].count - a[1].count || b[1].total - a[1].total)
+      .slice(0, 4);
+
+    return {
+      worthItTotal,
+      regretTotal,
+      treatTotal,
+      totalExpense,
+      phoCount: Math.round(totalExpense / 50_000),
+      bobaCount: Math.round(totalExpense / 35_000),
+      workHours: Math.round((totalExpense / 45_000) * 10) / 10,
+      movieTickets: Math.round(totalExpense / 95_000),
+      topFavorites,
+    };
+  }, [transactions]);
+
+  const tarotCards = useMemo(() => {
+    const seed = new Date().getDate() + transactions.length;
+    const fortunes = [
+      {
+        title: '🌟 Ngôi Sao Giữ Ví',
+        cardName: 'THE STAR OF WALLET',
+        desc: 'Hôm nay trực giác tài chính cực nhạy! Khoản tiền bạn định chi cho bản thân hoàn toàn xứng đáng.',
+      },
+      {
+        title: '🛡️ Kỵ Sĩ Phòng Thủ',
+        cardName: 'KNIGHT OF COINS',
+        desc: 'Vận tiền đang ổn định. Hãy giữ chặt ví trước các lời rủ rê đặt đồ ăn xế chiều nay!',
+      },
+      {
+        title: '🎡 Vòng Quay Thần Tài',
+        cardName: 'WHEEL OF FORTUNE',
+        desc: 'Sắp có khoản lộc nhỏ bất ngờ (hoàn tiền, được bao ăn hoặc thưởng nhẹ). Tinh thần phấn chấn!',
+      },
+    ];
+    const traps = [
+      {
+        title: '🧋 Cạm Bẫy Trà Sữa & Ăn Vặt',
+        cardName: 'THE BOBA TEMPTATION',
+        desc: 'Khung giờ nguy hiểm: 14h30 - 16h30 chiều. Dễ bay 50k - 100k vì đồng nghiệp rủ rê!',
+      },
+      {
+        title: '🛒 Bóng Đêm Săn Sale',
+        cardName: 'MIDNIGHT CART',
+        desc: 'Khung giờ nguy hiểm: 22h30 - 0h30 đêm. Tắt app mua sắm trước khi đi ngủ để bảo toàn ví!',
+      },
+      {
+        title: '🛵 Cuốc Xe Ngẫu Hứng',
+        cardName: 'THE FLASH RIDE',
+        desc: 'Đi sớm 10 phút hôm nay sẽ giúp bạn tiết kiệm được một khoản phí di chuyển kha khá.',
+      },
+    ];
+    const advices = [
+      {
+        title: '🪙 Mẹo Phong Thủy Ví',
+        cardName: 'ACE OF PENTACLES',
+        desc: 'Bỏ ngay 50k vào Hũ Vàng hôm nay để kích hoạt vía giữ tiền cả tuần! Con số hợp ví: 68.',
+      },
+      {
+        title: '🍀 Quy Tắc 10 Giây',
+        cardName: 'THE HERMIT WISDOM',
+        desc: 'Trước khi quẹt QR hôm nay, hãy chụp bill kèm tem "🤩 Đáng tiền" để kiểm chứng độ cần thiết.',
+      },
+    ];
+    return [
+      fortunes[seed % fortunes.length],
+      traps[seed % traps.length],
+      advices[seed % advices.length],
+    ];
+  }, [transactions.length]);
 
   // Bill Splitter state
   const [billTotal, setBillTotal] = useState('450000');
@@ -389,8 +488,22 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
           </span>
         </header>
 
-        {/* Scrollable 6-Tab Switcher */}
+        {/* Scrollable 8-Tab Switcher */}
         <div className="cm-toolkit-tabs-scroll">
+          <button
+            type="button"
+            className={`cm-story-period-btn ${tab === 'tarot' ? 'active' : ''}`}
+            onClick={() => setTab('tarot')}
+          >
+            🔮 Bói Ví
+          </button>
+          <button
+            type="button"
+            className={`cm-story-period-btn ${tab === 'radar' ? 'active' : ''}`}
+            onClick={() => setTab('radar')}
+          >
+            💔 Độ Tiêu Ngu
+          </button>
           <button
             type="button"
             className={`cm-story-period-btn ${tab === 'jar' ? 'active' : ''}`}
@@ -434,6 +547,106 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
             🏆 Huy Hiệu
           </button>
         </div>
+
+        {/* TAB 0A: DAILY FINANCIAL TAROT (🔮 BÓI VÍ) */}
+        {tab === 'tarot' && (
+          <div className="cm-toolkit-body fade-in">
+            <p className="cm-sub-intro">
+              ✨ Chạm vào từng lá bài bên dưới để lật xem <b>Quẻ Tài Chính Hôm Nay</b> của bạn:
+            </p>
+            <div className="cm-tarot-grid">
+              {tarotCards.map((c, idx) => {
+                const isFlipped = Boolean(flippedCards[idx]);
+                const labels = ['1. Vận Tiền Hôm Nay', '2. Cạm Bẫy Cần Né', '3. Lời Phán Giữ Ví'];
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`cm-tarot-card ${isFlipped ? 'flipped' : ''}`}
+                    onClick={() => {
+                      setFlippedCards(prev => ({ ...prev, [idx]: !prev[idx] }));
+                      if (navigator.vibrate) navigator.vibrate(25);
+                    }}
+                  >
+                    {!isFlipped ? (
+                      <div className="cm-tarot-back">
+                        <span className="cm-tarot-moon">🔮</span>
+                        <strong>{labels[idx]}</strong>
+                        <small>Chạm để lật bài ✨</small>
+                      </div>
+                    ) : (
+                      <div className="cm-tarot-front">
+                        <small className="cm-tarot-arcana">{c.cardName}</small>
+                        <strong>{c.title}</strong>
+                        <p>{c.desc}</p>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 0B: REGRET RADAR & LIFE INDEX (💔 ĐỘ TIÊU NGU & QUÁN RUỘT) */}
+        {tab === 'radar' && (
+          <div className="cm-toolkit-body fade-in">
+            <div className="cm-story-stats-row">
+              <div className="cm-story-stat-box income">
+                <small>🤩 Chi tiêu Đáng tiền</small>
+                <strong>{radarStats.worthItTotal.toLocaleString('vi-VN')}đ</strong>
+              </div>
+              <div className="cm-story-stat-box expense">
+                <small>😭 Chi tiêu Hối hận</small>
+                <strong>{radarStats.regretTotal.toLocaleString('vi-VN')}đ</strong>
+              </div>
+            </div>
+
+            <div className="cm-life-converter-card">
+              <strong>⏱️ Quy đổi Tổng Chi ({radarStats.totalExpense.toLocaleString('vi-VN')}đ) ra hiện vật:</strong>
+              <div className="cm-life-converter-grid">
+                <div>
+                  <span>🍜</span>
+                  <b>{radarStats.phoCount}</b>
+                  <small>Bát phở bò</small>
+                </div>
+                <div>
+                  <span>🧋</span>
+                  <b>{radarStats.bobaCount}</b>
+                  <small>Ly trà sữa</small>
+                </div>
+                <div>
+                  <span>⏱️</span>
+                  <b>{radarStats.workHours}h</b>
+                  <small>Giờ cày cuốc</small>
+                </div>
+                <div>
+                  <span>🎟️</span>
+                  <b>{radarStats.movieTickets}</b>
+                  <small>Vé xem phim</small>
+                </div>
+              </div>
+            </div>
+
+            <div className="cm-debt-form-card">
+              <strong style={{ fontSize: 13, color: '#f1f5f9' }}>🏆 Top Món / Quán "Ruột" hay chi nhất:</strong>
+              {radarStats.topFavorites.length === 0 ? (
+                <small style={{ color: '#94a3b8' }}>Chưa có dữ liệu giao dịch.</small>
+              ) : (
+                radarStats.topFavorites.map(([name, info], idx) => (
+                  <div key={name} className="cm-debt-row">
+                    <span className="cm-sub-emoji">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🔥'}</span>
+                    <div className="cm-debt-info">
+                      <strong>{name}</strong>
+                      <small>Lặp lại {info.count} lần</small>
+                    </div>
+                    <b className="cm-debt-amount expense">−{info.total.toLocaleString('vi-VN')}đ</b>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
         {/* TAB 1: SAVINGS JAR */}
         {tab === 'jar' && (

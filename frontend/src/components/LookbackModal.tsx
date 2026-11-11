@@ -62,6 +62,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   const [dragX, setDragX] = useState(0);
   const [slideDir, setSlideDir] = useState<'next' | 'prev'>('next');
   const [pulseTick, setPulseTick] = useState(0);
+  const [boothTheme, setBoothTheme] = useState<'dark' | 'pink' | 'neon' | 'retro'>('dark');
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -208,7 +209,97 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   const periodTitle =
     period === 1 ? '24 Giờ Qua (1 Ngày)' : period === 3 ? '3 Ngày Gần Nhất' : 'Hành Trình 1 Tuần (7 Ngày)';
   const maxDayExpense = Math.max(1, ...Object.values(stats.dayTotals).map(d => Math.max(d.expense, d.income)));
-  const barCount = slideIndex === 0 ? Math.max(1, Math.min(displayTxs.length, 12)) : 3;
+  const barCount = slideIndex === 0 ? Math.max(1, Math.min(displayTxs.length, 12)) : 4;
+
+  // Export Korean Photobooth 4-Cut Strip with real photos
+  const downloadPhotoboothStrip = async () => {
+    const cuts = displayTxs.slice(0, 4);
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 1380;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const themeColors = {
+      dark: { bg1: '#141722', bg2: '#0b0d13', text: '#ffffff', sub: '#9ba5bc', accent: '#c084fc' },
+      pink: { bg1: '#fce7f3', bg2: '#fbcfe8', text: '#831843', sub: '#be185d', accent: '#ec4899' },
+      neon: { bg1: '#1e1b4b', bg2: '#090d16', text: '#38bdf8', sub: '#f472b6', accent: '#a855f7' },
+      retro: { bg1: '#fef3c7', bg2: '#fde68a', text: '#451a03', sub: '#92400e', accent: '#d97706' },
+    }[boothTheme];
+
+    const grad = ctx.createLinearGradient(0, 0, 0, 1380);
+    grad.addColorStop(0, themeColors.bg1);
+    grad.addColorStop(1, themeColors.bg2);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 640, 1380);
+
+    // Film sprocket holes on left & right edges
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    for (let y = 30; y < 1340; y += 44) {
+      ctx.fillRect(14, y, 12, 22);
+      ctx.fillRect(614, y, 12, 22);
+    }
+
+    ctx.fillStyle = themeColors.text;
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText('🎞️ CAPMONEY LIFE4CUTS', 48, 62);
+    ctx.fillStyle = themeColors.sub;
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillText(`${periodTitle} • Tổng chi: −${stats.expense.toLocaleString('vi-VN')}đ`, 48, 94);
+
+    for (let i = 0; i < 4; i++) {
+      const tx = cuts[i];
+      const boxY = 120 + i * 285;
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.fillRect(48, boxY, 544, 265);
+
+      if (tx?.imageUrl) {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          await new Promise<void>(resolve => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            img.src = tx.imageUrl!;
+          });
+          if (img.width > 0 && img.height > 0) {
+            ctx.drawImage(img, 48, boxY, 544, 265);
+          }
+        } catch {
+          // fallback if image fails
+        }
+      }
+
+      // Dark bottom gradient for caption
+      const capGrad = ctx.createLinearGradient(0, boxY + 170, 0, boxY + 265);
+      capGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      capGrad.addColorStop(1, 'rgba(0,0,0,0.82)');
+      ctx.fillStyle = capGrad;
+      ctx.fillRect(48, boxY + 170, 544, 95);
+
+      if (tx) {
+        ctx.fillStyle = tx.type === 'income' ? '#7CE3A6' : '#FF8E88';
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillText(`${tx.type === 'income' ? '+' : '−'}${tx.amount.toLocaleString('vi-VN')}đ`, 68, boxY + 225);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '20px sans-serif';
+        ctx.fillText(`${tx.note || 'Kỷ niệm'} • ${formatVNDate(tx.dateKey)}`, 68, boxY + 252);
+      } else {
+        ctx.fillStyle = '#9ba5bc';
+        ctx.font = '22px sans-serif';
+        ctx.fillText(`Khung ảnh #${i + 1} (Chụp thêm bill nhé!)`, 140, boxY + 145);
+      }
+    }
+
+    ctx.fillStyle = themeColors.text;
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('✨ cap-money.vercel.app • Nhật ký chi tiêu bằng ảnh', 72, 1320);
+
+    const link = document.createElement('a');
+    link.download = `capmoney-photobooth-${period}d.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
 
   // Export Story Card as PNG Image
   const downloadStoryCard = () => {
@@ -647,14 +738,85 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
           </div>
         )}
 
-        {/* Footer View Mode Switcher (Ảnh Kỷ Niệm | Biểu Đồ | Tổng Kết) */}
+        {/* SLIDE 3: KOREAN PHOTOBOOTH / LOCKET 4-CUT COLLAGE */}
+        {slideIndex === 3 && (
+          <div className="cm-story-slide fade-in">
+            <div className="cm-fx-selector-row">
+              {(
+                [
+                  { id: 'dark', label: '🖤 Film Đen' },
+                  { id: 'pink', label: '🌸 Đào Pastel' },
+                  { id: 'neon', label: '💜 Tím Neon' },
+                  { id: 'retro', label: '☕ Kem Retro' },
+                ] as const
+              ).map(th => (
+                <button
+                  key={th.id}
+                  type="button"
+                  className={`cm-fx-chip ${boothTheme === th.id ? 'active' : ''}`}
+                  onClick={() => setBoothTheme(th.id)}
+                >
+                  {th.label}
+                </button>
+              ))}
+            </div>
+
+            <div className={`cm-photobooth-frame theme-${boothTheme}`}>
+              <div className="cm-photobooth-head">
+                <strong>🎞️ CAPMONEY LIFE4CUTS</strong>
+                <span>−{stats.expense.toLocaleString('vi-VN')}đ</span>
+              </div>
+              <div className="cm-photobooth-grid">
+                {[0, 1, 2, 3].map(idx => {
+                  const tx = displayTxs[idx];
+                  return (
+                    <div key={idx} className="cm-photobooth-cell">
+                      {tx?.imageUrl ? (
+                        <img src={tx.imageUrl} alt={tx.note || 'Bill'} />
+                      ) : (
+                        <div className="cm-photobooth-empty">
+                          <span>#{idx + 1}</span>
+                        </div>
+                      )}
+                      {tx && (
+                        <div className="cm-photobooth-tag">
+                          <b>
+                            {tx.type === 'income' ? '+' : '−'}
+                            {tx.amount.toLocaleString('vi-VN')}đ
+                          </b>
+                          <small>{tx.note || formatVNDate(tx.dateKey)}</small>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                className="cm-photobooth-dl-btn"
+                onClick={() => void downloadPhotoboothStrip()}
+              >
+                <Download size={14} /> Tải Dải Phim Photobooth (PNG)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Footer View Mode Switcher (Ảnh Kỷ Niệm | Photobooth | Biểu Đồ | Tổng Kết) */}
         <footer className="cm-story-footer">
           <button
             type="button"
             className={`cm-story-nav-btn ${slideIndex === 0 ? 'active' : ''}`}
             onClick={() => setSlideIndex(0)}
           >
-            <Camera size={14} /> Ảnh ({displayTxs.length})
+            <Camera size={14} /> 1s Reel ({displayTxs.length})
+          </button>
+          <button
+            type="button"
+            className={`cm-story-nav-btn ${slideIndex === 3 ? 'active' : ''}`}
+            onClick={() => setSlideIndex(3)}
+          >
+            <WandSparkles size={14} /> Photobooth
           </button>
           <button
             type="button"
