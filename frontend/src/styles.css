@@ -4641,3 +4641,83 @@ html:not(.dark-theme) .cm-app-shell {
 }
 
 
+
+/* 30-day challenge & food wheel */
+.cm-challenge-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.cm-challenge-cell {
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease, background 0.2s ease;
+}
+
+.cm-challenge-cell:active {
+  transform: scale(0.92);
+}
+
+.cm-challenge-cell b {
+  font-size: 14px;
+}
+
+.cm-challenge-cell small {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.cm-challenge-cell.done {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border-color: #4ade80;
+  color: #ffffff;
+}
+
+.cm-wheel-display {
+  border-radius: 20px;
+  padding: 24px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(145deg, rgba(88, 28, 135, 0.45), rgba(15, 23, 42, 0.9));
+  border: 1px solid rgba(192, 132, 252, 0.4);
+}
+
+.cm-wheel-display .cm-wheel-icon {
+  font-size: 56px;
+}
+
+.cm-wheel-display strong {
+  font-size: 18px;
+  color: #ffffff;
+  text-align: center;
+}
+
+.cm-wheel-display small {
+  color: #fde047;
+  font-size: 13px;
+}
+
+.cm-wheel-display.spinning .cm-wheel-icon {
+  animation: wheelShake 0.18s linear infinite;
+}
+
+.cm-wheel-display.done {
+  border-color: #fde047;
+  box-shadow: 0 0 24px rgba(250, 204, 21, 0.4);
+  animation: pricePop1s 0.4s ease-out;
+}
+
+@keyframes wheelShake {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-6px) rotate(6deg); }
+}

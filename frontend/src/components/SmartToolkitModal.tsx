@@ -132,7 +132,34 @@ function saveSubs(list: SubscriptionItem[]) {
   }
 }
 
-type ToolkitTab = 'jar' | 'tarot' | 'radar' | 'debts' | 'subs' | 'coach' | 'split' | 'badges';
+type ToolkitTab = 'jar' | 'challenge' | 'wheel' | 'tarot' | 'radar' | 'debts' | 'subs' | 'coach' | 'split' | 'badges';
+
+const CHALLENGE_KEY = 'capmoney_challenge30_v1';
+const WHEEL_FOODS = [
+  { name: 'Phở bò', price: '50k', icon: '🍜' },
+  { name: 'Cơm tấm sườn', price: '45k', icon: '🍚' },
+  { name: 'Bún chả', price: '45k', icon: '🥢' },
+  { name: 'Bánh mì', price: '20k', icon: '🥖' },
+  { name: 'Mì cay', price: '55k', icon: '🌶️' },
+  { name: 'Trà sữa + gà rán', price: '80k', icon: '🧋' },
+  { name: 'Tự nấu ở nhà (tiết kiệm!)', price: '25k', icon: '🍳' },
+  { name: 'Bún đậu mắm tôm', price: '60k', icon: '🍤' },
+  { name: 'Cơm văn phòng', price: '40k', icon: '🍱' },
+  { name: 'Mì gói trứng', price: '10k', icon: '🥚' },
+];
+
+function loadChallenge(): number[] {
+  try {
+    const raw = localStorage.getItem(CHALLENGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((n): n is number => typeof n === 'number');
+    }
+  } catch {
+    // Ignore
+  }
+  return [];
+}
 
 type SmartToolkitModalProps = {
   transactions: Transaction[];
@@ -163,6 +190,46 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
 
   // AI Coach state
   const [coachTone, setCoachTone] = useState<'roast' | 'heal'>('roast');
+
+  // 30-day challenge & food wheel state
+  const [challengeDays, setChallengeDays] = useState<number[]>(() => loadChallenge());
+  const [wheelIdx, setWheelIdx] = useState(0);
+  const [wheelSpinning, setWheelSpinning] = useState(false);
+  const [wheelDone, setWheelDone] = useState(false);
+
+  const toggleChallengeDay = (day: number) => {
+    if (navigator.vibrate) navigator.vibrate(20);
+    setChallengeDays(prev => {
+      const next = prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day];
+      try {
+        localStorage.setItem(CHALLENGE_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore
+      }
+      return next;
+    });
+  };
+
+  const spinWheel = () => {
+    if (wheelSpinning) return;
+    setWheelSpinning(true);
+    setWheelDone(false);
+    let ticks = 0;
+    const total = 18 + Math.floor(Math.random() * WHEEL_FOODS.length);
+    const timer = setInterval(() => {
+      ticks += 1;
+      setWheelIdx(i => (i + 1) % WHEEL_FOODS.length);
+      if (navigator.vibrate) navigator.vibrate(8);
+      if (ticks >= total) {
+        clearInterval(timer);
+        setWheelSpinning(false);
+        setWheelDone(true);
+        if (navigator.vibrate) navigator.vibrate([30, 40, 60]);
+      }
+    }, 70 + ticks * 4);
+  };
+
+  const challengeTotal = challengeDays.reduce((sum, d) => sum + d * 10_000, 0);
 
   // Tarot 3-Card Flip state
   const [flippedCards, setFlippedCards] = useState<Record<number, boolean>>({ 0: false, 1: false, 2: false });
@@ -488,8 +555,22 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
           </span>
         </header>
 
-        {/* Scrollable 8-Tab Switcher */}
+        {/* Scrollable Tab Switcher */}
         <div className="cm-toolkit-tabs-scroll">
+          <button
+            type="button"
+            className={`cm-story-period-btn ${tab === 'challenge' ? 'active' : ''}`}
+            onClick={() => setTab('challenge')}
+          >
+            🎯 Thử Thách 30N
+          </button>
+          <button
+            type="button"
+            className={`cm-story-period-btn ${tab === 'wheel' ? 'active' : ''}`}
+            onClick={() => setTab('wheel')}
+          >
+            🎡 Ăn Gì Nay?
+          </button>
           <button
             type="button"
             className={`cm-story-period-btn ${tab === 'tarot' ? 'active' : ''}`}
@@ -547,6 +628,70 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
             🏆 Huy Hiệu
           </button>
         </div>
+
+        {/* TAB: 30-DAY SAVING CHALLENGE */}
+        {tab === 'challenge' && (
+          <div className="cm-toolkit-body fade-in">
+            <p className="cm-sub-intro">
+              Ngày thứ <b>N</b> bỏ ống heo <b>N × 10.000đ</b>. Hoàn thành 30 ngày bạn có{' '}
+              <b>4.650.000đ</b>! Chạm vào ô để đánh dấu đã bỏ.
+            </p>
+            <div className="cm-story-stats-row">
+              <div className="cm-story-stat-box income">
+                <small>Đã tiết kiệm</small>
+                <strong>+{challengeTotal.toLocaleString('vi-VN')}đ</strong>
+              </div>
+              <div className="cm-story-stat-box expense">
+                <small>Hoàn thành</small>
+                <strong>{challengeDays.length}/30 ngày</strong>
+              </div>
+            </div>
+            <div className="cm-challenge-grid">
+              {Array.from({ length: 30 }, (_, i) => i + 1).map(day => (
+                <button
+                  key={day}
+                  type="button"
+                  className={`cm-challenge-cell ${challengeDays.includes(day) ? 'done' : ''}`}
+                  onClick={() => toggleChallengeDay(day)}
+                >
+                  <b>{day}</b>
+                  <small>{day * 10}k</small>
+                </button>
+              ))}
+            </div>
+            {challengeDays.length > 0 && (
+              <button
+                type="button"
+                className="cm-text-link-btn danger"
+                onClick={() => {
+                  setChallengeDays([]);
+                  try {
+                    localStorage.removeItem(CHALLENGE_KEY);
+                  } catch {
+                    // Ignore
+                  }
+                }}
+              >
+                Làm lại thử thách
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* TAB: FOOD WHEEL */}
+        {tab === 'wheel' && (
+          <div className="cm-toolkit-body fade-in">
+            <p className="cm-sub-intro">Phân vân không biết ăn gì? Quay một vòng để máy chọn giúp bạn!</p>
+            <div className={`cm-wheel-display ${wheelSpinning ? 'spinning' : ''} ${wheelDone ? 'done' : ''}`}>
+              <span className="cm-wheel-icon">{WHEEL_FOODS[wheelIdx].icon}</span>
+              <strong>{WHEEL_FOODS[wheelIdx].name}</strong>
+              <small>≈ {WHEEL_FOODS[wheelIdx].price}</small>
+            </div>
+            <button type="button" className="cm-crop-submit-btn" onClick={spinWheel} disabled={wheelSpinning}>
+              <Sparkles size={18} /> {wheelSpinning ? 'Đang quay...' : wheelDone ? 'Quay lại' : 'Quay ngay!'}
+            </button>
+          </div>
+        )}
 
         {/* TAB 0A: DAILY FINANCIAL TAROT (🔮 BÓI VÍ) */}
         {tab === 'tarot' && (
