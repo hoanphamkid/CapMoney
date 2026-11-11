@@ -2,6 +2,7 @@ import { ArrowDownLeft, ArrowUpRight, BarChart3, CircleDollarSign, Plus, WalletC
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
+import { MonthlyReport } from '../components/MonthlyReport';
 import { useAuth } from '../contexts/AuthContext';
 import { api, type Transaction, type Wallet } from '../services/api';
 
@@ -79,6 +80,8 @@ export function DashboardPage() {
           note="Thu nhập − chi tiêu"
         />
       </div>
+
+      <MonthlyReport transactions={transactions} />
 
       <section className="panel recent-panel" style={{ marginTop: 16 }}>
         <div className="panel-head">
