@@ -89,7 +89,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new BankWebhookError(403, 'BANK_ACCOUNT_MISMATCH', 'Số tài khoản không khớp tài khoản đã liên kết.');
     }
     await connectDB();
-    await Transaction.init();
     const user: any = await User.findOne({
       status: 'active',
       ...(configuredUser && mongoose.isValidObjectId(configuredUser) ? { _id: configuredUser } : { email: configuredEmail }),
@@ -138,7 +137,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, transaction: results[0], transactions: results });
   } catch (error) {
     if (error instanceof BankWebhookError) return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
-    console.error('[mbbank webhook] Failed to persist bank transaction');
-    return res.status(503).json({ success: false, message: 'Chưa lưu được giao dịch. Vui lòng gửi lại webhook.' });
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error('[mbbank webhook] Failed to persist bank transaction', detail);
+    return res.status(503).json({ success: false, error: { code: 'WEBHOOK_PERSIST_FAILED', message: 'Chưa lưu được giao dịch. Vui lòng gửi lại webhook.' } });
   }
 }
