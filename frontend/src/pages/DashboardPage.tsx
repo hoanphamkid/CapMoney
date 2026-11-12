@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { CATEGORY_LABELS, MonthlyReport } from '../components/MonthlyReport';
 import { useAuth } from '../contexts/AuthContext';
+import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { api, type Transaction, type Wallet } from '../services/api';
 
 export function DashboardPage() {
@@ -16,6 +17,7 @@ export function DashboardPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const recentListRef = useRef<HTMLDivElement>(null);
   const [scrollEdges, setScrollEdges] = useState({ above: false, below: false });
+  useAutoRefresh(() => load());
 
   const recentTransactions = useMemo(() => transactions
     .filter(tx => selectedCategory === 'all' || (tx.type === 'expense' && tx.categoryId === selectedCategory))

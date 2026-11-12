@@ -30,6 +30,7 @@ import { LookbackModal } from '../components/LookbackModal';
 import { SmartToolkitModal } from '../components/SmartToolkitModal';
 import { loadBudget, SpendingLimitModal, type BudgetConfig } from '../components/SpendingLimitModal';
 import { useAuth } from '../contexts/AuthContext';
+import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { api, type CalendarEvent, type Transaction } from '../services/api';
 
 const weekdayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
@@ -84,15 +85,17 @@ export function CalendarPage() {
     return { from: toDateKey(first), to: toDateKey(last), year, month, daysInMonth: last.getDate(), firstWeekdayOffset: (first.getDay() + 6) % 7 };
   }, [cursor]);
 
-  const reload = async () => {
-    setLoading(true);
+  const reload = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
       const txRes = await api.transactions({ from: monthRange.from, to: monthRange.to });
       setTransactions(txRes.transactions);
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   };
+
+  useAutoRefresh(() => reload(true));
 
   useEffect(() => {
     void reload();

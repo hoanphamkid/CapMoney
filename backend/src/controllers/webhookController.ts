@@ -5,7 +5,8 @@ import { AppError } from '../middleware/error.js';
 import { TransactionModel } from '../models/Transaction.js';
 import { UserModel } from '../models/User.js';
 import { WalletModel } from '../models/Wallet.js';
-import { saveBufferImage } from '../services/storageService.js';
+import { deletePrivateImage, saveBufferImage } from '../services/storageService.js';
+import { BankWebhookError, bankCategory, bankWalletId, parseBankTransactions, verifyBankWebhook } from '../utils/bankWebhook.js';
 
 function formatVND(amount: number): string {
   return amount.toLocaleString('vi-VN');
@@ -131,215 +132,81 @@ function generateMbReceiptSvg(options: {
  * Handle Webhook from MB Bank (via SePay, Casso, or custom notification forwarder)
  */
 export const handleMbBankWebhook: RequestHandler = async (request, response) => {
-  // 1. Verify Secret Key
-  const authHeader = request.headers['authorization'];
-  const apiKeyHeader = request.headers['x-api-key'] || request.headers['x-webhook-secret'];
-  const querySecret = request.query.apiKey || request.query.secret;
-
-  let providedKey = '';
-  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-    providedKey = authHeader.slice(7).trim();
-  } else if (typeof apiKeyHeader === 'string') {
-    providedKey = apiKeyHeader.trim();
-  } else if (typeof querySecret === 'string') {
-    providedKey = querySecret.trim();
-  }
-
-  const configuredSecret = env.MBBANK_WEBHOOK_SECRET;
-  if (configuredSecret && providedKey !== configuredSecret) {
-    throw new AppError(401, 'Webhook Secret không hợp lệ. Vui lòng kiểm tra MBBANK_WEBHOOK_SECRET', 'INVALID_WEBHOOK_SECRET');
-  }
-
-  // 2. Parse Incoming Payload
-  const body = request.body || {};
-  let rawAmount = 0;
-  let type: 'income' | 'expense' = 'expense';
-  let note = '';
-  let referenceCode = '';
-  let accountNumber = '';
-  let transactionDateTimeStr = '';
-
-  // Case A: SePay Payload
-  if ('gateway' in body || 'amountIn' in body || 'amountOut' in body) {
-    const amountIn = Number(body.amountIn) || 0;
-    const amountOut = Number(body.amountOut) || 0;
-    if (amountIn > 0) {
-      rawAmount = amountIn;
-      type = 'income';
-    } else {
-      rawAmount = amountOut > 0 ? amountOut : Number(body.transferAmount) || 0;
-      type = 'expense';
-    }
-    note = String(body.transactionContent || body.content || body.description || '').trim();
-    referenceCode = String(body.referenceNumber || body.referenceCode || body.id || `MB_${Date.now()}`);
-    accountNumber = String(body.accountNumber || body.subAccount || '');
-    transactionDateTimeStr = String(body.transactionDate || '');
-  }
-  // Case B: Casso Payload (data array)
-  else if (Array.isArray(body.data) && body.data.length > 0) {
-    const item = body.data[0];
-    const val = Number(item.amount) || 0;
-    rawAmount = Math.abs(val);
-    type = val >= 0 ? 'income' : 'expense';
-    note = String(item.description || '').trim();
-    referenceCode = String(item.tid || item.id || `CASSO_${Date.now()}`);
-    accountNumber = String(item.subAccId || item.accountNumber || '');
-    transactionDateTimeStr = String(item.when || '');
-  }
-  // Case C: Generic notification forwarder format
-  else {
-    rawAmount = Math.abs(Number(body.amount) || Number(body.money) || 0);
-    const rawType = String(body.type || '').toLowerCase();
-    type = rawType === 'income' || rawType === 'in' || (Number(body.amountIn) || 0) > 0 ? 'income' : 'expense';
-    note = String(body.description || body.content || body.note || body.message || '').trim();
-    referenceCode = String(body.referenceCode || body.refCode || body.id || body.code || `MB_${Date.now()}`);
-    accountNumber = String(body.accountNumber || body.subAccount || '');
-    transactionDateTimeStr = String(body.transaction_time || body.transactionTime || body.date || '');
-  }
-
-  if (rawAmount <= 0) {
-    throw new AppError(400, 'Số tiền giao dịch không hợp lệ hoặc bằng 0', 'INVALID_AMOUNT');
-  }
-
-  // 3. Normalize Date & Time
-  let dateObj = new Date();
-  if (transactionDateTimeStr) {
-    const parsed = new Date(transactionDateTimeStr);
-    if (!isNaN(parsed.getTime())) dateObj = parsed;
-  }
-  const dateKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-  const timeStr = dateObj.toTimeString().slice(0, 8); // e.g. "14:35:20"
-
-  // 4. Resolve Target User & Wallet
-  // Priority: explicit userId in query/body -> user with matching account number -> first active user
-  let targetUser = null;
-  const explicitUserId = (request.query.userId as string) || (body.userId as string);
-  if (explicitUserId && mongoose.isValidObjectId(explicitUserId)) {
-    targetUser = await UserModel.findById(explicitUserId);
-  }
-  if (!targetUser) {
-    targetUser = await UserModel.findOne().sort({ createdAt: 1 });
-  }
-  if (!targetUser) {
-    throw new AppError(404, 'Hệ thống chưa có người dùng nào để ghi nhận giao dịch', 'USER_NOT_FOUND');
-  }
-
-  const userId = targetUser._id as mongoose.Types.ObjectId;
-
-  // Idempotency Check: if this referenceCode was already imported, return existing transaction
-  const existing = await TransactionModel.findOne({ userId, idempotencyKey: referenceCode }).lean();
-  if (existing) {
-    response.status(200).json({
-      success: true,
-      message: 'Giao dịch đã được ghi nhận trước đó',
-      transaction: {
-        id: String(existing._id),
-        amount: existing.amountMinor / 100,
-        type: existing.type,
-        dateKey: existing.dateKey,
-        referenceCode,
-      },
-    });
-    return;
-  }
-
-  // Find or auto-create MB Bank wallet for this user
-  let wallet = await WalletModel.findOne({
-    userId,
-    active: true,
-    $or: [{ name: /MB/i }, { type: 'bank' }],
-  });
-
-  if (!wallet) {
-    wallet = await WalletModel.create({
-      userId,
-      name: 'MB Bank',
-      type: 'bank',
-      balanceMinor: 0,
-      currency: 'VND',
-      color: '#002D72',
-      active: true,
-    });
-  }
-
-  // 5. Generate Default MB Bank Digital Receipt SVG & Save to Private Storage
-  const receiptSvg = generateMbReceiptSvg({
-    amount: rawAmount,
-    type,
-    dateKey,
-    timeStr,
-    note: note || 'Thanh toán qua MB Bank',
-    referenceCode,
-    accountNumber,
-  });
-
-  const savedImage = await saveBufferImage(Buffer.from(receiptSvg, 'utf-8'), 'image/svg+xml', '.svg');
-
-  // Guess category from note
-  let categoryId = 'bills';
-  const lowerNote = note.toLowerCase();
-  if (/cơm|phở|bún|ăn|uống|cf|cafe|cà phê|trà sữa|highlands|starbucks|food|grabfood|shopeefood/i.test(lowerNote)) {
-    categoryId = 'food';
-  } else if (/grab|be|xăng|taxi|giao thông|vé xe|vé tàu|vé máy bay/i.test(lowerNote)) {
-    categoryId = 'transport';
-  } else if (/mua|shopee|lazada|tiki|tiktok|quần áo|siêu thị|mart/i.test(lowerNote)) {
-    categoryId = 'shopping';
-  } else if (/lương|thu nhập|bonus|thưởng|tiền về/i.test(lowerNote)) {
-    categoryId = 'salary';
-  }
-
-  // 6. Save Transaction & Update Wallet Balance atomically
-  const amountMinor = Math.round(rawAmount * 100);
-  const session = await mongoose.startSession();
-  let createdTx: any = null;
-
   try {
-    await session.withTransaction(async () => {
-      [createdTx] = await TransactionModel.create(
-        [
-          {
-            userId,
-            walletId: wallet._id,
-            type,
-            amountMinor,
-            currency: 'VND',
-            note: note || (type === 'income' ? 'Nhận tiền MB Bank' : 'Chi tiêu MB Bank'),
-            categoryId,
-            transactionDate: dateObj,
-            dateKey,
-            transactionTime: timeStr,
-            source: 'webhook_mbbank',
-            imageKey: savedImage.key,
-            imageMimeType: savedImage.mimetype,
-            imageSize: savedImage.size,
-            idempotencyKey: referenceCode,
-            status: 'posted',
-          },
-        ],
-        { session },
+    verifyBankWebhook(request.headers, env.SEPAY_WEBHOOK_SECRET || env.MBBANK_WEBHOOK_SECRET);
+    const transactions = parseBankTransactions(request.body);
+    if ((!env.MBBANK_USER_ID && !env.MBBANK_USER_EMAIL) || !env.MBBANK_ACCOUNT_NUMBER) {
+      throw new AppError(503, 'Chưa cấu hình người dùng và số tài khoản MB Bank trên máy chủ.', 'BANK_ACCOUNT_NOT_CONFIGURED');
+    }
+    if (transactions.some(tx => tx.accountNumber !== env.MBBANK_ACCOUNT_NUMBER)) {
+      throw new AppError(403, 'Số tài khoản không khớp tài khoản MB Bank đã liên kết.', 'BANK_ACCOUNT_MISMATCH');
+    }
+    const user = await UserModel.findOne({
+      status: 'active',
+      ...(env.MBBANK_USER_ID && mongoose.isValidObjectId(env.MBBANK_USER_ID)
+        ? { _id: env.MBBANK_USER_ID }
+        : { email: env.MBBANK_USER_EMAIL?.trim().toLowerCase() }),
+    }).lean();
+    if (!user) throw new AppError(404, 'Không tìm thấy tài khoản CapMoney đã cấu hình.', 'USER_NOT_FOUND');
+    const userId = user._id;
+    const bankId = new mongoose.Types.ObjectId(bankWalletId(String(userId), env.MBBANK_ACCOUNT_NUMBER));
+    let wallet = await WalletModel.findOne({ userId, active: true, type: 'bank', $or: [{ _id: bankId }, { name: /^MB Bank$/i }] });
+    if (!wallet) {
+      wallet = await WalletModel.findOneAndUpdate(
+        { _id: bankId, userId, active: true },
+        { $setOnInsert: { userId, name: 'MB Bank', type: 'bank', balanceMinor: 0, currency: 'VND', color: '#002D72', active: true } },
+        { upsert: true, returnDocument: 'after', runValidators: true },
       );
-
-      const balanceDelta = type === 'income' ? amountMinor : -amountMinor;
-      await WalletModel.updateOne({ _id: wallet._id }, { $inc: { balanceMinor: balanceDelta } }, { session });
-    });
-  } finally {
-    session.endSession();
+    }
+    if (!wallet) throw new AppError(503, 'Chưa tạo được ví MB Bank.', 'BANK_WALLET_UNAVAILABLE');
+    const walletId = wallet._id;
+    const session = await mongoose.startSession();
+    const imageKeys: string[] = [];
+    let results: Array<{ id: string; amount: number; type: string; dateKey: string; transactionTime: string; referenceCode: string; duplicate: boolean }> = [];
+    try {
+      await session.withTransaction(async () => {
+        results = [];
+        for (const tx of transactions) {
+          const existing = await TransactionModel.findOne({ userId, idempotencyKey: { $in: [tx.idempotencyKey, tx.referenceCode] } }).session(session).lean();
+          if (existing) {
+            results.push({ id: String(existing._id), amount: existing.amountMinor / 100, type: existing.type, dateKey: existing.dateKey, transactionTime: existing.transactionTime || '', referenceCode: tx.referenceCode, duplicate: true });
+            continue;
+          }
+          const image = await saveBufferImage(Buffer.from(generateMbReceiptSvg(tx), 'utf-8'), 'image/svg+xml', '.svg');
+          imageKeys.push(image.key);
+          const [created] = await TransactionModel.create([{
+            userId, walletId, type: tx.type, amountMinor: tx.amountMinor,
+            currency: 'VND', note: tx.note || (tx.type === 'income' ? 'Nhận tiền MB Bank' : 'Chi tiêu MB Bank'),
+            categoryId: bankCategory(tx.note, tx.type), transactionDate: tx.dateObj, dateKey: tx.dateKey,
+            transactionTime: tx.timeStr, source: 'webhook_mbbank', status: 'posted', idempotencyKey: tx.idempotencyKey,
+            imageKey: image.key, imageMimeType: image.mimetype, imageSize: image.size,
+          }], { session });
+          await WalletModel.updateOne({ _id: walletId, userId }, { $inc: { balanceMinor: tx.type === 'income' ? tx.amountMinor : -tx.amountMinor } }, { session });
+          results.push({ id: String(created._id), amount: tx.amount, type: tx.type, dateKey: tx.dateKey, transactionTime: tx.timeStr, referenceCode: tx.referenceCode, duplicate: false });
+        }
+      });
+    } catch (error) {
+      await Promise.all(imageKeys.map(key => deletePrivateImage(key)));
+      // A concurrent delivery can commit the same reference before this request.
+      if ((error as { code?: number }).code !== 11000) throw error;
+      const existing = await TransactionModel.find({ userId, idempotencyKey: { $in: transactions.map(tx => tx.idempotencyKey) } }).lean();
+      if (existing.length !== new Set(transactions.map(tx => tx.idempotencyKey)).size) throw error;
+      results = transactions.map(tx => {
+        const row = existing.find(item => item.idempotencyKey === tx.idempotencyKey)!;
+        return { id: String(row._id), amount: row.amountMinor / 100, type: row.type, dateKey: row.dateKey, transactionTime: row.transactionTime || '', referenceCode: tx.referenceCode, duplicate: true };
+      });
+    } finally {
+      await session.endSession();
+    }
+    // withTransaction may retry; remove receipt files belonging to aborted attempts.
+    if (imageKeys.length) {
+      const used = await TransactionModel.find({ userId, imageKey: { $in: imageKeys } }).select('imageKey').lean();
+      const keep = new Set(used.map(row => row.imageKey));
+      await Promise.all(imageKeys.filter(key => !keep.has(key)).map(key => deletePrivateImage(key)));
+    }
+    response.status(200).json({ success: true, message: 'Đã ghi nhận giao dịch MB Bank.', transaction: results[0], transactions: results });
+  } catch (error) {
+    if (error instanceof BankWebhookError) throw new AppError(error.status, error.message, error.code);
+    throw error;
   }
-
-  response.status(201).json({
-    success: true,
-    message: 'Đã tự động đồng bộ giao dịch từ MB Bank',
-    transaction: {
-      id: String(createdTx._id),
-      amount: rawAmount,
-      type,
-      note: createdTx.note,
-      dateKey,
-      transactionTime: timeStr,
-      source: 'webhook_mbbank',
-      referenceCode,
-      walletName: wallet.name,
-      imageUrl: `/api/transactions/${String(createdTx._id)}/image`,
-    },
-  });
 };

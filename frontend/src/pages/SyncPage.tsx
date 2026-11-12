@@ -94,7 +94,7 @@ export function SyncPage() {
     <div className="feature-page cm-sync-page" aria-busy={Boolean(busy)}>
       <div className="page-heading"><div><p className="eyebrow dark">DỮ LIỆU TRÊN MỌI THIẾT BỊ</p><h1>Đồng bộ & bản sao</h1><p className="page-subtitle">Tạo trên điện thoại, lưu trên laptop — hoặc ngược lại.</p></div></div>
       <section className="panel cm-sync-intro">
-        <MonitorSmartphone size={28} /><div><strong>{device.deviceName}</strong><p>{currentEmail}</p><small>Hai thiết bị cần mở cùng website và đăng nhập cùng tài khoản. Ngày giờ hiển thị GMT+7.</small></div>
+        <MonitorSmartphone size={28} /><div><strong>{device.deviceName}</strong><p>{currentEmail}</p><small>Không cần mở hai thiết bị cùng lúc: điện thoại tải bản gốc lên trước, máy tính đăng nhập cùng tài khoản sau đó để lấy về. Ngày giờ hiển thị GMT+7.</small></div>
       </section>
       {notice && <div className="page-alert success" role="status"><Check size={16} />{notice}</div>}
       {error && <div className="cm-sync-error" role="alert"><p>{error}</p><button type="button" onClick={() => void refresh()} disabled={Boolean(busy)}>Thử lại</button><Link to="/login">Đăng nhập</Link></div>}

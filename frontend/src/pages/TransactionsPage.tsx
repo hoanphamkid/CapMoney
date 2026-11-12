@@ -2,6 +2,7 @@ import { CalendarDays, ChevronDown, ChevronRight, Plus, Search, SlidersHorizonta
 import { useEffect, useMemo, useState } from 'react';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
+import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { api, type CalendarEvent, type Transaction } from '../services/api';
 
 type TypeFilter = 'all' | 'income' | 'expense' | 'transfer';
@@ -11,7 +12,8 @@ const icons: Record<string, string> = { food: '🍜', shopping: '🛍️', trans
 export function TransactionsPage() {
   const [rows, setRows] = useState<Transaction[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const [query, setQuery] = useState(''); const [type, setType] = useState<TypeFilter>('all'); const [category, setCategory] = useState('all'); const [sort, setSort] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest'); const [captureOpen, setCaptureOpen] = useState(false); const [detail, setDetail] = useState<CalendarEvent | null>(null);
-  const load = async () => { setLoading(true); try { setRows((await api.transactions()).transactions); setError(''); } catch { setError('Không tải được giao dịch.'); } finally { setLoading(false); } };
+  const load = async (quiet = false) => { if (!quiet) setLoading(true); try { setRows((await api.transactions()).transactions); setError(''); } catch { if (!quiet) setError('Không tải được giao dịch.'); } finally { if (!quiet) setLoading(false); } };
+  useAutoRefresh(() => load(true));
   useEffect(() => { void load(); }, []);
   const monthKey = new Date().toISOString().slice(0, 7);
   const stats = useMemo(() => { const current = rows.filter(row => row.dateKey.startsWith(monthKey)); const expense = current.filter(row => row.type === 'expense').reduce((sum, row) => sum + row.amount, 0); const income = current.filter(row => row.type === 'income').reduce((sum, row) => sum + row.amount, 0); const today = new Date().toISOString().slice(0, 10); return { expense, income, count: current.length, today: current.filter(row => row.dateKey === today && row.type === 'expense').reduce((sum, row) => sum + row.amount, 0) }; }, [monthKey, rows]);

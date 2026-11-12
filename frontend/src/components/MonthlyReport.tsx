@@ -33,6 +33,7 @@ export function MonthlyReport({ transactions, selectedCategory, onCategoryChange
 }) {
   const now = new Date();
   const [cursor, setCursor] = useState(new Date(now.getFullYear(), now.getMonth(), 1));
+  const [flowType, setFlowType] = useState<'all' | 'expense' | 'income'>('all');
   const budget = useMemo(() => loadBudget(), []);
 
   const report = useMemo(() => {
@@ -50,6 +51,7 @@ export function MonthlyReport({ transactions, selectedCategory, onCategoryChange
       const k = tx.dateKey.slice(0, 7);
       if (k === prevKey && tx.type === 'expense') prevExpense += tx.amount;
       if (k !== key) continue;
+      if (flowType !== 'all' && tx.type !== flowType) continue;
       monthTxs.push(tx);
       if (tx.type === 'income') income += tx.amount;
       else if (tx.type === 'expense') {
@@ -76,8 +78,8 @@ export function MonthlyReport({ transactions, selectedCategory, onCategoryChange
       let exp = 0;
       for (const tx of transactions) {
         if (tx.dateKey.slice(0, 7) !== k) continue;
-        if (tx.type === 'income') inc += tx.amount;
-        else if (tx.type === 'expense' && (selectedCategory === 'all' || tx.categoryId === selectedCategory)) exp += tx.amount;
+        if (flowType !== 'expense' && tx.type === 'income') inc += tx.amount;
+        else if (flowType !== 'income' && tx.type === 'expense' && (selectedCategory === 'all' || tx.categoryId === selectedCategory)) exp += tx.amount;
       }
       return { label: `T${d.getMonth() + 1}`, income: inc, expense: exp };
     });
@@ -107,15 +109,18 @@ export function MonthlyReport({ transactions, selectedCategory, onCategoryChange
       remaining,
       safePerDay,
     };
-  }, [transactions, cursor, budget, selectedCategory]);
+  }, [transactions, cursor, budget, selectedCategory, flowType]);
 
   const categoryName = CATEGORY_LABELS[selectedCategory] ?? 'Khác';
   const visibleCategories = useMemo(() => report.categories.filter(c => selectedCategory === 'all' || c.id === selectedCategory), [report.categories, selectedCategory]);
   const visibleExpense = visibleCategories.reduce((sum, c) => sum + c.amount, 0);
   const categoryTransactions = report.monthTxs.filter(tx => tx.type === 'expense' && tx.categoryId === selectedCategory);
+  const flowTotal = flowType === 'income' ? report.income : report.expense;
+  const largestTransaction = report.monthTxs.reduce((largest, tx) => tx.amount > (largest?.amount ?? 0) ? tx : largest, null as Transaction | null);
+  const averagePerDay = Math.round(flowTotal / Math.max(1, new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()));
 
   const donut = useMemo(() => {
-    if (visibleCategories.length === 0) return 'conic-gradient(#2a2d38 0 100%)';
+    if (visibleCategories.length === 0 || flowType === 'income') return 'conic-gradient(#2a2d38 0 100%)';
     let acc = 0;
     const stops = visibleCategories.map(c => {
       const start = acc;
@@ -124,7 +129,7 @@ export function MonthlyReport({ transactions, selectedCategory, onCategoryChange
     });
     if (selectedCategory !== 'all') stops.push(`#2a2d38 ${acc}% 100%`);
     return `conic-gradient(${stops.join(', ')})`;
-  }, [visibleCategories, visibleExpense, selectedCategory, report.expense]);
+  }, [visibleCategories, visibleExpense, selectedCategory, report.expense, flowType]);
 
   const diff = report.expense - report.prevExpense;
   const diffPct = report.prevExpense > 0 ? Math.round((diff / report.prevExpense) * 100) : null;
@@ -135,7 +140,7 @@ export function MonthlyReport({ transactions, selectedCategory, onCategoryChange
   const exportCsv = () => {
     const header = 'Ngày,Loại,Danh mục,Ghi chú,Số tiền';
     const rows = report.monthTxs
-      .filter(tx => selectedCategory === 'all' || (tx.type === 'expense' && tx.categoryId === selectedCategory))
+      .filter(tx => (flowType === 'all' || tx.type === flowType) && (selectedCategory === 'all' || (tx.type === 'expense' && tx.categoryId === selectedCategory)))
       .slice()
       .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
       .map(tx =>
@@ -151,7 +156,7 @@ export function MonthlyReport({ transactions, selectedCategory, onCategoryChange
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `capmoney-${report.key}${selectedCategory === 'all' ? '' : `-${selectedCategory}`}.csv`;
+    a.download = `capmoney-${report.key}-${flowType}${selectedCategory === 'all' ? '' : `-${selectedCategory}`}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -193,6 +198,23 @@ export function MonthlyReport({ transactions, selectedCategory, onCategoryChange
           <small>Tiết kiệm được</small>
           <strong>{money(report.income - report.expense)}</strong>
         </div>
+      </div>
+
+      <div className="cm-report-flow-filter" role="group" aria-label="Lọc dòng tiền">
+        <span>Lọc dòng tiền</span>
+        <div>
+          {(['all', 'expense', 'income'] as const).map(value => (
+            <button key={value} type="button" aria-pressed={flowType === value} onClick={() => { setFlowType(value); onCategoryChange('all'); }}>
+              {value === 'all' ? 'Tất cả' : value === 'expense' ? 'Tiền ra' : 'Tiền vào'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="cm-report-insights">
+        <div><small>Số giao dịch</small><strong>{report.monthTxs.length}</strong></div>
+        <div><small>Khoản lớn nhất</small><strong>{largestTransaction ? money(largestTransaction.amount) : '0 ₫'}</strong></div>
+        <div><small>Trung bình/ngày</small><strong>{money(averagePerDay)}</strong></div>
       </div>
 
       <div className={`cm-report-compare ${diff > 0 ? 'up' : 'down'}`}>
@@ -246,7 +268,7 @@ export function MonthlyReport({ transactions, selectedCategory, onCategoryChange
       <div className="cm-report-donut-row">
         <div className="cm-report-donut" style={{ background: donut }}>
           <span>
-            <small>{selectedCategory === 'all' ? 'Tổng chi' : categoryName}</small>
+            <small>{flowType === 'income' ? 'Tổng thu' : selectedCategory === 'all' ? 'Tổng chi' : categoryName}</small>
             <b>{visibleExpense >= 1_000_000 ? `${(visibleExpense / 1_000_000).toFixed(1)}tr` : `${Math.round(visibleExpense / 1000)}k`}</b>
           </span>
         </div>
@@ -282,11 +304,11 @@ export function MonthlyReport({ transactions, selectedCategory, onCategoryChange
           ))}
         </div>
         <div className="cm-report-trend-legend">
-          {selectedCategory === 'all' && <span>
+          {selectedCategory === 'all' && flowType !== 'income' && <span>
             <i className="inc" /> Thu
           </span>}
           <span>
-            <i className="exp" /> {selectedCategory === 'all' ? 'Chi' : `Chi ${categoryName}`}
+            <i className="exp" /> {flowType === 'income' ? 'Thu' : selectedCategory === 'all' ? 'Chi' : `Chi ${categoryName}`}
           </span>
         </div>
       </div>

@@ -7,6 +7,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import mongoose from 'mongoose';
+import { BankWebhookError, bankCategory, bankWalletId, parseBankTransactions, verifyBankWebhook } from '../../backend/src/utils/bankWebhook.js';
 
 // ─── Mongoose models (inline to keep this file self-contained) ─────────────
 const TransactionSchema = new mongoose.Schema(
@@ -44,14 +45,14 @@ const WalletSchema = new mongoose.Schema(
 );
 
 const UserSchema = new mongoose.Schema(
-  { email: { type: String, required: true, unique: true } },
+  { email: { type: String, required: true, unique: true }, status: String },
   { timestamps: true, collection: 'users' },
 );
 
 // Re-use models if already compiled (Vercel warm-start)
-const Transaction = mongoose.models.Transaction || mongoose.model('Transaction', TransactionSchema);
-const Wallet = mongoose.models.Wallet || mongoose.model('Wallet', WalletSchema);
-const User = mongoose.models.User || mongoose.model('User', UserSchema);
+const Transaction: mongoose.Model<any> = mongoose.models.Transaction || mongoose.model('Transaction', TransactionSchema);
+const Wallet: mongoose.Model<any> = mongoose.models.Wallet || mongoose.model('Wallet', WalletSchema);
+const User: mongoose.Model<any> = mongoose.models.User || mongoose.model('User', UserSchema);
 
 // ─── DB connection (cached across warm invocations) ────────────────────────
 let cachedConn: typeof mongoose | null = null;
@@ -60,193 +61,84 @@ async function connectDB() {
   if (cachedConn && mongoose.connection.readyState === 1) return cachedConn;
   const uri = process.env.MONGO_URI;
   if (!uri) throw new Error('MONGO_URI env var is not set');
-  cachedConn = await mongoose.connect(uri);
+  cachedConn = await mongoose.connect(uri, {
+    serverSelectionTimeoutMS: 4500,
+    connectTimeoutMS: 4500,
+    socketTimeoutMS: 4500,
+  });
   return cachedConn;
 }
 
 // ─── Main handler ──────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, x-webhook-secret');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-
-  if (req.method === 'GET') {
-    return res.status(200).json({
-      status: 'ok',
-      service: 'CapMoney MBBank Webhook API',
-      timestamp: new Date().toISOString(),
-    });
-  }
-
+  if (req.method === 'GET') return res.status(200).json({ status: 'ok', service: 'CapMoney MBBank Webhook API' });
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    res.setHeader('Allow', 'GET, POST');
+    return res.status(405).json({ success: false, message: 'Method Not Allowed' });
   }
-
   try {
-    // 1. Verify secret key
-    const configuredSecret = process.env.MBBANK_WEBHOOK_SECRET || 'capmoney_mbbank_secret_key_2026';
-    const authHeader = req.headers['authorization'];
-    const apiKeyHeader = req.headers['x-api-key'] || req.headers['x-webhook-secret'];
-    const querySecret = req.query.apiKey || req.query.secret;
-
-    let providedKey = '';
-    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-      providedKey = authHeader.slice(7).trim();
-    } else if (typeof apiKeyHeader === 'string') {
-      providedKey = apiKeyHeader.trim();
-    } else if (typeof querySecret === 'string') {
-      providedKey = querySecret.trim();
+    verifyBankWebhook(req.headers, process.env.SEPAY_WEBHOOK_SECRET || process.env.MBBANK_WEBHOOK_SECRET);
+    const transactions = parseBankTransactions(req.body);
+    const configuredUser = process.env.MBBANK_USER_ID;
+    const configuredEmail = process.env.MBBANK_USER_EMAIL?.trim().toLowerCase();
+    const accountNumber = process.env.MBBANK_ACCOUNT_NUMBER;
+    if ((!configuredUser && !configuredEmail) || !accountNumber) {
+      throw new BankWebhookError(503, 'BANK_ACCOUNT_NOT_CONFIGURED', 'Chưa cấu hình người dùng và số tài khoản MB Bank.');
     }
-
-    if (configuredSecret && providedKey !== configuredSecret) {
-      return res.status(401).json({ error: 'Webhook Secret không hợp lệ' });
+    if (transactions.some(tx => tx.accountNumber !== accountNumber)) {
+      throw new BankWebhookError(403, 'BANK_ACCOUNT_MISMATCH', 'Số tài khoản không khớp tài khoản đã liên kết.');
     }
-
-    // 2. Parse payload (SePay / Casso / generic)
-    const body = req.body || {};
-    let rawAmount = 0;
-    let type: 'income' | 'expense' = 'expense';
-    let note = '';
-    let referenceCode = '';
-    let accountNumber = '';
-    let transactionDateTimeStr = '';
-
-    if ('gateway' in body || 'amountIn' in body || 'amountOut' in body || 'transferAmount' in body) {
-      // SePay format
-      const amountIn = Number(body.amountIn) || 0;
-      const amountOut = Number(body.amountOut) || 0;
-      rawAmount = amountIn > 0 ? amountIn : (amountOut > 0 ? amountOut : Number(body.transferAmount) || 0);
-      type = amountIn > 0 ? 'income' : 'expense';
-      note = String(body.transactionContent || body.content || body.description || '').trim();
-      referenceCode = String(body.referenceNumber || body.referenceCode || body.id || `MB_${Date.now()}`);
-      accountNumber = String(body.accountNumber || body.subAccount || '');
-      transactionDateTimeStr = String(body.transactionDate || '');
-    } else if (Array.isArray(body.data) && body.data.length > 0) {
-      // Casso format
-      const item = body.data[0];
-      const val = Number(item.amount) || 0;
-      rawAmount = Math.abs(val);
-      type = val >= 0 ? 'income' : 'expense';
-      note = String(item.description || '').trim();
-      referenceCode = String(item.tid || item.id || `CASSO_${Date.now()}`);
-      accountNumber = String(item.subAccId || item.accountNumber || '');
-      transactionDateTimeStr = String(item.when || '');
-    } else {
-      // Generic format
-      rawAmount = Math.abs(Number(body.amount) || Number(body.money) || 0);
-      const rawType = String(body.type || '').toLowerCase();
-      type = rawType === 'income' || rawType === 'in' || (Number(body.amountIn) || 0) > 0 ? 'income' : 'expense';
-      note = String(body.description || body.content || body.note || body.message || '').trim();
-      referenceCode = String(body.referenceCode || body.refCode || body.id || body.code || `MB_${Date.now()}`);
-      accountNumber = String(body.accountNumber || body.subAccount || '');
-      transactionDateTimeStr = String(body.transaction_time || body.transactionTime || body.date || '');
-    }
-
-    if (rawAmount <= 0) {
-      return res.status(200).json({ success: true, message: 'Số tiền bằng 0 — bỏ qua (ping)' });
-    }
-
-    // 3. Date / time
-    let dateObj = new Date();
-    if (transactionDateTimeStr) {
-      const parsed = new Date(transactionDateTimeStr);
-      if (!isNaN(parsed.getTime())) dateObj = parsed;
-    }
-    const dateKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-    const timeStr = dateObj.toTimeString().slice(0, 8);
-
-    // 4. Connect to MongoDB
     await connectDB();
-
-    // 5. Resolve user (explicit userId → first user)
-    let targetUser: any = null;
-    const explicitUserId = (req.query.userId as string) || (body.userId as string);
-    if (explicitUserId && mongoose.isValidObjectId(explicitUserId)) {
-      targetUser = await User.findById(explicitUserId);
-    }
-    if (!targetUser) {
-      targetUser = await User.findOne().sort({ createdAt: 1 });
-    }
-    if (!targetUser) {
-      return res.status(404).json({ error: 'Chưa có người dùng nào trong hệ thống' });
-    }
-
-    const userId = targetUser._id;
-
-    // 6. Idempotency check
-    const existing = await Transaction.findOne({ userId, idempotencyKey: referenceCode }).lean();
-    if (existing) {
-      return res.status(200).json({
-        success: true,
-        message: 'Giao dịch đã được ghi nhận trước đó',
-        referenceCode,
-      });
-    }
-
-    // 7. Find or create MB Bank wallet
-    let wallet: any = await Wallet.findOne({ userId, active: true, $or: [{ name: /MB/i }, { type: 'bank' }] });
+    await Transaction.init();
+    const user: any = await User.findOne({
+      status: 'active',
+      ...(configuredUser && mongoose.isValidObjectId(configuredUser) ? { _id: configuredUser } : { email: configuredEmail }),
+    }).lean();
+    if (!user) throw new BankWebhookError(404, 'USER_NOT_FOUND', 'Không tìm thấy tài khoản CapMoney đã cấu hình.');
+    const userId = user._id;
+    const bankId = new mongoose.Types.ObjectId(bankWalletId(String(userId), accountNumber));
+    let wallet: any = await Wallet.findOne({ userId, active: true, type: 'bank', $or: [{ _id: bankId }, { name: /^MB Bank$/i }] });
     if (!wallet) {
-      wallet = await Wallet.create({ userId, name: 'MB Bank', type: 'bank', balanceMinor: 0, currency: 'VND', color: '#002D72', active: true });
+      wallet = await Wallet.findOneAndUpdate(
+        { _id: bankId, userId, active: true },
+        { $setOnInsert: { userId, name: 'MB Bank', type: 'bank', balanceMinor: 0, currency: 'VND', color: '#002D72', active: true } },
+        { upsert: true, returnDocument: 'after', runValidators: true },
+      );
     }
-
-    // 8. Auto-categorise
-    let categoryId = 'bills';
-    const lowerNote = note.toLowerCase();
-    if (/cơm|phở|bún|ăn|uống|cf|cafe|cà phê|trà sữa|highlands|starbucks|food|grabfood|shopeefood/i.test(lowerNote)) categoryId = 'food';
-    else if (/grab|be|xăng|taxi|giao thông|vé xe|vé tàu|vé máy bay/i.test(lowerNote)) categoryId = 'transport';
-    else if (/mua|shopee|lazada|tiki|tiktok|quần áo|siêu thị|mart/i.test(lowerNote)) categoryId = 'shopping';
-    else if (/lương|thu nhập|bonus|thưởng|tiền về/i.test(lowerNote)) categoryId = 'salary';
-
-    // 9. Save transaction + update wallet balance (atomic)
-    const amountMinor = Math.round(rawAmount * 100);
     const session = await mongoose.startSession();
-    let createdTx: any;
+    let results: any[] = [];
     try {
       await session.withTransaction(async () => {
-        [createdTx] = await Transaction.create(
-          [{
-            userId,
-            walletId: wallet._id,
-            type,
-            amountMinor,
-            currency: 'VND',
-            note: note || (type === 'income' ? 'Nhận tiền MB Bank' : 'Chi tiêu MB Bank'),
-            categoryId,
-            transactionDate: dateObj,
-            dateKey,
-            transactionTime: timeStr,
-            source: 'webhook_mbbank',
-            idempotencyKey: referenceCode,
-            status: 'posted',
-          }],
-          { session },
-        );
-        const delta = type === 'income' ? amountMinor : -amountMinor;
-        await Wallet.updateOne({ _id: wallet._id }, { $inc: { balanceMinor: delta } }, { session });
+        results = [];
+        for (const tx of transactions) {
+          const existing: any = await Transaction.findOne({ userId, idempotencyKey: { $in: [tx.idempotencyKey, tx.referenceCode] } }).session(session).lean();
+          if (existing) {
+            results.push({ id: String(existing._id), amount: existing.amountMinor / 100, type: existing.type, dateKey: existing.dateKey, transactionTime: existing.transactionTime, referenceCode: tx.referenceCode, duplicate: true });
+            continue;
+          }
+          const [created] = await Transaction.create([{
+            userId, walletId: wallet._id, type: tx.type, amountMinor: tx.amountMinor, currency: 'VND',
+            note: tx.note || (tx.type === 'income' ? 'Nhận tiền MB Bank' : 'Chi tiêu MB Bank'),
+            categoryId: bankCategory(tx.note, tx.type), transactionDate: tx.dateObj, dateKey: tx.dateKey,
+            transactionTime: tx.timeStr, source: 'webhook_mbbank', status: 'posted', idempotencyKey: tx.idempotencyKey,
+          }], { session });
+          await Wallet.updateOne({ _id: wallet._id, userId }, { $inc: { balanceMinor: tx.type === 'income' ? tx.amountMinor : -tx.amountMinor } }, { session });
+          results.push({ id: String(created._id), amount: tx.amount, type: tx.type, dateKey: tx.dateKey, transactionTime: tx.timeStr, referenceCode: tx.referenceCode, duplicate: false });
+        }
       });
-    } finally {
-      session.endSession();
-    }
-
-    return res.status(201).json({
-      success: true,
-      message: 'Đã tự động đồng bộ giao dịch từ MB Bank',
-      transaction: {
-        id: String(createdTx._id),
-        amount: rawAmount,
-        type,
-        note: createdTx.note,
-        dateKey,
-        transactionTime: timeStr,
-        source: 'webhook_mbbank',
-        referenceCode,
-        walletName: wallet.name,
-      },
-    });
-  } catch (err: any) {
-    console.error('[mbbank webhook error]', err);
-    return res.status(500).json({ success: false, message: err?.message || 'Lỗi server' });
+    } catch (error) {
+      if ((error as { code?: number }).code !== 11000) throw error;
+      const existing = await Transaction.find({ userId, idempotencyKey: { $in: transactions.map(tx => tx.idempotencyKey) } }).lean();
+      if (existing.length !== new Set(transactions.map(tx => tx.idempotencyKey)).size) throw error;
+      results = transactions.map(tx => {
+        const row = existing.find(item => item.idempotencyKey === tx.idempotencyKey)!;
+        return { id: String(row._id), amount: row.amountMinor / 100, type: row.type, dateKey: row.dateKey, transactionTime: row.transactionTime, referenceCode: tx.referenceCode, duplicate: true };
+      });
+    } finally { await session.endSession(); }
+    return res.status(200).json({ success: true, transaction: results[0], transactions: results });
+  } catch (error) {
+    if (error instanceof BankWebhookError) return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
+    console.error('[mbbank webhook] Failed to persist bank transaction');
+    return res.status(503).json({ success: false, message: 'Chưa lưu được giao dịch. Vui lòng gửi lại webhook.' });
   }
 }

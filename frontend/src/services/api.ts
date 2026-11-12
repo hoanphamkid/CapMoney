@@ -243,7 +243,7 @@ export async function authenticatedRequest<T>(path: string, init: RequestInit = 
       return await request<T>(path, init);
     }
   } catch (error) {
-    if (error instanceof BackendUnavailableError) throw new ApiError(503, 'SYNC_UNAVAILABLE', 'Không kết nối được máy chủ đồng bộ. Hai thiết bị cần mở cùng website và đăng nhập cùng tài khoản.');
+    if (error instanceof BackendUnavailableError) throw new ApiError(503, 'SYNC_UNAVAILABLE', 'Không kết nối được máy chủ đồng bộ. Hãy kiểm tra bản triển khai API rồi thử lại; hai thiết bị không cần mở cùng lúc.');
     throw error;
   }
 }

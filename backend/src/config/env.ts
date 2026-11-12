@@ -15,7 +15,11 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('CapMoney <no-reply@capmoney.local>'),
-  MBBANK_WEBHOOK_SECRET: z.string().default('capmoney_mbbank_secret_key_2026'),
+  MBBANK_WEBHOOK_SECRET: z.string().optional(),
+  SEPAY_WEBHOOK_SECRET: z.string().optional(),
+  MBBANK_USER_ID: z.string().optional(),
+  MBBANK_USER_EMAIL: z.string().email().optional(),
+  MBBANK_ACCOUNT_NUMBER: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

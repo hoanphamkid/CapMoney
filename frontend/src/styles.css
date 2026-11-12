@@ -5479,6 +5479,15 @@ html:not(.dark-theme) .cm-app-shell {
 .cm-report-summary > div { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
 .cm-report-summary small { font-size: 11px; opacity: 0.7; }
 .cm-report-summary strong { font-size: 13px; }
+.cm-report-flow-filter { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; padding: 10px; border: 1px solid rgba(110,162,220,.22); border-radius: 12px; background: rgba(110,162,220,.06); }
+.cm-report-flow-filter > span { color: #aeb9cb; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.cm-report-flow-filter > div { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.cm-report-flow-filter button { min-height: 34px; padding: 6px 10px; border: 1px solid rgba(148,163,184,.25); border-radius: 999px; background: rgba(255,255,255,.05); color: #cbd5e1; font-size: 11px; font-weight: 700; }
+.cm-report-flow-filter button[aria-pressed="true"] { border-color: #6ea2dc; background: #35577f; color: #fff; box-shadow: 0 4px 14px rgba(110,162,220,.18); }
+.cm-report-insights { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 10px; }
+.cm-report-insights > div { display: grid; gap: 4px; min-width: 0; padding: 9px; border-radius: 10px; background: rgba(255,255,255,.035); }
+.cm-report-insights small { color: #9da8b7; font-size: 10px; }
+.cm-report-insights strong { color: #f3f5f8; font-size: 12px; overflow-wrap: anywhere; }
 .cm-report-compare { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; font-weight: 600; }
 .cm-report-compare.up { color: #ff8e85; }
 .cm-report-compare.down { color: #7de89a; }
