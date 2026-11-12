@@ -348,7 +348,27 @@ export const api = {
 
   login: (input: { email: string; password: string; remember: boolean }) =>
     withFallback(
-      () => request<{ user: User }>('/auth/login', { method: 'POST', body: JSON.stringify(input) }),
+      async () => {
+        try {
+          return await request<{ user: User }>('/auth/login', { method: 'POST', body: JSON.stringify(input) });
+        } catch (error) {
+          // A local-only account can be promoted to a server account without deleting its device data.
+          // Only attempt this when the entered password matches the local account; an existing server
+          // account that rejects its password must remain protected by the normal 401 response.
+          if (!(error instanceof ApiError) || error.status !== 401) throw error;
+          const db = loadDb();
+          const localUser = db.users.find(user => user.email === input.email.trim().toLowerCase() && user.password === input.password);
+          if (!localUser) throw error;
+          try {
+            return await request<{ user: User }>('/auth/register', {
+              method: 'POST',
+              body: JSON.stringify({ name: localUser.name, email: localUser.email, password: input.password, phone: localUser.phone }),
+            });
+          } catch (registrationError) {
+            throw error;
+          }
+        }
+      },
       async () => {
         const email = input.email.trim().toLowerCase();
         const db = loadDb();
