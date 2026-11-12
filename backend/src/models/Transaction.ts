@@ -14,6 +14,8 @@ const TransactionSchema = new Schema({
   imageSize: { type: Number, max: 10 * 1024 * 1024 },
   transactionDate: { type: Date, required: true },
   dateKey: { type: String, required: true, index: true },
+  transactionTime: { type: String, maxlength: 20 },
+  source: { type: String, enum: ['manual', 'camera', 'webhook_mbbank'], default: 'manual' },
   status: { type: String, enum: ['posted', 'planned', 'cancelled'], default: 'posted' },
   idempotencyKey: { type: String, maxlength: 120 },
 }, { timestamps: true, collection: 'transactions' });

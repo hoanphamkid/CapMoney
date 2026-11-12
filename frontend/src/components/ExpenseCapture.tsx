@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  Clock,
   Crop,
   Delete,
   LoaderCircle,
@@ -75,6 +76,7 @@ export function ExpenseCapture({
   const [keypadOpen, setKeypadOpen] = useState(true);
   const [celebrate, setCelebrate] = useState(false);
   const [moodStamp, setMoodStamp] = useState<string>('');
+  const [capturedTime, setCapturedTime] = useState<string>(() => new Date().toTimeString().slice(0, 5));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
@@ -333,6 +335,7 @@ export function ExpenseCapture({
       const baseNote = note.trim() || (categories.find(c => c.id === category)?.label ?? '');
       const finalNote =
         moodStamp && !baseNote.includes(moodStamp) ? `${moodStamp} ${baseNote}`.trim() : baseNote;
+      const timeStr = capturedTime ? (capturedTime.length === 5 ? `${capturedTime}:00` : capturedTime) : new Date().toTimeString().slice(0, 8);
       await api.createTransaction({
         type,
         amount: numericAmount,
@@ -340,6 +343,8 @@ export function ExpenseCapture({
         categoryId: category,
         walletId: targetWalletId,
         transactionDate: dateKey,
+        transactionTime: timeStr,
+        source: image ? 'camera' : 'manual',
         image,
       });
       if (navigator.vibrate) navigator.vibrate([35, 50, 75]);
@@ -380,10 +385,12 @@ export function ExpenseCapture({
       <CameraView
         onCaptured={file => {
           setImage(file);
+          setCapturedTime(new Date().toTimeString().slice(0, 5));
           setStep('form');
         }}
         onSelected={file => {
           setImage(file);
+          setCapturedTime(new Date().toTimeString().slice(0, 5));
           setStep('form');
         }}
         onManual={() => setStep('form')}
@@ -428,6 +435,12 @@ export function ExpenseCapture({
               Hủy
             </button>
             <div className="cm-capture-top-right">
+              {image && (
+                <span className="cm-time-realtime-pill">
+                  <Clock size={11} style={{ marginRight: 3, verticalAlign: '-1px' }} />
+                  {capturedTime}
+                </span>
+              )}
               {image && (
                 <button
                   type="button"

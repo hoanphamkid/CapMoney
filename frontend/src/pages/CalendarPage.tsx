@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
+  Clock,
   CloudUpload,
   Eye,
   EyeOff,
@@ -23,7 +24,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
@@ -56,7 +57,10 @@ export function CalendarPage() {
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [dayViewDate, setDayViewDate] = useState<string | null>(null);
-  const [dayViewLayout, setDayViewLayout] = useState<'grid' | 'list'>('grid');
+  const [dayViewLayout, setDayViewLayout] = useState<'timeline' | 'grid' | 'list'>('timeline');
+  const [daySlideAnim, setDaySlideAnim] = useState<'next' | 'prev' | null>(null);
+  const dayTouchRef = useRef<{ x: number; y: number } | null>(null);
+  const [dayTouchDx, setDayTouchDx] = useState(0);
   const [captureDate, setCaptureDate] = useState<string | null>(null);
   const [captureType, setCaptureType] = useState<'expense' | 'income'>('expense');
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
@@ -179,7 +183,74 @@ export function CalendarPage() {
     }
   };
 
-  const dayViewEvents = dayViewDate ? byDay[dayViewDate] ?? [] : [];
+  const getAdjacentDayKey = (baseKey: string, offset: number) => {
+    const [y, m, d] = baseKey.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + offset);
+    return toDateKey(dt);
+  };
+
+  const handlePrevDay = () => {
+    if (!dayViewDate) return;
+    setDaySlideAnim('prev');
+    const prev = getAdjacentDayKey(dayViewDate, -1);
+    setDayViewDate(prev);
+    if (navigator.vibrate) navigator.vibrate(12);
+  };
+
+  const handleNextDay = () => {
+    if (!dayViewDate) return;
+    setDaySlideAnim('next');
+    const next = getAdjacentDayKey(dayViewDate, 1);
+    setDayViewDate(next);
+    if (navigator.vibrate) navigator.vibrate(12);
+  };
+
+  const onDayTouchStart = (clientX: number, clientY: number) => {
+    dayTouchRef.current = { x: clientX, y: clientY };
+    setDayTouchDx(0);
+  };
+
+  const onDayTouchMove = (clientX: number) => {
+    if (!dayTouchRef.current) return;
+    setDayTouchDx(clientX - dayTouchRef.current.x);
+  };
+
+  const onDayTouchEnd = () => {
+    if (!dayTouchRef.current || !dayViewDate) return;
+    const dx = dayTouchDx;
+    dayTouchRef.current = null;
+    setDayTouchDx(0);
+    if (Math.abs(dx) > 42) {
+      if (dx < 0) handleNextDay();
+      else handlePrevDay();
+    }
+  };
+
+  const dayViewEvents = useMemo(() => {
+    if (!dayViewDate) return [];
+    if (byDay[dayViewDate]) return byDay[dayViewDate];
+    return transactions
+      .filter(tx => tx.dateKey === dayViewDate)
+      .map(tx => ({
+        id: tx.id,
+        kind: tx.type,
+        type: tx.type,
+        title: tx.note || (tx.type === 'income' ? 'Thu nhập' : 'Chi tiêu'),
+        amount: tx.amount,
+        amountMinor: tx.amountMinor,
+        dateKey: tx.dateKey,
+        note: tx.note,
+        categoryId: tx.categoryId,
+        walletId: tx.walletId,
+        imageUrl: tx.imageUrl,
+        status: tx.status,
+        source: (tx.source as any) || 'transaction',
+        transactionTime: tx.transactionTime,
+        time: tx.transactionTime,
+        createdAt: tx.createdAt,
+      }));
+  }, [dayViewDate, byDay, transactions]);
+
   const dayViewNet = useMemo(() => {
     let inc = 0;
     let exp = 0;
@@ -612,21 +683,53 @@ export function CalendarPage() {
               <X size={20} />
             </button>
 
-            <div className="cm-day-view-title">
-              <small>{formatWeekday(dayViewDate)}</small>
-              <h2>{formatShortDate(dayViewDate)}</h2>
-              <p className={dayViewNet.net >= 0 ? 'income' : 'expense'}>
-                {dayViewNet.net >= 0 ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-                <span>{Math.abs(dayViewNet.net).toLocaleString('vi-VN')}đ</span>
-              </p>
+            <div className="cm-day-nav-center">
+              <button
+                type="button"
+                className="cm-day-nav-arrow"
+                onClick={handlePrevDay}
+                aria-label="Ngày trước"
+                title="Ngày trước"
+              >
+                <ChevronLeft size={20} />
+              </button>
+
+              <div className="cm-day-view-title">
+                <small>{formatWeekday(dayViewDate)}</small>
+                <h2>{formatShortDate(dayViewDate)}</h2>
+                <p className={dayViewNet.net >= 0 ? 'income' : 'expense'}>
+                  {dayViewNet.net >= 0 ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
+                  <span>{Math.abs(dayViewNet.net).toLocaleString('vi-VN')}đ</span>
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="cm-day-nav-arrow"
+                onClick={handleNextDay}
+                aria-label="Ngày sau"
+                title="Ngày sau"
+              >
+                <ChevronRight size={20} />
+              </button>
             </div>
 
             <div className="cm-day-view-toggle">
               <button
                 type="button"
+                className={dayViewLayout === 'timeline' ? 'active' : ''}
+                onClick={() => setDayViewLayout('timeline')}
+                aria-label="Trục thời gian"
+                title="Trục thời gian"
+              >
+                <Clock size={16} />
+              </button>
+              <button
+                type="button"
                 className={dayViewLayout === 'grid' ? 'active' : ''}
                 onClick={() => setDayViewLayout('grid')}
                 aria-label="Chế độ lưới"
+                title="Chế độ lưới"
               >
                 <LayoutGrid size={16} />
               </button>
@@ -635,13 +738,25 @@ export function CalendarPage() {
                 className={dayViewLayout === 'list' ? 'active' : ''}
                 onClick={() => setDayViewLayout('list')}
                 aria-label="Chế độ danh sách"
+                title="Chế độ danh sách"
               >
                 <ImageIcon size={16} />
               </button>
             </div>
           </header>
 
-          <div className="cm-day-view-body">
+          <div
+            className={`cm-day-view-body swipeable ${daySlideAnim ? `slide-${daySlideAnim}` : ''}`}
+            onTouchStart={e => onDayTouchStart(e.touches[0].clientX, e.touches[0].clientY)}
+            onTouchMove={e => onDayTouchMove(e.touches[0].clientX)}
+            onTouchEnd={onDayTouchEnd}
+            onMouseDown={e => onDayTouchStart(e.clientX, e.clientY)}
+            onMouseMove={e => {
+              if (e.buttons === 1) onDayTouchMove(e.clientX);
+            }}
+            onMouseUp={onDayTouchEnd}
+            onAnimationEnd={() => setDaySlideAnim(null)}
+          >
             {dayViewEvents.length === 0 ? (
               <div className="cm-day-view-empty">
                 <p>Chưa có giao dịch nào trong ngày này.</p>
@@ -656,11 +771,71 @@ export function CalendarPage() {
                   <Plus size={16} /> Thêm giao dịch
                 </button>
               </div>
+            ) : dayViewLayout === 'timeline' ? (
+              <div className="cm-day-timeline">
+                <div className="cm-timeline-track-line" />
+                {[...dayViewEvents]
+                  .sort((a, b) => {
+                    const timeA = a.transactionTime || a.time || (a.createdAt ? new Date(a.createdAt).toTimeString().slice(0, 8) : '12:00:00');
+                    const timeB = b.transactionTime || b.time || (b.createdAt ? new Date(b.createdAt).toTimeString().slice(0, 8) : '12:00:00');
+                    return timeA.localeCompare(timeB);
+                  })
+                  .map((ev, idx) => {
+                    const isIncome = ev.kind === 'income';
+                    const isMbBank = ev.source === 'webhook_mbbank' || /MB Bank|MBBank/i.test(ev.note ?? '');
+                    const tagLabel = ev.note || categoryNames[ev.categoryId ?? 'other'] || ev.title;
+                    const timeLabel = ev.transactionTime
+                      ? ev.transactionTime.slice(0, 5)
+                      : ev.time
+                        ? ev.time.slice(0, 5)
+                        : ev.createdAt
+                          ? new Date(ev.createdAt).toTimeString().slice(0, 5)
+                          : '--:--';
+
+                    return (
+                      <div key={ev.id || idx} className="cm-timeline-node-row">
+                        <div className="cm-timeline-time-badge">
+                          <Clock size={11} />
+                          <span>{timeLabel}</span>
+                        </div>
+                        <div className={`cm-timeline-node-dot ${isIncome ? 'income' : 'expense'}`} />
+                        <button
+                          type="button"
+                          className={`cm-timeline-card ${isIncome ? 'income' : 'expense'}`}
+                          onClick={() => setDetailEvent(ev)}
+                        >
+                          {ev.imageUrl && (
+                            <div className="cm-timeline-card-photo">
+                              <img src={ev.imageUrl} alt={tagLabel} />
+                              {isMbBank && <span className="cm-photo-mbbank-chip">⚡ MB Bank Auto</span>}
+                            </div>
+                          )}
+                          <div className="cm-timeline-card-content">
+                            <div className="cm-timeline-card-top">
+                              <span className={`cm-bill-badge ${isIncome ? 'income' : 'expense'}`}>
+                                {categoryNames[ev.categoryId ?? 'other'] ?? 'Giao dịch'}
+                              </span>
+                              <strong className={`cm-timeline-amount ${isIncome ? 'income' : 'expense'}`}>
+                                {isIncome ? '+' : '−'}
+                                {(ev.amount ?? 0).toLocaleString('vi-VN')}đ
+                              </strong>
+                            </div>
+                            <p className="cm-timeline-note">{tagLabel}</p>
+                            {isMbBank && !ev.imageUrl && (
+                              <span className="cm-mbbank-text-pill">⚡ MB Bank Auto</span>
+                            )}
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
             ) : dayViewLayout === 'grid' ? (
               <div className="cm-day-cards-grid">
                 {dayViewEvents.map(ev => {
                   const tagLabel = ev.note || categoryNames[ev.categoryId ?? 'other'] || ev.title;
                   const isIncome = ev.kind === 'income';
+                  const isMbBank = ev.source === 'webhook_mbbank' || /MB Bank|MBBank/i.test(ev.note ?? '');
                   return (
                     <button
                       key={ev.id}
@@ -669,7 +844,10 @@ export function CalendarPage() {
                       onClick={() => setDetailEvent(ev)}
                     >
                       {ev.imageUrl ? (
-                        <img src={ev.imageUrl} alt={tagLabel} className="cm-bill-img" />
+                        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                          <img src={ev.imageUrl} alt={tagLabel} className="cm-bill-img" />
+                          {isMbBank && <span className="cm-photo-mbbank-chip">⚡ MB Bank</span>}
+                        </div>
                       ) : (
                         <div className={`cm-bill-placeholder ${isIncome ? 'income' : 'expense'}`}>
                           {isIncome ? <ArrowDownLeft size={32} /> : <ArrowUpRight size={32} />}
@@ -691,6 +869,12 @@ export function CalendarPage() {
                 {dayViewEvents.map(ev => {
                   const tagLabel = ev.note || categoryNames[ev.categoryId ?? 'other'] || ev.title;
                   const isIncome = ev.kind === 'income';
+                  const isMbBank = ev.source === 'webhook_mbbank' || /MB Bank|MBBank/i.test(ev.note ?? '');
+                  const timeLabel = ev.transactionTime
+                    ? ev.transactionTime.slice(0, 5)
+                    : ev.time
+                      ? ev.time.slice(0, 5)
+                      : '';
                   return (
                     <button
                       key={ev.id}
@@ -709,7 +893,11 @@ export function CalendarPage() {
                       </span>
                       <span className="cm-day-list-info">
                         <strong>{tagLabel}</strong>
-                        <small>{categoryNames[ev.categoryId ?? 'other'] ?? 'Giao dịch'}</small>
+                        <small>
+                          {timeLabel ? `${timeLabel} • ` : ''}
+                          {categoryNames[ev.categoryId ?? 'other'] ?? 'Giao dịch'}
+                          {isMbBank ? ' • ⚡ MB Bank' : ''}
+                        </small>
                       </span>
                       <b className={isIncome ? 'income' : 'expense'}>
                         {isIncome ? '+' : '−'}
@@ -720,6 +908,10 @@ export function CalendarPage() {
                 })}
               </div>
             )}
+
+            <div className="cm-day-swipe-pill">
+              👆 Vuốt ngang màn hình hoặc bấm mũi tên để chuyển ngày
+            </div>
           </div>
 
           <button

@@ -1,5 +1,18 @@
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, Camera, Crop, Edit3, ImageOff, LoaderCircle, Trash2, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CalendarDays,
+  Camera,
+  Clock,
+  Crop,
+  Edit3,
+  ImageOff,
+  LoaderCircle,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CalendarEvent } from '../services/api';
 import { api } from '../services/api';
 import { ImageCropModal } from './ImageCropModal';
@@ -7,7 +20,64 @@ import { ImageCropModal } from './ImageCropModal';
 export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEvent; onClose: () => void; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [updatingPhoto, setUpdatingPhoto] = useState(false);
+  const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const income = event.kind === 'income';
+  const isMbBank = event.source === 'webhook_mbbank' || /MB Bank|MBBank/i.test(event.note ?? '');
+
+  const timeDisplay = useMemo(() => {
+    if (event.transactionTime) return event.transactionTime;
+    if (event.time) return event.time;
+    if (event.createdAt) {
+      try {
+        const d = new Date(event.createdAt);
+        return d.toTimeString().slice(0, 8);
+      } catch {
+        // Ignore
+      }
+    }
+    return '';
+  }, [event]);
+
+  // Handle direct photo update from detail view (e.g. replacing MB receipt with real photo)
+  const handleDirectPhotoChosen = (file: File) => {
+    setPendingCropFile(file);
+  };
+
+  const handleApplyCroppedPhoto = async (cropped: File) => {
+    setPendingCropFile(null);
+    setUpdatingPhoto(true);
+    try {
+      await api.updateTransaction(event.id, {
+        type: event.kind,
+        amount: event.amount ?? 0,
+        note: event.note ?? '',
+        categoryId: event.categoryId ?? 'other',
+        walletId: event.walletId ?? '',
+        transactionDate: event.dateKey,
+        transactionTime: event.transactionTime,
+        source: 'camera',
+        image: cropped,
+      });
+      onChanged();
+    } catch {
+      alert('Không thể cập nhật ảnh.');
+    } finally {
+      setUpdatingPhoto(false);
+    }
+  };
+
+  if (pendingCropFile) {
+    return (
+      <ImageCropModal
+        file={pendingCropFile}
+        onCancel={() => setPendingCropFile(null)}
+        onConfirm={handleApplyCroppedPhoto}
+      />
+    );
+  }
 
   if (editing) {
     return (
@@ -36,18 +106,76 @@ export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEv
 
   return (
     <div className="detail-overlay" onClick={onClose}>
-      <section className="expense-detail" onClick={eventClick => eventClick.stopPropagation()}>
+      <section className="expense-detail cm-spring-pop" onClick={eventClick => eventClick.stopPropagation()}>
         <button className="detail-close" onClick={onClose} aria-label="Đóng">
           <X size={18} />
         </button>
-        {event.imageUrl ? (
-          <img className="detail-photo" src={event.imageUrl} alt="Ảnh giao dịch" />
-        ) : (
-          <div className="detail-no-photo">
-            <ImageOff size={25} />
-            <span>Giao dịch không có ảnh</span>
-          </div>
-        )}
+
+        {/* Source Badge & Time Stamp Ribbon */}
+        <div className="cm-detail-source-ribbon">
+          {isMbBank ? (
+            <span className="cm-source-badge mbbank">
+              <Sparkles size={12} /> MB Bank Auto
+            </span>
+          ) : event.imageUrl ? (
+            <span className="cm-source-badge camera">
+              <Camera size={12} /> Camera Real-time
+            </span>
+          ) : (
+            <span className="cm-source-badge manual">
+              <Edit3 size={12} /> Ghi chép
+            </span>
+          )}
+
+          {timeDisplay && (
+            <span className="cm-detail-time-chip">
+              <Clock size={12} /> {timeDisplay}
+            </span>
+          )}
+        </div>
+
+        {/* Photo Card Container */}
+        <div className="cm-detail-photo-stage">
+          {event.imageUrl ? (
+            <img className="detail-photo" src={event.imageUrl} alt="Ảnh giao dịch" />
+          ) : (
+            <div className="detail-no-photo">
+              <ImageOff size={28} />
+              <span>Giao dịch chưa có ảnh</span>
+            </div>
+          )}
+
+          {/* Quick Snap/Replace Photo Button directly on Card */}
+          <button
+            type="button"
+            className="cm-detail-snap-btn"
+            disabled={updatingPhoto}
+            onClick={() => fileInputRef.current?.click()}
+            title={event.imageUrl ? 'Chụp hoặc thay ảnh bill thật' : 'Chụp ảnh gắn vào giao dịch'}
+          >
+            {updatingPhoto ? (
+              <LoaderCircle size={14} className="spin" />
+            ) : (
+              <>
+                <Camera size={14} />
+                <span>{event.imageUrl ? (isMbBank ? 'Thay bằng ảnh bill thật' : 'Thay ảnh') : 'Chụp / Gắn ảnh'}</span>
+              </>
+            )}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: 'none' }}
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f) handleDirectPhotoChosen(f);
+              e.target.value = '';
+            }}
+          />
+        </div>
+
         <div className="detail-content">
           <span className={`detail-kind ${income ? 'income' : 'expense'}`}>
             {income ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
@@ -63,7 +191,7 @@ export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEv
           </div>
           <div className="detail-actions">
             <button onClick={() => setEditing(true)}>
-              <Edit3 size={14} /> Sửa giao dịch
+              <Edit3 size={14} /> Sửa chi tiết
             </button>
             <button className="danger" disabled={deleting} onClick={() => void remove()}>
               {deleting ? <LoaderCircle size={14} className="spin" /> : <Trash2 size={14} />} Xóa
@@ -88,6 +216,7 @@ function EditTransaction({
   const [note, setNote] = useState(event.note ?? '');
   const [category, setCategory] = useState(event.categoryId ?? 'other');
   const [type, setType] = useState<'expense' | 'income'>(event.kind === 'income' ? 'income' : 'expense');
+  const [timeStr, setTimeStr] = useState(event.transactionTime || event.time || new Date().toTimeString().slice(0, 5));
   const [image, setImage] = useState<File | null>(null);
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -109,6 +238,8 @@ function EditTransaction({
         categoryId: category,
         walletId: event.walletId ?? '',
         transactionDate: event.dateKey,
+        transactionTime: timeStr ? (timeStr.length === 5 ? `${timeStr}:00` : timeStr) : undefined,
+        source: image ? 'camera' : (event.source as any),
         image,
       });
       onSaved();
@@ -134,7 +265,7 @@ function EditTransaction({
 
   return (
     <div className="detail-overlay" onClick={onCancel}>
-      <section className="reminder-modal edit-transaction" onClick={e => e.stopPropagation()}>
+      <section className="reminder-modal edit-transaction cm-spring-pop" onClick={e => e.stopPropagation()}>
         <button className="detail-close" onClick={onCancel}>
           <X size={18} />
         </button>
@@ -165,26 +296,37 @@ function EditTransaction({
             <ArrowDownLeft size={15} /> Thu nhập
           </button>
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <label className="select-field">
+            <span>Giờ phát sinh</span>
+            <input
+              type="time"
+              value={timeStr.slice(0, 5)}
+              onChange={e => setTimeStr(e.target.value)}
+            />
+          </label>
+          <label className="select-field">
+            <span>Danh mục</span>
+            <select value={category} onChange={input => setCategory(input.target.value)}>
+              {categories.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <label className="note-field">
           <span>Ghi chú</span>
-          <textarea rows={3} value={note} onChange={input => setNote(input.target.value)} placeholder="Nhập ghi chú..." />
-        </label>
-        <label className="select-field">
-          <span>Danh mục</span>
-          <select value={category} onChange={input => setCategory(input.target.value)}>
-            {categories.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+          <textarea rows={2} value={note} onChange={input => setNote(input.target.value)} placeholder="Nhập ghi chú..." />
         </label>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
           <label className="replace-image">
-            <Camera size={15} /> Thay ảnh (có cắt ảnh)
+            <Camera size={15} /> {event.imageUrl ? 'Thay ảnh khác' : 'Chụp/Gắn ảnh'}
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
+              capture="environment"
               onChange={input => {
                 const file = input.target.files?.[0];
                 if (file) setPendingCropFile(file);

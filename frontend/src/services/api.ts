@@ -8,10 +8,44 @@ export class ApiError extends Error {
   constructor(status: number, code: string, message: string) { super(message); this.status = status; this.code = code; }
 }
 
-export type CalendarEvent = { id: string; kind: string; type: string; title: string; amount?: number; amountMinor?: number; dateKey: string; note?: string; categoryId?: string; walletId?: string; imageUrl?: string | null; status: string; source: 'transaction' | 'reminder'; time?: string; repeat?: string; channels?: string[] };
+export type CalendarEvent = {
+  id: string;
+  kind: string;
+  type: string;
+  title: string;
+  amount?: number;
+  amountMinor?: number;
+  dateKey: string;
+  note?: string;
+  categoryId?: string;
+  walletId?: string;
+  imageUrl?: string | null;
+  status: string;
+  source: 'transaction' | 'reminder' | 'manual' | 'camera' | 'webhook_mbbank';
+  time?: string;
+  transactionTime?: string;
+  repeat?: string;
+  channels?: string[];
+  createdAt?: string;
+};
 export type CalendarSummary = { income: number; expense: number; transfers: number; transactionCount: number; busiestExpenseDay: string | null; highestIncomeDay: string | null };
 export type Wallet = { id: string; name: string; type: string; balance: number; balanceMinor: number; currency: string; color: string };
-export type Transaction = { id: string; type: 'income' | 'expense' | 'transfer'; amount: number; amountMinor: number; note: string; categoryId: string; walletId: string; toWalletId?: string; dateKey: string; status: string; imageUrl: string | null; createdAt?: string };
+export type Transaction = {
+  id: string;
+  type: 'income' | 'expense' | 'transfer';
+  amount: number;
+  amountMinor: number;
+  note: string;
+  categoryId: string;
+  walletId: string;
+  toWalletId?: string;
+  dateKey: string;
+  transactionTime?: string;
+  source?: 'manual' | 'camera' | 'webhook_mbbank';
+  status: string;
+  imageUrl: string | null;
+  createdAt?: string;
+};
 
 type StoredUser = User & { password: string };
 type StoredWallet = Wallet & { userId: string; active: boolean };
@@ -416,7 +450,10 @@ function txToCalendarEvent(row: StoredTransaction): CalendarEvent {
     walletId: row.walletId,
     imageUrl: row.imageUrl,
     status: row.status,
-    source: 'transaction',
+    source: (row.source as any) || 'transaction',
+    transactionTime: row.transactionTime,
+    time: row.transactionTime,
+    createdAt: row.createdAt,
   };
 }
 
@@ -700,7 +737,19 @@ export const api = {
       },
     ),
 
-  createTransaction: (input: { type: string; amount: number; note: string; categoryId: string; walletId: string; toWalletId?: string; transactionDate: string; image?: File | null; idempotencyKey?: string }) =>
+  createTransaction: (input: {
+    type: string;
+    amount: number;
+    note: string;
+    categoryId: string;
+    walletId: string;
+    toWalletId?: string;
+    transactionDate: string;
+    transactionTime?: string;
+    source?: 'manual' | 'camera' | 'webhook_mbbank';
+    image?: File | null;
+    idempotencyKey?: string;
+  }) =>
     withFallback(
       () => {
         const form = new FormData();
@@ -711,6 +760,8 @@ export const api = {
         form.set('walletId', input.walletId);
         if (input.toWalletId) form.set('toWalletId', input.toWalletId);
         form.set('transactionDate', input.transactionDate);
+        if (input.transactionTime) form.set('transactionTime', input.transactionTime);
+        if (input.source) form.set('source', input.source);
         form.set('idempotencyKey', input.idempotencyKey ?? crypto.randomUUID());
         if (input.image) form.set('image', input.image);
         return upload<{ transaction: { id: string; dateKey: string; imageUrl: string | null } }>('/transactions', form);
@@ -732,6 +783,7 @@ export const api = {
           }
         }
         const imageUrl = input.image ? await fileToDataUrl(input.image) : null;
+        const nowTime = input.transactionTime || new Date().toTimeString().slice(0, 8);
         const created: StoredTransaction = {
           id: crypto.randomUUID(),
           userId: user.id,
@@ -743,6 +795,8 @@ export const api = {
           walletId: sourceWallet.id,
           toWalletId: targetWallet?.id,
           dateKey: input.transactionDate,
+          transactionTime: nowTime,
+          source: input.source || (input.image ? 'camera' : 'manual'),
           status: 'completed',
           imageUrl,
           createdAt: new Date().toISOString(),
@@ -766,7 +820,20 @@ export const api = {
       },
     ),
 
-  updateTransaction: (id: string, input: { type: string; amount: number; note: string; categoryId: string; walletId: string; transactionDate: string; image?: File | null }) =>
+  updateTransaction: (
+    id: string,
+    input: {
+      type: string;
+      amount: number;
+      note: string;
+      categoryId: string;
+      walletId: string;
+      transactionDate: string;
+      transactionTime?: string;
+      source?: 'manual' | 'camera' | 'webhook_mbbank';
+      image?: File | null;
+    },
+  ) =>
     withFallback(
       () => {
         const form = new FormData();
@@ -776,6 +843,8 @@ export const api = {
         form.set('categoryId', input.categoryId);
         form.set('walletId', input.walletId);
         form.set('transactionDate', input.transactionDate);
+        if (input.transactionTime) form.set('transactionTime', input.transactionTime);
+        if (input.source) form.set('source', input.source);
         if (input.image) form.set('image', input.image);
         return upload<{ transaction: { id: string; dateKey: string; imageUrl: string | null } }>(`/transactions/${id}`, form, 'PUT');
       },
@@ -802,6 +871,9 @@ export const api = {
         existing.categoryId = input.categoryId;
         if (input.walletId) existing.walletId = input.walletId;
         existing.dateKey = input.transactionDate;
+        if (input.transactionTime) existing.transactionTime = input.transactionTime;
+        if (input.source) existing.source = input.source;
+        else if (input.image) existing.source = 'camera';
         if (input.image) existing.imageUrl = await fileToDataUrl(input.image);
         saveDb(db);
         return { transaction: { id: existing.id, dateKey: existing.dateKey, imageUrl: existing.imageUrl } };
@@ -1014,4 +1086,155 @@ export const api = {
         saveDb(db);
       },
     ),
+
+  simulateMbBankWebhook: async (input: { amount: number; type: 'income' | 'expense'; note: string; dateKey?: string; timeStr?: string }) => {
+    try {
+      const res = await fetch(`${API_ROOT}/webhooks/mbbank`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gateway: 'MBBank',
+          amount: input.amount,
+          type: input.type,
+          description: input.note,
+          transaction_time: `${input.dateKey || getTodayDateKey()} ${input.timeStr || new Date().toTimeString().slice(0, 8)}`,
+          referenceCode: `MB_SIM_${Date.now()}`,
+        }),
+      });
+      if (res.ok) return await res.json();
+    } catch {
+      // Fallback to client-side creation
+    }
+
+    const db = loadDb();
+    const user = requireLocalUser(db);
+    let mbWallet = db.wallets.find(w => w.userId === user.id && (/MB/i.test(w.name) || w.type === 'bank'));
+    if (!mbWallet) {
+      mbWallet = {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        name: 'MB Bank',
+        type: 'bank',
+        balance: 0,
+        balanceMinor: 0,
+        currency: 'VND',
+        color: '#002D72',
+        active: true,
+      };
+      db.wallets.push(mbWallet);
+    }
+    const dKey = input.dateKey || getTodayDateKey();
+    const tStr = input.timeStr || new Date().toTimeString().slice(0, 8);
+    const refCode = `MB_${Math.floor(100000 + Math.random() * 900000)}`;
+    const receiptUrl = createMbBankReceiptDataUrl({
+      amount: input.amount,
+      type: input.type,
+      dateKey: dKey,
+      timeStr: tStr,
+      note: input.note,
+      referenceCode: refCode,
+    });
+    const amountMinor = Math.round(input.amount * 100);
+    const created: StoredTransaction = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      type: input.type,
+      amount: input.amount,
+      amountMinor,
+      note: input.note || (input.type === 'income' ? 'Nhận tiền MB Bank' : 'Chi tiêu MB Bank'),
+      categoryId: input.type === 'income' ? 'salary' : 'bills',
+      walletId: mbWallet.id,
+      dateKey: dKey,
+      transactionTime: tStr,
+      source: 'webhook_mbbank',
+      status: 'completed',
+      imageUrl: receiptUrl,
+      createdAt: new Date().toISOString(),
+      idempotencyKey: refCode,
+    };
+    if (input.type === 'income') {
+      mbWallet.balanceMinor += amountMinor;
+      mbWallet.balance = mbWallet.balanceMinor / 100;
+    } else {
+      mbWallet.balanceMinor -= amountMinor;
+      mbWallet.balance = mbWallet.balanceMinor / 100;
+    }
+    db.transactions.unshift(created);
+    saveDb(db);
+    return { success: true, transaction: created };
+  },
 };
+
+function getTodayDateKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function createMbBankReceiptDataUrl(options: {
+  amount: number;
+  type: 'income' | 'expense';
+  dateKey: string;
+  timeStr: string;
+  note: string;
+  referenceCode: string;
+}): string {
+  const isIncome = options.type === 'income';
+  const sign = isIncome ? '+' : '−';
+  const colorAccent = isIncome ? '#10b981' : '#f43f5e';
+  const cleanNote = (options.note || 'Thanh toán qua MB Bank').replace(/[<>&'"]/g, ' ').slice(0, 75);
+  const cleanRef = options.referenceCode.replace(/[<>&'"]/g, '').slice(0, 30);
+  const formatted = options.amount.toLocaleString('vi-VN');
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 900" width="720" height="900">
+  <defs>
+    <linearGradient id="mbg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#001844" />
+      <stop offset="50%" stop-color="#002D72" />
+      <stop offset="100%" stop-color="#0a1226" />
+    </linearGradient>
+  </defs>
+  <rect width="720" height="900" fill="url(#mbg)" />
+  <rect x="0" y="0" width="720" height="12" fill="#00A3E0" />
+  <g transform="translate(60, 60)">
+    <rect x="0" y="0" width="56" height="56" rx="14" fill="#00A3E0" />
+    <path d="M 16 38 L 16 18 L 24 28 L 32 18 L 32 38 M 38 18 L 46 18 L 46 28 L 38 28 L 46 38" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    <text x="72" y="28" font-family="-apple-system, sans-serif" font-weight="900" font-size="24" fill="#ffffff" letter-spacing="1.5">MB BANK</text>
+    <text x="72" y="48" font-family="-apple-system, sans-serif" font-weight="600" font-size="13" fill="#93c5fd">NGÂN HÀNG QUÂN ĐỘI • BIÊN LAI ĐIỆN TỬ</text>
+    <rect x="420" y="8" width="180" height="38" rx="19" fill="rgba(0, 163, 224, 0.22)" stroke="#00A3E0" stroke-width="1.5" />
+    <text x="510" y="32" font-family="-apple-system, sans-serif" font-weight="800" font-size="12" fill="#67e8f9" text-anchor="middle">⚡ MB BANK AUTO</text>
+  </g>
+  <g transform="translate(60, 160)">
+    <rect x="0" y="0" width="600" height="220" rx="24" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
+    <text x="40" y="48" font-family="-apple-system, sans-serif" font-size="14" font-weight="600" fill="#94a3b8">BIẾN ĐỘNG SỐ DƯ TỰ ĐỘNG</text>
+    <text x="40" y="125" font-family="-apple-system, sans-serif" font-size="50" font-weight="900" fill="${colorAccent}">
+      ${sign}${formatted} <tspan font-size="30" font-weight="700">VND</tspan>
+    </text>
+    <rect x="40" y="155" width="130" height="32" rx="8" fill="${isIncome ? 'rgba(16, 185, 129, 0.2)' : 'rgba(244, 63, 94, 0.2)'}" />
+    <text x="105" y="176" font-family="-apple-system, sans-serif" font-size="13" font-weight="700" fill="${colorAccent}" text-anchor="middle">
+      ${isIncome ? 'TIỀN VÀO (+)' : 'TIỀN RA (−)'}
+    </text>
+  </g>
+  <g transform="translate(60, 410)">
+    <rect x="0" y="0" width="600" height="330" rx="20" fill="rgba(10, 18, 38, 0.65)" stroke="rgba(255, 255, 255, 0.1)" stroke-width="1" />
+    <text x="36" y="50" font-family="-apple-system, sans-serif" font-size="13" fill="#94a3b8">Thời gian giao dịch</text>
+    <text x="564" y="50" font-family="-apple-system, sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="end">${options.timeStr} • ${options.dateKey}</text>
+    <line x1="36" y1="78" x2="564" y2="78" stroke="rgba(255, 255, 255, 0.08)" />
+    <text x="36" y="118" font-family="-apple-system, sans-serif" font-size="13" fill="#94a3b8">Mã tham chiếu (Ref ID)</text>
+    <text x="564" y="118" font-family="-apple-system, sans-serif" font-size="14" font-weight="700" fill="#38bdf8" text-anchor="end">${cleanRef}</text>
+    <line x1="36" y1="146" x2="564" y2="146" stroke="rgba(255, 255, 255, 0.08)" />
+    <text x="36" y="186" font-family="-apple-system, sans-serif" font-size="13" fill="#94a3b8">Nội dung</text>
+    <text x="36" y="222" font-family="-apple-system, sans-serif" font-size="16" font-weight="600" fill="#f8fafc">${cleanNote}</text>
+    <line x1="36" y1="254" x2="564" y2="254" stroke="rgba(255, 255, 255, 0.08)" />
+    <text x="36" y="294" font-family="-apple-system, sans-serif" font-size="13" fill="#94a3b8">Kênh tích hợp</text>
+    <text x="564" y="294" font-family="-apple-system, sans-serif" font-size="14" font-weight="700" fill="#a78bfa" text-anchor="end">Webhook API (Real-time)</text>
+  </g>
+  <g transform="translate(60, 780)">
+    <rect x="0" y="0" width="600" height="54" rx="14" fill="rgba(0, 163, 224, 0.12)" stroke="rgba(0, 163, 224, 0.3)" stroke-width="1" />
+    <text x="300" y="32" font-family="-apple-system, sans-serif" font-size="13" font-weight="600" fill="#7dd3fc" text-anchor="middle">
+      📸 Chạm vào giao dịch để chụp hoặc thay ảnh bill thực tế
+    </text>
+  </g>
+</svg>`;
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}

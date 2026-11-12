@@ -12,6 +12,14 @@ export async function savePrivateImage(file: { buffer: Buffer; mimetype: string;
   return key;
 }
 
+export async function saveBufferImage(buffer: Buffer, mimetype: string, ext = '.svg') {
+  await mkdir(uploadDir, { recursive: true });
+  const extension = ext.startsWith('.') ? ext : `.${ext}`;
+  const key = `${randomToken(18)}${extension}`;
+  await writeFile(path.join(uploadDir, key), buffer, { flag: 'wx' });
+  return { key, mimetype, size: buffer.length };
+}
+
 export async function readPrivateImage(key: string) {
   return readFile(path.join(uploadDir, path.basename(key)));
 }

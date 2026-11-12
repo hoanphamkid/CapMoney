@@ -4764,3 +4764,340 @@ html:not(.dark-theme) .cm-app-shell {
 .cm-report-trend-pair .exp, .cm-report-trend-legend i.exp { background: #e06d64; }
 .cm-report-trend-legend { display: flex; gap: 14px; font-size: 11px; }
 .cm-report-trend-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; }
+
+/* =========================================================
+   REAL-TIME PHOTO LOGGING, DAILY TIMELINE & SWIPE NAVIGATION
+   ========================================================= */
+
+/* Real-time capture badge */
+.cm-time-realtime-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Detail Modal Photo Stage & Source Ribbon */
+.cm-detail-source-ribbon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 10px 4px;
+  gap: 8px;
+}
+
+.cm-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+.cm-source-badge.mbbank {
+  background: linear-gradient(135deg, rgba(0, 45, 114, 0.5), rgba(0, 163, 224, 0.35));
+  border: 1px solid #00A3E0;
+  color: #67e8f9;
+  box-shadow: 0 0 12px rgba(0, 163, 224, 0.3);
+}
+
+.cm-source-badge.camera {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(5, 150, 105, 0.2));
+  border: 1px solid #10b981;
+  color: #6ee7b7;
+}
+
+.cm-source-badge.manual {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #cbd5e1;
+}
+
+.cm-detail-time-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+
+.cm-detail-photo-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #11141c;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 12px;
+}
+
+.cm-detail-photo-stage .detail-photo {
+  width: 100%;
+  max-height: 380px;
+  object-fit: cover;
+  display: block;
+}
+
+.cm-detail-photo-stage .detail-no-photo {
+  height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cm-detail-snap-btn {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+
+.cm-detail-snap-btn:active {
+  transform: scale(0.94);
+}
+
+/* Day View Navigation Header with Arrows */
+.cm-day-nav-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.cm-day-nav-arrow {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.cm-day-nav-arrow:active {
+  transform: scale(0.9);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Swipeable Day Body & Paging Animation */
+.cm-day-view-body.swipeable {
+  touch-action: pan-y;
+  user-select: none;
+  cursor: grab;
+}
+
+.cm-day-view-body.swipeable:active {
+  cursor: grabbing;
+}
+
+.cm-day-view-body.slide-next {
+  animation: daySlideNext 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.cm-day-view-body.slide-prev {
+  animation: daySlidePrev 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes daySlideNext {
+  0% { opacity: 0.35; transform: translateX(36px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes daySlidePrev {
+  0% { opacity: 0.35; transform: translateX(-36px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* Daily Timeline Layout */
+.cm-day-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 4px 18px 4px;
+}
+
+.cm-timeline-track-line {
+  position: absolute;
+  top: 14px;
+  bottom: 24px;
+  left: 64px;
+  width: 2px;
+  background: linear-gradient(to bottom, rgba(56, 189, 248, 0.6), rgba(168, 85, 247, 0.6), rgba(255, 255, 255, 0.1));
+  z-index: 1;
+}
+
+.cm-timeline-node-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  z-index: 2;
+}
+
+.cm-timeline-time-badge {
+  flex: 0 0 54px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  padding-top: 4px;
+}
+
+.cm-timeline-node-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #38bdf8;
+  border: 2px solid #0f172a;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.cm-timeline-node-dot.income {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
+}
+
+.cm-timeline-node-dot.expense {
+  background: #f43f5e;
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.7);
+}
+
+.cm-timeline-card {
+  flex: 1;
+  min-width: 0;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  transition: transform 0.12s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.cm-timeline-card:active {
+  transform: scale(0.98);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.cm-timeline-card-photo {
+  position: relative;
+  width: 100%;
+  height: 140px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0b0d13;
+}
+
+.cm-timeline-card-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cm-photo-mbbank-chip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 45, 114, 0.85);
+  border: 1px solid #00A3E0;
+  color: #67e8f9;
+  font-size: 10px;
+  font-weight: 800;
+  backdrop-filter: blur(6px);
+}
+
+.cm-timeline-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cm-timeline-amount {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.cm-timeline-amount.income {
+  color: #7de89a;
+}
+
+.cm-timeline-amount.expense {
+  color: #ff8e85;
+}
+
+.cm-timeline-note {
+  margin: 0;
+  font-size: 13px;
+  color: #f1f5f9;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cm-mbbank-text-pill {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(0, 163, 224, 0.14);
+  border: 1px solid rgba(0, 163, 224, 0.35);
+  color: #38bdf8;
+  font-size: 10px;
+  font-weight: 700;
+  width: fit-content;
+}
+
+.cm-day-swipe-pill {
+  text-align: center;
+  font-size: 11px;
+  color: #94a3b8;
+  padding: 6px 0 12px;
+  opacity: 0.85;
+}
