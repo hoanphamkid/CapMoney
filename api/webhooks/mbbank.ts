@@ -139,6 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (error instanceof BankWebhookError) return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
     const detail = error instanceof Error ? error.message : String(error);
     console.error('[mbbank webhook] Failed to persist bank transaction', detail);
-    return res.status(503).json({ success: false, error: { code: 'WEBHOOK_PERSIST_FAILED', message: 'Chưa lưu được giao dịch. Vui lòng gửi lại webhook.' } });
+    const safeDetail = detail.replace(/mongodb(?:\+srv)?:\/\/\S+/gi, 'mongodb://<redacted>').slice(0, 260);
+    return res.status(503).json({ success: false, error: { code: 'WEBHOOK_PERSIST_FAILED', message: 'Chưa lưu được giao dịch. Vui lòng gửi lại webhook.', detail: safeDetail } });
   }
 }
