@@ -7,7 +7,7 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import mongoose from 'mongoose';
-import { BankWebhookError, bankCategory, bankWalletId, parseBankTransactions, verifyBankWebhook } from '../../backend/src/utils/bankWebhook.js';
+import { BankWebhookError, bankCategory, bankWalletId, parseBankTransactions, verifyBankWebhook } from '../utils/bankWebhook.js';
 
 // ─── Mongoose models (inline to keep this file self-contained) ─────────────
 const TransactionSchema = new mongoose.Schema(
