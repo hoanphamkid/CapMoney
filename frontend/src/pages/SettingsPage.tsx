@@ -1,4 +1,4 @@
-import { Bell, Check, Download, FileText, Globe2, KeyRound, LoaderCircle, LogOut, Save, ShieldCheck, Sun, UserRound } from 'lucide-react';
+import { Bell, Check, CloudUpload, Download, FileText, Globe2, KeyRound, LoaderCircle, LogOut, Save, ShieldCheck, Sun, UserRound } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, type MeResponse } from '../services/api';
@@ -106,7 +106,7 @@ export function SettingsPage() {
 
   return (
     <div className="feature-page settings-page">
-      <div className="page-heading">
+      <div className="page-heading settings-hero">
         <div>
           <p className="eyebrow dark">KHÔNG GIAN CỦA BẠN</p>
           <h1>Cài đặt</h1>
@@ -123,6 +123,10 @@ export function SettingsPage() {
 
       <div className="settings-layout">
         <div className="settings-main">
+          <section className="settings-card panel">
+            <SettingsHeading icon={<CloudUpload size={17} />} title="Đồng bộ & bản sao" description="Chuyển dữ liệu giữa điện thoại và laptop, xem ngày giờ cập nhật và chọn phiên bản muốn khôi phục." />
+            <button className="settings-action" onClick={() => navigate('/app/sync')}><CloudUpload size={16} /> Mở lịch sử bản sao</button>
+          </section>
           <section className="settings-card panel">
             <SettingsHeading
               icon={<UserRound size={17} />}

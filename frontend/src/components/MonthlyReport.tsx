@@ -1,9 +1,9 @@
-import { ChevronLeft, ChevronRight, Download, TrendingDown, TrendingUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, ListFilter, TrendingDown, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Transaction } from '../services/api';
 import { loadBudget } from './SpendingLimitModal';
 
-const CATEGORY_LABELS: Record<string, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
   food: 'Ăn uống',
   shopping: 'Mua sắm',
   transport: 'Di chuyển',
@@ -13,7 +13,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: 'Khác',
 };
 
-const CATEGORY_COLORS = ['#e06d64', '#f0a35e', '#e7cf5b', '#5fc278', '#4aa8d8', '#9b7bff', '#d977b8', '#8d96ab'];
+const CATEGORY_COLORS: Record<string, string> = {
+  food: '#e06d64', shopping: '#f0a35e', transport: '#4aa8d8', bills: '#5fc278',
+  entertainment: '#9b7bff', health: '#d977b8', other: '#e7cf5b',
+};
 
 function monthKey(year: number, month: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}`;
@@ -23,7 +26,11 @@ function money(value: number) {
   return `${value.toLocaleString('vi-VN')} ₫`;
 }
 
-export function MonthlyReport({ transactions }: { transactions: Transaction[] }) {
+export function MonthlyReport({ transactions, selectedCategory, onCategoryChange }: {
+  transactions: Transaction[];
+  selectedCategory: string;
+  onCategoryChange: (category: string) => void;
+}) {
   const now = new Date();
   const [cursor, setCursor] = useState(new Date(now.getFullYear(), now.getMonth(), 1));
   const budget = useMemo(() => loadBudget(), []);
@@ -53,11 +60,11 @@ export function MonthlyReport({ transactions }: { transactions: Transaction[] })
 
     const categories = Object.entries(byCategory)
       .sort((a, b) => b[1] - a[1])
-      .map(([id, amount], i) => ({
+      .map(([id, amount]) => ({
         id,
         amount,
         pct: expense > 0 ? (amount / expense) * 100 : 0,
-        color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+        color: CATEGORY_COLORS[id] ?? '#8d96ab',
         limit: budget.categoryLimits[id] ?? 0,
       }));
 
@@ -70,7 +77,7 @@ export function MonthlyReport({ transactions }: { transactions: Transaction[] })
       for (const tx of transactions) {
         if (tx.dateKey.slice(0, 7) !== k) continue;
         if (tx.type === 'income') inc += tx.amount;
-        else if (tx.type === 'expense') exp += tx.amount;
+        else if (tx.type === 'expense' && (selectedCategory === 'all' || tx.categoryId === selectedCategory)) exp += tx.amount;
       }
       return { label: `T${d.getMonth() + 1}`, income: inc, expense: exp };
     });
@@ -100,28 +107,35 @@ export function MonthlyReport({ transactions }: { transactions: Transaction[] })
       remaining,
       safePerDay,
     };
-  }, [transactions, cursor, budget]);
+  }, [transactions, cursor, budget, selectedCategory]);
+
+  const categoryName = CATEGORY_LABELS[selectedCategory] ?? 'Khác';
+  const visibleCategories = useMemo(() => report.categories.filter(c => selectedCategory === 'all' || c.id === selectedCategory), [report.categories, selectedCategory]);
+  const visibleExpense = visibleCategories.reduce((sum, c) => sum + c.amount, 0);
+  const categoryTransactions = report.monthTxs.filter(tx => tx.type === 'expense' && tx.categoryId === selectedCategory);
 
   const donut = useMemo(() => {
-    if (report.categories.length === 0) return 'conic-gradient(#2a2d38 0 100%)';
+    if (visibleCategories.length === 0) return 'conic-gradient(#2a2d38 0 100%)';
     let acc = 0;
-    const stops = report.categories.map(c => {
+    const stops = visibleCategories.map(c => {
       const start = acc;
-      acc += c.pct;
+      acc += (c.amount / (selectedCategory === 'all' ? visibleExpense : report.expense)) * 100;
       return `${c.color} ${start}% ${acc}%`;
     });
+    if (selectedCategory !== 'all') stops.push(`#2a2d38 ${acc}% 100%`);
     return `conic-gradient(${stops.join(', ')})`;
-  }, [report.categories]);
+  }, [visibleCategories, visibleExpense, selectedCategory, report.expense]);
 
   const diff = report.expense - report.prevExpense;
   const diffPct = report.prevExpense > 0 ? Math.round((diff / report.prevExpense) * 100) : null;
-  const maxTrend = Math.max(1, ...report.trend.map(t => Math.max(t.income, t.expense)));
+  const maxTrend = Math.max(1, ...report.trend.map(t => selectedCategory === 'all' ? Math.max(t.income, t.expense) : t.expense));
   const budgetPct = budget.monthlyLimit > 0 ? Math.min(100, (report.expense / budget.monthlyLimit) * 100) : 0;
   const budgetState = budgetPct >= 100 ? 'over' : budgetPct >= 80 ? 'warn' : 'ok';
 
   const exportCsv = () => {
     const header = 'Ngày,Loại,Danh mục,Ghi chú,Số tiền';
     const rows = report.monthTxs
+      .filter(tx => selectedCategory === 'all' || (tx.type === 'expense' && tx.categoryId === selectedCategory))
       .slice()
       .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
       .map(tx =>
@@ -137,7 +151,7 @@ export function MonthlyReport({ transactions }: { transactions: Transaction[] })
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `capmoney-${report.key}.csv`;
+    a.download = `capmoney-${report.key}${selectedCategory === 'all' ? '' : `-${selectedCategory}`}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -149,7 +163,7 @@ export function MonthlyReport({ transactions }: { transactions: Transaction[] })
           <h2>Báo cáo chi tiêu tháng</h2>
           <p>Phân tích theo danh mục, so sánh và dự báo</p>
         </div>
-        <button type="button" className="outline-button small" onClick={exportCsv}>
+        <button type="button" className="outline-button small" onClick={exportCsv} aria-label={selectedCategory === 'all' ? 'Xuất CSV tháng này' : `Xuất CSV ${categoryName}`}>
           <Download size={14} /> CSV
         </button>
       </div>
@@ -207,36 +221,60 @@ export function MonthlyReport({ transactions }: { transactions: Transaction[] })
         )}
       </div>
 
+      <div className="cm-report-category-filter">
+        <div className="cm-report-filter-heading">
+          <strong><ListFilter size={16} /> Lọc theo danh mục</strong>
+          {selectedCategory !== 'all' && <button type="button" onClick={() => onCategoryChange('all')}>Bỏ lọc</button>}
+        </div>
+        <div className="cm-report-category-chips" role="group" aria-label="Lọc báo cáo theo danh mục">
+          <button type="button" aria-pressed={selectedCategory === 'all'} onClick={() => onCategoryChange('all')}>Tất cả</button>
+          {Object.entries(CATEGORY_LABELS).map(([id, label]) => (
+            <button type="button" key={id} aria-pressed={selectedCategory === id} onClick={() => onCategoryChange(id)}>
+              <i style={{ background: CATEGORY_COLORS[id] }} aria-hidden="true" />{label}
+            </button>
+          ))}
+        </div>
+        <p>Áp dụng cho biểu đồ, xu hướng và giao dịch gần đây.</p>
+        {selectedCategory !== 'all' && (
+          <div className="cm-report-category-total" aria-live="polite">
+            <div><span>Chi cho {categoryName}</span><strong>−{money(visibleExpense)}</strong></div>
+            <div><span>{categoryTransactions.length} khoản chi trong tháng</span><small>{report.expense > 0 ? Math.round((visibleExpense / report.expense) * 100) : 0}% tổng chi tháng này</small></div>
+          </div>
+        )}
+      </div>
+
       <div className="cm-report-donut-row">
         <div className="cm-report-donut" style={{ background: donut }}>
           <span>
-            <small>Tổng chi</small>
-            <b>{report.expense >= 1_000_000 ? `${(report.expense / 1_000_000).toFixed(1)}tr` : `${Math.round(report.expense / 1000)}k`}</b>
+            <small>{selectedCategory === 'all' ? 'Tổng chi' : categoryName}</small>
+            <b>{visibleExpense >= 1_000_000 ? `${(visibleExpense / 1_000_000).toFixed(1)}tr` : `${Math.round(visibleExpense / 1000)}k`}</b>
           </span>
         </div>
         <ul className="cm-report-legend">
-          {report.categories.length === 0 && <li>Chưa có khoản chi nào trong tháng này.</li>}
-          {report.categories.map(c => (
+          {visibleCategories.length === 0 && <li className="cm-report-category-empty">Chưa có khoản chi{selectedCategory === 'all' ? '' : ` ${categoryName}`} trong tháng này.</li>}
+          {visibleCategories.map(c => (
             <li key={c.id}>
-              <i style={{ background: c.color }} />
-              <span>{CATEGORY_LABELS[c.id] ?? 'Khác'}</span>
-              <b>{Math.round(c.pct)}%</b>
-              <small className={c.limit > 0 && c.amount > c.limit ? 'over' : ''}>
-                {money(c.amount)}
-                {c.limit > 0 && c.amount > c.limit ? ' ⚠' : ''}
-              </small>
+              <button type="button" className="cm-report-category-row" onClick={() => onCategoryChange(c.id)} aria-label={`Lọc danh mục ${CATEGORY_LABELS[c.id] ?? 'Khác'}`}>
+                <i style={{ background: c.color }} />
+                <span>{CATEGORY_LABELS[c.id] ?? 'Khác'}</span>
+                <b>{Math.round(c.pct)}%</b>
+                <small className={c.limit > 0 && c.amount > c.limit ? 'over' : ''}>
+                  {money(c.amount)}
+                  {c.limit > 0 && c.amount > c.limit ? ' ⚠' : ''}
+                </small>
+              </button>
             </li>
           ))}
         </ul>
       </div>
 
       <div className="cm-report-trend">
-        <strong>Xu hướng 6 tháng</strong>
+        <strong>{selectedCategory === 'all' ? 'Xu hướng 6 tháng' : `Xu hướng chi ${categoryName} · 6 tháng`}</strong>
         <div className="cm-report-trend-bars">
           {report.trend.map(t => (
             <div key={t.label}>
               <div className="cm-report-trend-pair">
-                <span className="inc" style={{ height: `${Math.max(3, (t.income / maxTrend) * 80)}px` }} />
+                {selectedCategory === 'all' && <span className="inc" style={{ height: `${Math.max(3, (t.income / maxTrend) * 80)}px` }} />}
                 <span className="exp" style={{ height: `${Math.max(3, (t.expense / maxTrend) * 80)}px` }} />
               </div>
               <small>{t.label}</small>
@@ -244,11 +282,11 @@ export function MonthlyReport({ transactions }: { transactions: Transaction[] })
           ))}
         </div>
         <div className="cm-report-trend-legend">
-          <span>
+          {selectedCategory === 'all' && <span>
             <i className="inc" /> Thu
-          </span>
+          </span>}
           <span>
-            <i className="exp" /> Chi
+            <i className="exp" /> {selectedCategory === 'all' ? 'Chi' : `Chi ${categoryName}`}
           </span>
         </div>
       </div>

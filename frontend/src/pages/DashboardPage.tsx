@@ -1,8 +1,8 @@
-import { ArrowDownLeft, ArrowUpRight, BarChart3, CircleDollarSign, Plus, WalletCards } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, BarChart3, ChevronsUpDown, CircleDollarSign, Plus, WalletCards } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
-import { MonthlyReport } from '../components/MonthlyReport';
+import { CATEGORY_LABELS, MonthlyReport } from '../components/MonthlyReport';
 import { useAuth } from '../contexts/AuthContext';
 import { api, type Transaction, type Wallet } from '../services/api';
 
@@ -13,6 +13,46 @@ export function DashboardPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const recentListRef = useRef<HTMLDivElement>(null);
+  const [scrollEdges, setScrollEdges] = useState({ above: false, below: false });
+
+  const recentTransactions = useMemo(() => transactions
+    .filter(tx => selectedCategory === 'all' || (tx.type === 'expense' && tx.categoryId === selectedCategory))
+    .sort((a, b) => b.dateKey.localeCompare(a.dateKey) || (b.transactionTime ?? '').localeCompare(a.transactionTime ?? '') || (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
+  [transactions, selectedCategory]);
+
+  useEffect(() => {
+    const list = recentListRef.current;
+    if (!list) return;
+    list.scrollTo({ top: 0, behavior: 'instant' });
+    const updateEdges = () => {
+      const above = list.scrollTop > 2;
+      const below = list.scrollTop + list.clientHeight < list.scrollHeight - 2;
+      setScrollEdges(previous => previous.above === above && previous.below === below ? previous : { above, below });
+    };
+    updateEdges();
+    list.addEventListener('scroll', updateEdges, { passive: true });
+    const resizeObserver = new ResizeObserver(updateEdges);
+    resizeObserver.observe(list);
+    const rows = list.querySelectorAll('.cm-recent-row');
+    const revealObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.classList.add('is-visible');
+        revealObserver?.unobserve(entry.target);
+      }
+    }, { root: list, threshold: 0.1 }) : null;
+    for (const row of rows) {
+      if (revealObserver) revealObserver.observe(row);
+      else row.classList.add('is-visible');
+    }
+    return () => {
+      list.removeEventListener('scroll', updateEdges);
+      resizeObserver.disconnect();
+      revealObserver?.disconnect();
+    };
+  }, [recentTransactions]);
 
   const load = async () => {
     try {
@@ -81,50 +121,64 @@ export function DashboardPage() {
         />
       </div>
 
-      <MonthlyReport transactions={transactions} />
+      <MonthlyReport transactions={transactions} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />
 
       <section className="panel recent-panel" style={{ marginTop: 16 }}>
         <div className="panel-head">
           <div>
             <h2>Giao dịch gần đây</h2>
-            <p>{transactions.length} hoạt động đã ghi nhận</p>
+            <p aria-live="polite">{selectedCategory === 'all' ? `${recentTransactions.length} hoạt động đã ghi nhận` : `${recentTransactions.length} khoản chi · ${CATEGORY_LABELS[selectedCategory] ?? 'Khác'}`}</p>
           </div>
           <button className="text-button" onClick={() => navigate('/app/transactions')}>
             Xem tất cả
           </button>
         </div>
-        {transactions.length ? (
-          <div className="transaction-table">
-            {transactions.slice(0, 8).map(row => (
-              <div className="transaction-row" key={row.id} onClick={() => navigate('/app/transactions')}>
+        {selectedCategory !== 'all' && (
+          <div className="cm-recent-active-filter"><span>Danh mục: {CATEGORY_LABELS[selectedCategory] ?? 'Khác'}</span><button type="button" onClick={() => setSelectedCategory('all')}>Xem tất cả danh mục</button></div>
+        )}
+        {recentTransactions.length ? (
+          <>
+          <div
+            ref={recentListRef}
+            className={`transaction-table cm-recent-scroll ${scrollEdges.above ? 'has-more-above' : ''} ${scrollEdges.below ? 'has-more-below' : ''}`}
+            role="region"
+            aria-label="Danh sách giao dịch gần đây"
+            tabIndex={0}
+          >
+            {recentTransactions.map(row => (
+              <button type="button" className="transaction-row cm-recent-row" key={row.id} onClick={() => navigate('/app/transactions')}>
                 <span className={`transaction-image ${row.imageUrl ? 'has-image' : row.type}`}>
                   {row.imageUrl ? (
                     <img src={row.imageUrl} alt="" />
                   ) : row.type === 'income' ? (
                     <ArrowDownLeft size={16} />
-                  ) : (
+                  ) : row.type === 'expense' ? (
                     <ArrowUpRight size={16} />
+                  ) : (
+                    <ArrowLeftRight size={16} />
                   )}
                 </span>
                 <span className="transaction-main">
-                  <strong>{row.note || (row.type === 'income' ? 'Thu nhập' : 'Chi tiêu')}</strong>
-                  <small>{row.dateKey}</small>
+                  <strong>{row.note || (row.type === 'income' ? 'Thu nhập' : row.type === 'expense' ? 'Chi tiêu' : 'Chuyển tiền')}</strong>
+                  <small>{row.type === 'income' ? 'Thu nhập' : row.type === 'transfer' ? 'Chuyển tiền' : CATEGORY_LABELS[row.categoryId] ?? 'Khác'} · {row.dateKey}{row.transactionTime ? ` · ${row.transactionTime.slice(0, 5)}` : ''}</small>
                 </span>
                 <span className={`transaction-amount ${row.type}`}>
-                  {row.type === 'income' ? '+' : '−'}
+                  {row.type === 'income' ? '+' : row.type === 'expense' ? '−' : ''}
                   {row.amount.toLocaleString('vi-VN')} ₫
                 </span>
-              </div>
+              </button>
             ))}
           </div>
+          {(scrollEdges.above || scrollEdges.below) && <p className="cm-recent-scroll-hint"><ChevronsUpDown size={14} /> Cuộn để xem các giao dịch khác</p>}
+          </>
         ) : (
           <div className="recent-empty">
             <div className="empty-circle">
               <WalletCards size={22} />
             </div>
             <div>
-              <strong>Chưa có giao dịch nào</strong>
-              <p>Mọi khoản thu chi của bạn sẽ xuất hiện ở đây.</p>
+              <strong>{selectedCategory === 'all' ? 'Chưa có giao dịch nào' : `Chưa có khoản chi ${CATEGORY_LABELS[selectedCategory] ?? 'Khác'}`}</strong>
+              <p>{selectedCategory === 'all' ? 'Mọi khoản thu chi của bạn sẽ xuất hiện ở đây.' : 'Chọn danh mục khác hoặc thêm khoản chi mới.'}</p>
             </div>
             <button className="outline-button small" onClick={() => setCaptureOpen(true)}>
               Thêm giao dịch

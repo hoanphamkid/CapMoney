@@ -10,13 +10,11 @@ import {
   EyeOff,
   Flame,
   Image as ImageIcon,
-  Landmark,
   LayoutGrid,
   Leaf,
   Paintbrush,
   PiggyBank,
   Plus,
-  ReceiptText,
   Search,
   ShieldCheck,
   Sparkles,
@@ -32,7 +30,7 @@ import { LookbackModal } from '../components/LookbackModal';
 import { SmartToolkitModal } from '../components/SmartToolkitModal';
 import { loadBudget, SpendingLimitModal, type BudgetConfig } from '../components/SpendingLimitModal';
 import { useAuth } from '../contexts/AuthContext';
-import { api, type CalendarEvent, type Transaction, type Wallet } from '../services/api';
+import { api, type CalendarEvent, type Transaction } from '../services/api';
 
 const weekdayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
@@ -65,8 +63,6 @@ export function CalendarPage() {
   const [captureType, setCaptureType] = useState<'expense' | 'income'>('expense');
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
 
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [selectedWallet, setSelectedWallet] = useState<string>('all');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -78,8 +74,6 @@ export function CalendarPage() {
   const [lookbackPeriod, setLookbackPeriod] = useState<1 | 3 | 7 | null>(null);
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [toolkitOpen, setToolkitOpen] = useState(false);
-  const [syncingCloud, setSyncingCloud] = useState(false);
-  const [syncNotice, setSyncNotice] = useState('');
   const [budget, setBudget] = useState<BudgetConfig>(() => loadBudget());
 
   const monthRange = useMemo(() => {
@@ -93,17 +87,7 @@ export function CalendarPage() {
   const reload = async () => {
     setLoading(true);
     try {
-      const [walletRes, txRes] = await Promise.all([
-        api.wallets(),
-        api.transactions({ from: monthRange.from, to: monthRange.to }),
-      ]);
-      let walletList = walletRes.wallets;
-      if (!walletList.length) {
-        const w1 = await api.createWallet({ name: 'Wallet', type: 'cash', openingBalance: 0, color: '#163e36' });
-        const w2 = await api.createWallet({ name: 'Bank', type: 'bank', openingBalance: 0, color: '#3c6684' });
-        walletList = [w1.wallet, w2.wallet];
-      }
-      setWallets(walletList);
+      const txRes = await api.transactions({ from: monthRange.from, to: monthRange.to });
       setTransactions(txRes.transactions);
     } finally {
       setLoading(false);
@@ -116,9 +100,6 @@ export function CalendarPage() {
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => {
-      if (selectedWallet !== 'all' && tx.walletId !== selectedWallet && tx.toWalletId !== selectedWallet) {
-        return false;
-      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const cat = (categoryNames[tx.categoryId] ?? tx.categoryId).toLowerCase();
@@ -126,7 +107,7 @@ export function CalendarPage() {
       }
       return true;
     });
-  }, [transactions, selectedWallet, searchQuery]);
+  }, [transactions, searchQuery]);
 
   const byDay = useMemo(() => {
     const map: Record<string, CalendarEvent[]> = {};
@@ -144,7 +125,10 @@ export function CalendarPage() {
         walletId: tx.walletId,
         imageUrl: tx.imageUrl,
         status: tx.status,
-        source: 'transaction',
+        source: tx.source || 'transaction',
+        transactionTime: tx.transactionTime,
+        time: tx.transactionTime,
+        createdAt: tx.createdAt,
       };
       map[tx.dateKey] = [...(map[tx.dateKey] ?? []), ev];
     }
@@ -325,31 +309,11 @@ export function CalendarPage() {
             </button>
             <button
               type="button"
-              className="cm-badge-gold clickable"
-              onClick={() => setToolkitOpen(true)}
-              title="Hũ tiết kiệm, Chia tiền nhóm & Huy hiệu"
-            >
-              <PiggyBank size={12} /> Hũ & Chia bill
-            </button>
-            <button
-              type="button"
               className="cm-badge-blue clickable"
-              disabled={syncingCloud}
-              onClick={async () => {
-                setSyncingCloud(true);
-                try {
-                  await api.syncCloud();
-                  await reload();
-                  setSyncNotice('Đã đồng bộ!');
-                  setTimeout(() => setSyncNotice(''), 2500);
-                } finally {
-                  setSyncingCloud(false);
-                }
-              }}
-              title="Đồng bộ dữ liệu tài khoản giữa điện thoại và máy tính"
+              onClick={() => navigate('/app/sync')}
+              title="Đồng bộ dữ liệu và lịch sử bản sao"
             >
-              <CloudUpload size={12} />
-              {syncingCloud ? 'Đang đồng bộ...' : syncNotice || 'Đồng bộ'}
+              <CloudUpload size={12} /> Đồng bộ
             </button>
           </div>
         </div>
@@ -363,6 +327,26 @@ export function CalendarPage() {
           <UserRound size={26} />
         </button>
       </header>
+
+      <div className="cm-toolkit-launcher">
+        <button
+          type="button"
+          className="cm-toolkit-launch"
+          onClick={() => setToolkitOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={toolkitOpen}
+          aria-controls="cm-toolkit-dialog"
+        >
+          <span className="cm-toolkit-launch-icon" aria-hidden="true">
+            <PiggyBank size={28} />
+          </span>
+          <span className="cm-toolkit-launch-copy">
+            <strong>Hũ & Chia bill</strong>
+            <small>Tiết kiệm • Chia tiền nhóm</small>
+          </span>
+          <Sparkles className="cm-toolkit-launch-sparkle" size={22} aria-hidden="true" />
+        </button>
+      </div>
 
       {/* Mode Switcher & Utility Icons */}
       <div className="cm-toolbar-row">
@@ -468,32 +452,6 @@ export function CalendarPage() {
             {hideAll || hideIncome ? <EyeOff size={17} /> : <Eye size={17} />}
           </button>
         </div>
-      </div>
-
-      {/* Wallet Filter Chips */}
-      <div className="cm-wallet-chips">
-        <button
-          type="button"
-          className={`cm-wallet-chip ${selectedWallet === 'all' ? 'active' : ''}`}
-          onClick={() => setSelectedWallet('all')}
-        >
-          <ReceiptText size={14} />
-          <span>Tất cả</span>
-        </button>
-        {wallets.map(wallet => {
-          const Icon = wallet.type === 'bank' ? Landmark : ReceiptText;
-          return (
-            <button
-              key={wallet.id}
-              type="button"
-              className={`cm-wallet-chip ${selectedWallet === wallet.id ? 'active' : ''}`}
-              onClick={() => setSelectedWallet(wallet.id)}
-            >
-              <Icon size={14} />
-              <span>{wallet.name}</span>
-            </button>
-          );
-        })}
       </div>
 
       {/* Lookback Story Reel Strip (1 Ngày • 3 Ngày • 1 Tuần) */}
@@ -794,20 +752,19 @@ export function CalendarPage() {
 
                     return (
                       <div key={ev.id || idx} className="cm-timeline-node-row">
-                        <div className="cm-timeline-time-badge">
-                          <Clock size={11} />
-                          <span>{timeLabel}</span>
-                        </div>
                         <div className={`cm-timeline-node-dot ${isIncome ? 'income' : 'expense'}`} />
                         <button
                           type="button"
                           className={`cm-timeline-card ${isIncome ? 'income' : 'expense'}`}
                           onClick={() => setDetailEvent(ev)}
                         >
+                          <span className="cm-timeline-card-time">
+                            <Clock size={12} />
+                            <strong>{timeLabel}</strong>
+                          </span>
                           {ev.imageUrl && (
                             <div className="cm-timeline-card-photo">
                               <img src={ev.imageUrl} alt={tagLabel} />
-                              {isMbBank && <span className="cm-photo-mbbank-chip">⚡ MB Bank Auto</span>}
                             </div>
                           )}
                           <div className="cm-timeline-card-content">
@@ -821,7 +778,7 @@ export function CalendarPage() {
                               </strong>
                             </div>
                             <p className="cm-timeline-note">{tagLabel}</p>
-                            {isMbBank && !ev.imageUrl && (
+                            {isMbBank && (
                               <span className="cm-mbbank-text-pill">⚡ MB Bank Auto</span>
                             )}
                           </div>
@@ -933,7 +890,6 @@ export function CalendarPage() {
         <ExpenseCapture
           selectedDate={captureDate}
           initialType={captureType}
-          defaultWalletId={selectedWallet}
           onClose={() => setCaptureDate(null)}
           onSaved={() => {
             setCaptureDate(null);

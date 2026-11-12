@@ -2,7 +2,7 @@ import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
 import pino from 'pino';
 
-export const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
+export const logger = pino({ level: process.env.LOG_LEVEL ?? 'info', redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'] });
 
 export class AppError extends Error {
   constructor(public statusCode: number, message: string, public code = 'APP_ERROR', public details?: unknown) {
@@ -15,6 +15,10 @@ export const notFound: RequestHandler = (request, _response, next) => {
 };
 
 export const errorHandler: ErrorRequestHandler = (error, request, response, _next) => {
+  if (error?.type === 'entity.too.large') {
+    response.status(413).json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Dữ liệu quá lớn. Hãy giảm kích thước ảnh giao dịch rồi thử lại.' } });
+    return;
+  }
   if (error?.code === 'LIMIT_FILE_SIZE') {
     response.status(400).json({ error: { code: 'IMAGE_TOO_LARGE', message: 'Ảnh không được vượt quá 10MB' } });
     return;

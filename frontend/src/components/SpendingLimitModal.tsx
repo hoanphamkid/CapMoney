@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Flame, ShieldCheck, Sparkles, Target, TrendingUp, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Flame, Minus, Plus, ShieldCheck, Sparkles, Target, TrendingUp, X } from 'lucide-react';
 import { useState } from 'react';
 import type { Transaction } from '../services/api';
 
@@ -40,11 +40,7 @@ export function loadBudget(): BudgetConfig {
 }
 
 export function saveBudget(config: BudgetConfig) {
-  try {
-    localStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify(config));
-  } catch {
-    // Ignore storage quota errors
-  }
+  localStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify(config));
 }
 
 const categoryLabels: Record<string, string> = {
@@ -55,7 +51,40 @@ const categoryLabels: Record<string, string> = {
   entertainment: '🎬 Giải trí',
 };
 
-const monthlyPresets = [3_000_000, 5_000_000, 8_000_000, 10_000_000, 15_000_000];
+const monthlyPresets = [1_000_000, 2_000_000, 3_000_000, 5_000_000, 8_000_000, 10_000_000, 15_000_000];
+const dailyPresets = [50_000, 100_000, 150_000, 200_000, 300_000, 500_000];
+const categoryPresets = [100_000, 200_000, 500_000, 1_000_000, 2_000_000, 3_000_000];
+const categoryShares: Record<string, number> = { food: 0.4, shopping: 0.2, transport: 0.1, bills: 0.2, entertainment: 0.1 };
+
+function presetLabel(amount: number) {
+  return amount >= 1_000_000 ? `${(amount / 1_000_000).toLocaleString('vi-VN')} triệu` : `${(amount / 1000).toLocaleString('vi-VN')} nghìn`;
+}
+
+function AmountPicker({ label, value, step, minimum, presets, onChange }: {
+  label: string;
+  value: number;
+  step: number;
+  minimum: number;
+  presets: number[];
+  onChange: (amount: number) => void;
+}) {
+  return (
+    <div className="cm-budget-amount-picker" role="group" aria-label={label}>
+      <div className="cm-budget-stepper">
+        <button type="button" disabled={value <= minimum} onClick={() => onChange(Math.max(minimum, value - step))} aria-label={`Giảm ${label} ${presetLabel(step)}`}>
+          <Minus size={18} />
+        </button>
+        <output aria-label={label} aria-live="polite">{value.toLocaleString('vi-VN')}<small>đ</small></output>
+        <button type="button" disabled={value >= 1_000_000_000_000} onClick={() => onChange(Math.min(1_000_000_000_000, value + step))} aria-label={`Tăng ${label} ${presetLabel(step)}`}>
+          <Plus size={18} />
+        </button>
+      </div>
+      <div className="cm-preset-row">
+        {presets.map(preset => <button key={preset} type="button" className={`cm-preset-chip ${value === preset ? 'active' : ''}`} aria-pressed={value === preset} onClick={() => onChange(preset)}>{presetLabel(preset)}</button>)}
+      </div>
+    </div>
+  );
+}
 
 type SpendingLimitModalProps = {
   transactions: Transaction[];
@@ -72,14 +101,14 @@ export function SpendingLimitModal({
   onClose,
   onSaved,
 }: SpendingLimitModalProps) {
-  const initial = loadBudget();
-  const [monthlyLimit, setMonthlyLimit] = useState(String(initial.monthlyLimit));
-  const [dailyLimit, setDailyLimit] = useState(String(initial.dailyLimit));
+  const [initial] = useState(loadBudget);
+  const [numMonthly, setMonthlyLimit] = useState(initial.monthlyLimit);
+  const [numDaily, setDailyLimit] = useState(initial.dailyLimit);
   const [catLimits, setCatLimits] = useState<Record<string, number>>(initial.categoryLimits);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
-
-  const numMonthly = Number(monthlyLimit.replace(/[^0-9]/g, '')) || 0;
-  const numDaily = Number(dailyLimit.replace(/[^0-9]/g, '')) || 0;
+  const [saveError, setSaveError] = useState('');
+  const [autoNotice, setAutoNotice] = useState('');
 
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -91,6 +120,20 @@ export function SpendingLimitModal({
 
   const monthPercent = numMonthly > 0 ? Math.min(100, Math.round((monthExpense / numMonthly) * 100)) : 0;
   const dayPercent = numDaily > 0 ? Math.min(100, Math.round((todayExpense / numDaily) * 100)) : 0;
+  const categoryTotal = Object.keys(categoryLabels).reduce((sum, id) => sum + (catLimits[id] ?? 0), 0);
+
+  const distributeBudget = () => {
+    const entries = Object.entries(categoryShares);
+    let allocated = 0;
+    const limits = Object.fromEntries(entries.map(([id, share], index) => {
+      const amount = index === entries.length - 1 ? numMonthly - allocated : Math.floor(numMonthly * share);
+      allocated += amount;
+      return [id, amount];
+    }));
+    setDailyLimit(Math.max(1000, Math.round(numMonthly / daysInMonth / 1000) * 1000));
+    setCatLimits(previous => ({ ...previous, ...limits }));
+    setAutoNotice(`Đã chia mức ngày theo ${daysInMonth} ngày trong tháng và phân bổ các danh mục. Bạn có thể bấm chỉnh từng mức trước khi lưu.`);
+  };
 
   // Compute category spending for the current month
   const catSpend: Record<string, number> = {};
@@ -101,12 +144,19 @@ export function SpendingLimitModal({
   }
 
   const handleSave = () => {
+    if (savedNotice) return;
     const nextConfig: BudgetConfig = {
-      monthlyLimit: numMonthly || 5_000_000,
-      dailyLimit: numDaily || Math.round((numMonthly || 5_000_000) / 25),
+      monthlyLimit: numMonthly,
+      dailyLimit: numDaily,
       categoryLimits: catLimits,
     };
-    saveBudget(nextConfig);
+    try {
+      saveBudget(nextConfig);
+      setSaveError('');
+    } catch {
+      setSaveError('Không lưu được hạn mức trên thiết bị. Hãy giải phóng dung lượng rồi thử lại.');
+      return;
+    }
     setSavedNotice(true);
     setTimeout(() => {
       onSaved(nextConfig);
@@ -114,17 +164,17 @@ export function SpendingLimitModal({
   };
 
   return (
-    <div className="cm-crop-overlay" onClick={onClose}>
-      <div className="cm-budget-modal" onClick={e => e.stopPropagation()}>
+    <div className="cm-crop-overlay cm-budget-overlay" onClick={onClose}>
+      <div className="cm-budget-modal" role="dialog" aria-modal="true" aria-labelledby="cm-budget-title" onClick={e => e.stopPropagation()}>
         <header className="cm-crop-header">
           <button type="button" className="cm-crop-icon-btn" onClick={onClose} aria-label="Đóng">
             <X size={20} />
           </button>
           <div>
-            <strong>🎯 Giới hạn & Kiểm soát chi tiêu</strong>
-            <small>Đặt trần chi tiêu để giữ kỷ luật tài chính</small>
+            <strong id="cm-budget-title">🎯 Giới hạn & Kiểm soát chi tiêu</strong>
+            <small>Chạm chọn mức phù hợp, không cần gõ số</small>
           </div>
-          <button type="button" className="cm-crop-confirm-top" onClick={handleSave} aria-label="Lưu hạn mức">
+          <button type="button" className="cm-crop-confirm-top" disabled={savedNotice} onClick={handleSave} aria-label="Lưu hạn mức">
             <Check size={20} />
           </button>
         </header>
@@ -187,52 +237,19 @@ export function SpendingLimitModal({
           </div>
         </div>
 
-        {/* Inputs for Monthly & Daily Limit */}
-        <div className="cm-budget-inputs">
-          <label className="select-field">
-            <span>
-              <Target size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />
-              Hạn mức chi tiêu Tháng (đ)
-            </span>
-            <input
-              inputMode="numeric"
-              value={numMonthly ? numMonthly.toLocaleString('vi-VN') : ''}
-              onChange={e => {
-                const raw = e.target.value.replace(/[^0-9]/g, '');
-                setMonthlyLimit(raw);
-              }}
-              placeholder="5.000.000"
-            />
-          </label>
-
-          <div className="cm-preset-row">
-            {monthlyPresets.map(preset => (
-              <button
-                key={preset}
-                type="button"
-                className={`cm-preset-chip ${numMonthly === preset ? 'active' : ''}`}
-                onClick={() => {
-                  setMonthlyLimit(String(preset));
-                  setDailyLimit(String(Math.round(preset / 25)));
-                }}
-              >
-                {preset / 1_000_000} triệu
-              </button>
-            ))}
+        <div className="cm-budget-quick-section">
+          <h3><Target size={15} /> Hạn mức tháng</h3>
+          <AmountPicker label="Hạn mức tháng" value={numMonthly} step={500_000} minimum={100_000} presets={monthlyPresets} onChange={amount => { setMonthlyLimit(amount); setAutoNotice(''); }} />
+          <div className="cm-budget-auto-plan">
+            <button type="button" onClick={distributeBudget}><Sparkles size={16} /> Tự chia ngày & danh mục</button>
+            <small>Gợi ý: Ăn uống 40%, Mua sắm 20%, Di chuyển 10%, Hóa đơn 20%, Giải trí 10%.</small>
+            {autoNotice && <p role="status">{autoNotice}</p>}
           </div>
+        </div>
 
-          <label className="select-field">
-            <span>
-              <TrendingUp size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />
-              Hạn mức chi tiêu Ngày (đ)
-            </span>
-            <input
-              inputMode="numeric"
-              value={numDaily ? numDaily.toLocaleString('vi-VN') : ''}
-              onChange={e => setDailyLimit(e.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="200.000"
-            />
-          </label>
+        <div className="cm-budget-quick-section">
+          <h3><TrendingUp size={15} /> Hạn mức ngày</h3>
+          <AmountPicker label="Hạn mức ngày" value={numDaily} step={10_000} minimum={1000} presets={dailyPresets} onChange={setDailyLimit} />
         </div>
 
         {/* Category Limits */}
@@ -241,41 +258,40 @@ export function SpendingLimitModal({
             <Sparkles size={14} />
             <span>Hạn mức theo từng danh mục</span>
           </div>
+          <p className="cm-budget-category-hint">Bấm vào danh mục để chọn mức nhanh.</p>
           {Object.entries(categoryLabels).map(([catId, label]) => {
             const spent = catSpend[catId] ?? 0;
             const limit = catLimits[catId] ?? 1_000_000;
             const pct = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
+            const expanded = expandedCategory === catId;
             return (
               <div key={catId} className="cm-cat-limit-row">
-                <div className="cm-cat-limit-top">
+                <button type="button" className="cm-budget-category-toggle" aria-expanded={expanded} aria-controls={`cm-budget-category-${catId}`} onClick={() => setExpandedCategory(expanded ? null : catId)}>
                   <span>{label}</span>
-                  <small>
-                    Đã chi: <b>{spent.toLocaleString('vi-VN')}đ</b> ({pct}%)
-                  </small>
-                </div>
-                <div className="cm-cat-limit-control">
-                  <div className="cm-gauge-track compact">
+                  <strong>{limit.toLocaleString('vi-VN')}đ</strong>
+                  <ChevronDown size={16} />
+                </button>
+                <small className="cm-budget-category-spent">Đã chi: {spent.toLocaleString('vi-VN')}đ ({pct}%)</small>
+                  <div className="cm-gauge-track">
                     <div
                       className={`cm-gauge-fill ${spent > limit ? 'danger' : pct >= 80 ? 'warning' : 'safe'}`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <input
-                    inputMode="numeric"
-                    className="cm-cat-input"
-                    value={limit ? limit.toLocaleString('vi-VN') : ''}
-                    onChange={e => {
-                      const val = Number(e.target.value.replace(/[^0-9]/g, '')) || 0;
-                      setCatLimits(prev => ({ ...prev, [catId]: val }));
-                    }}
-                  />
-                </div>
+                {expanded && <div id={`cm-budget-category-${catId}`} className="cm-budget-category-options">
+                  <AmountPicker label={`Hạn mức ${label.slice(label.indexOf(' ') + 1)}`} value={limit} step={50_000} minimum={1} presets={categoryPresets} onChange={amount => setCatLimits(prev => ({ ...prev, [catId]: amount }))} />
+                </div>}
               </div>
             );
           })}
+          <div className={`cm-budget-category-total ${categoryTotal > numMonthly ? 'over' : ''}`}>
+            <span>Tổng các danh mục</span><strong>{categoryTotal.toLocaleString('vi-VN')}đ</strong>
+            {categoryTotal > numMonthly && <small>Đang lớn hơn hạn mức tháng. Bấm “Tự chia ngày & danh mục” để phân bổ lại.</small>}
+          </div>
         </div>
 
-        <button type="button" className="cm-crop-submit-btn" onClick={handleSave}>
+        {saveError && <p className="cm-budget-save-error" role="alert">{saveError}</p>}
+        <button type="button" className="cm-crop-submit-btn" disabled={savedNotice} onClick={handleSave}>
           <Check size={18} /> {savedNotice ? 'Đã lưu hạn mức!' : 'Lưu hạn mức chi tiêu'}
         </button>
       </div>

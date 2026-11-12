@@ -1,4 +1,4 @@
-import { CreditCard, Home, PieChart, ReceiptText, UserRound } from 'lucide-react';
+import { Home, PieChart, ReceiptText, UserRound } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
@@ -6,7 +6,6 @@ const dockItems = [
   { label: 'Trang chủ', icon: Home, to: '/app', matchPaths: ['/app', '/app/calendar'] },
   { label: 'Thống kê', icon: PieChart, to: '/app/dashboard', matchPaths: ['/app/dashboard'] },
   { label: 'Giao dịch', icon: ReceiptText, to: '/app/transactions', matchPaths: ['/app/transactions'] },
-  { label: 'Ví tiền', icon: CreditCard, to: '/app/wallets', matchPaths: ['/app/wallets'] },
   { label: 'Cá nhân', icon: UserRound, to: '/app/settings', matchPaths: ['/app/settings'] },
 ];
 

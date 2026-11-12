@@ -2,6 +2,7 @@ import {
   Bot,
   CalendarSync,
   Check,
+  Clock,
   Coins,
   Copy,
   Flame,
@@ -18,6 +19,10 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { api, type Transaction } from '../services/api';
+import { loadBudget } from './SpendingLimitModal';
+import { useAuth } from '../contexts/AuthContext';
+import { useWorkPay } from '../hooks/useWorkPay';
+import { equivalentWorkHours, formatEquivalent, hourlyPay, SHIFT_PRESETS, type ShiftId } from '../utils/workPay';
 
 const SAVINGS_KEY = 'capmoney_savings_jar_v1';
 const DEBTS_KEY = 'capmoney_debts_v1';
@@ -135,19 +140,6 @@ function saveSubs(list: SubscriptionItem[]) {
 type ToolkitTab = 'jar' | 'challenge' | 'wheel' | 'tarot' | 'radar' | 'debts' | 'subs' | 'coach' | 'split' | 'badges';
 
 const CHALLENGE_KEY = 'capmoney_challenge30_v1';
-const WHEEL_FOODS = [
-  { name: 'Phở bò', price: '50k', icon: '🍜' },
-  { name: 'Cơm tấm sườn', price: '45k', icon: '🍚' },
-  { name: 'Bún chả', price: '45k', icon: '🥢' },
-  { name: 'Bánh mì', price: '20k', icon: '🥖' },
-  { name: 'Mì cay', price: '55k', icon: '🌶️' },
-  { name: 'Trà sữa + gà rán', price: '80k', icon: '🧋' },
-  { name: 'Tự nấu ở nhà (tiết kiệm!)', price: '25k', icon: '🍳' },
-  { name: 'Bún đậu mắm tôm', price: '60k', icon: '🍤' },
-  { name: 'Cơm văn phòng', price: '40k', icon: '🍱' },
-  { name: 'Mì gói trứng', price: '10k', icon: '🥚' },
-];
-
 function loadChallenge(): number[] {
   try {
     const raw = localStorage.getItem(CHALLENGE_KEY);
@@ -168,6 +160,9 @@ type SmartToolkitModalProps = {
 };
 
 export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }: SmartToolkitModalProps) {
+  const { user } = useAuth();
+  const { config: workPay, selectShift } = useWorkPay(user?.email ?? '');
+  const [payError, setPayError] = useState('');
   const [tab, setTab] = useState<ToolkitTab>('jar');
   const [jar, setJar] = useState<SavingsJarState>(() => loadSavingsJar());
   const [coinBurst, setCoinBurst] = useState(false);
@@ -191,11 +186,8 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
   // AI Coach state
   const [coachTone, setCoachTone] = useState<'roast' | 'heal'>('roast');
 
-  // 30-day challenge & food wheel state
+  // 30-day challenge state
   const [challengeDays, setChallengeDays] = useState<number[]>(() => loadChallenge());
-  const [wheelIdx, setWheelIdx] = useState(0);
-  const [wheelSpinning, setWheelSpinning] = useState(false);
-  const [wheelDone, setWheelDone] = useState(false);
 
   const toggleChallengeDay = (day: number) => {
     if (navigator.vibrate) navigator.vibrate(20);
@@ -210,29 +202,7 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
     });
   };
 
-  const spinWheel = () => {
-    if (wheelSpinning) return;
-    setWheelSpinning(true);
-    setWheelDone(false);
-    let ticks = 0;
-    const total = 18 + Math.floor(Math.random() * WHEEL_FOODS.length);
-    const timer = setInterval(() => {
-      ticks += 1;
-      setWheelIdx(i => (i + 1) % WHEEL_FOODS.length);
-      if (navigator.vibrate) navigator.vibrate(8);
-      if (ticks >= total) {
-        clearInterval(timer);
-        setWheelSpinning(false);
-        setWheelDone(true);
-        if (navigator.vibrate) navigator.vibrate([30, 40, 60]);
-      }
-    }, 70 + ticks * 4);
-  };
-
   const challengeTotal = challengeDays.reduce((sum, d) => sum + d * 10_000, 0);
-
-  // Tarot 3-Card Flip state
-  const [flippedCards, setFlippedCards] = useState<Record<number, boolean>>({ 0: false, 1: false, 2: false });
 
   // Regret vs Worth-It & Top Places Radar
   const radarStats = useMemo(() => {
@@ -267,68 +237,29 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
       regretTotal,
       treatTotal,
       totalExpense,
-      phoCount: Math.round(totalExpense / 50_000),
-      bobaCount: Math.round(totalExpense / 35_000),
-      workHours: Math.round((totalExpense / 45_000) * 10) / 10,
+      phoCount: formatEquivalent(totalExpense / workPay.phoPrice),
+      bobaCount: formatEquivalent(totalExpense / workPay.milkTeaPrice),
+      workHours: formatEquivalent(equivalentWorkHours(totalExpense, workPay)),
       movieTickets: Math.round(totalExpense / 95_000),
       topFavorites,
     };
-  }, [transactions]);
+  }, [transactions, workPay]);
 
-  const tarotCards = useMemo(() => {
-    const seed = new Date().getDate() + transactions.length;
-    const fortunes = [
-      {
-        title: '🌟 Ngôi Sao Giữ Ví',
-        cardName: 'THE STAR OF WALLET',
-        desc: 'Hôm nay trực giác tài chính cực nhạy! Khoản tiền bạn định chi cho bản thân hoàn toàn xứng đáng.',
-      },
-      {
-        title: '🛡️ Kỵ Sĩ Phòng Thủ',
-        cardName: 'KNIGHT OF COINS',
-        desc: 'Vận tiền đang ổn định. Hãy giữ chặt ví trước các lời rủ rê đặt đồ ăn xế chiều nay!',
-      },
-      {
-        title: '🎡 Vòng Quay Thần Tài',
-        cardName: 'WHEEL OF FORTUNE',
-        desc: 'Sắp có khoản lộc nhỏ bất ngờ (hoàn tiền, được bao ăn hoặc thưởng nhẹ). Tinh thần phấn chấn!',
-      },
-    ];
-    const traps = [
-      {
-        title: '🧋 Cạm Bẫy Trà Sữa & Ăn Vặt',
-        cardName: 'THE BOBA TEMPTATION',
-        desc: 'Khung giờ nguy hiểm: 14h30 - 16h30 chiều. Dễ bay 50k - 100k vì đồng nghiệp rủ rê!',
-      },
-      {
-        title: '🛒 Bóng Đêm Săn Sale',
-        cardName: 'MIDNIGHT CART',
-        desc: 'Khung giờ nguy hiểm: 22h30 - 0h30 đêm. Tắt app mua sắm trước khi đi ngủ để bảo toàn ví!',
-      },
-      {
-        title: '🛵 Cuốc Xe Ngẫu Hứng',
-        cardName: 'THE FLASH RIDE',
-        desc: 'Đi sớm 10 phút hôm nay sẽ giúp bạn tiết kiệm được một khoản phí di chuyển kha khá.',
-      },
-    ];
-    const advices = [
-      {
-        title: '🪙 Mẹo Phong Thủy Ví',
-        cardName: 'ACE OF PENTACLES',
-        desc: 'Bỏ ngay 50k vào Hũ Vàng hôm nay để kích hoạt vía giữ tiền cả tuần! Con số hợp ví: 68.',
-      },
-      {
-        title: '🍀 Quy Tắc 10 Giây',
-        cardName: 'THE HERMIT WISDOM',
-        desc: 'Trước khi quẹt QR hôm nay, hãy chụp bill kèm tem "🤩 Đáng tiền" để kiểm chứng độ cần thiết.',
-      },
-    ];
-    return [
-      fortunes[seed % fortunes.length],
-      traps[seed % traps.length],
-      advices[seed % advices.length],
-    ];
-  }, [transactions.length]);
+  const weeklyPlan = useMemo(() => {
+    const today = new Date();
+    const day = today.getDay() || 7;
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - day + 1);
+    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - day + 7);
+    const key = (date: Date) => date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+    const from = key(start);
+    const to = key(end);
+    const expense = transactions.filter(tx => tx.type === 'expense' && tx.dateKey >= from && tx.dateKey <= to).reduce((sum, tx) => sum + tx.amount, 0);
+    const income = transactions.filter(tx => tx.type === 'income' && tx.dateKey >= from && tx.dateKey <= to).reduce((sum, tx) => sum + tx.amount, 0);
+    const weeklyTarget = Math.round(loadBudget().monthlyLimit / 4);
+    const remaining = Math.max(0, weeklyTarget - expense);
+    const daysLeft = Math.max(1, 7 - day + 1);
+    return { from, to, expense, income, weeklyTarget, remaining, safeDaily: Math.floor(remaining / daysLeft), percent: weeklyTarget ? Math.min(100, Math.round((expense / weeklyTarget) * 100)) : 0, daysLeft };
+  }, [transactions]);
 
   // Bill Splitter state
   const [billTotal, setBillTotal] = useState('450000');
@@ -540,14 +471,21 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
   ];
 
   return (
-    <div className="cm-crop-overlay" onClick={onClose}>
-      <div className="cm-toolkit-modal cm-spring-pop" onClick={e => e.stopPropagation()}>
+    <div className="cm-crop-overlay cm-toolkit-overlay" onClick={onClose}>
+      <div
+        id="cm-toolkit-dialog"
+        className="cm-toolkit-modal cm-spring-pop"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cm-toolkit-title"
+        onClick={e => e.stopPropagation()}
+      >
         <header className="cm-crop-header">
           <button type="button" className="cm-crop-icon-btn" onClick={onClose} aria-label="Đóng">
             <X size={20} />
           </button>
           <div>
-            <strong>✨ Siêu Tiện Ích Tài Chính</strong>
+            <strong id="cm-toolkit-title">✨ Siêu Tiện Ích Tài Chính</strong>
             <small>Hũ tiết kiệm • Sổ nợ • Định kỳ • AI Coach</small>
           </div>
           <span className="cm-story-sparkle">
@@ -569,14 +507,14 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
             className={`cm-story-period-btn ${tab === 'wheel' ? 'active' : ''}`}
             onClick={() => setTab('wheel')}
           >
-            🎡 Ăn Gì Nay?
+            🔄 Chi Định Kỳ
           </button>
           <button
             type="button"
             className={`cm-story-period-btn ${tab === 'tarot' ? 'active' : ''}`}
             onClick={() => setTab('tarot')}
           >
-            🔮 Bói Ví
+            📅 Kế Hoạch Tuần
           </button>
           <button
             type="button"
@@ -604,7 +542,7 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
             className={`cm-story-period-btn ${tab === 'subs' ? 'active' : ''}`}
             onClick={() => setTab('subs')}
           >
-            🔄 Định Kỳ
+            📚 Danh Sách Định Kỳ
           </button>
           <button
             type="button"
@@ -681,55 +619,41 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
         {/* TAB: FOOD WHEEL */}
         {tab === 'wheel' && (
           <div className="cm-toolkit-body fade-in">
-            <p className="cm-sub-intro">Phân vân không biết ăn gì? Quay một vòng để máy chọn giúp bạn!</p>
-            <div className={`cm-wheel-display ${wheelSpinning ? 'spinning' : ''} ${wheelDone ? 'done' : ''}`}>
-              <span className="cm-wheel-icon">{WHEEL_FOODS[wheelIdx].icon}</span>
-              <strong>{WHEEL_FOODS[wheelIdx].name}</strong>
-              <small>≈ {WHEEL_FOODS[wheelIdx].price}</small>
+            <p className="cm-sub-intro"><CalendarSync size={18} /> Các khoản cố định sắp đến hạn. Bấm “Ghi lịch” để tạo giao dịch nhanh.</p>
+            <div className="cm-wheel-display done">
+              <span className="cm-wheel-icon">🔄</span>
+              <strong>Chi định kỳ</strong>
+              <small>Theo dõi và ghi lịch nhanh</small>
             </div>
-            <button type="button" className="cm-crop-submit-btn" onClick={spinWheel} disabled={wheelSpinning}>
-              <Sparkles size={18} /> {wheelSpinning ? 'Đang quay...' : wheelDone ? 'Quay lại' : 'Quay ngay!'}
-            </button>
+            <div className="cm-toolkit-summary-grid">
+              <div><small>Tổng định kỳ/tháng</small><strong>{subs.reduce((sum, sub) => sum + sub.amount, 0).toLocaleString('vi-VN')}đ</strong></div>
+              <div><small>Khoản đang theo dõi</small><strong>{subs.length}</strong></div>
+            </div>
+            <div className="cm-debt-list">
+              {subs.map(sub => <div key={sub.id} className="cm-debt-row"><span className="cm-sub-emoji">{sub.icon}</span><div className="cm-debt-info"><strong>{sub.name}</strong><small>Ngày {sub.dayOfMonth} hàng tháng · <b>{sub.amount.toLocaleString('vi-VN')}đ</b></small></div><button type="button" className="cm-sub-record-btn" onClick={() => void recordSubToCalendar(sub)}>{recordedSubId === sub.id ? <><Check size={13} /> Đã ghi!</> : <><Zap size={13} /> Ghi lịch</>}</button></div>)}
+            </div>
+            <div className="cm-jar-custom-row"><input className="cm-cat-input" style={{ flex: 1, textAlign: 'left' }} placeholder="Thêm khoản định kỳ..." value={subName} onChange={e => setSubName(e.target.value)} /><input inputMode="numeric" className="cm-cat-input" style={{ width: 110 }} placeholder="Số tiền..." value={subAmount ? Number(subAmount).toLocaleString('vi-VN') : ''} onChange={e => setSubAmount(e.target.value.replace(/[^0-9]/g, ''))} /><button type="button" className="cm-jar-deposit-btn" onClick={handleAddSub}><Plus size={15} /></button></div>
           </div>
         )}
 
         {/* TAB 0A: DAILY FINANCIAL TAROT (🔮 BÓI VÍ) */}
         {tab === 'tarot' && (
           <div className="cm-toolkit-body fade-in">
-            <p className="cm-sub-intro">
-              ✨ Chạm vào từng lá bài bên dưới để lật xem <b>Quẻ Tài Chính Hôm Nay</b> của bạn:
-            </p>
-            <div className="cm-tarot-grid">
-              {tarotCards.map((c, idx) => {
-                const isFlipped = Boolean(flippedCards[idx]);
-                const labels = ['1. Vận Tiền Hôm Nay', '2. Cạm Bẫy Cần Né', '3. Lời Phán Giữ Ví'];
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    className={`cm-tarot-card ${isFlipped ? 'flipped' : ''}`}
-                    onClick={() => {
-                      setFlippedCards(prev => ({ ...prev, [idx]: !prev[idx] }));
-                      if (navigator.vibrate) navigator.vibrate(25);
-                    }}
-                  >
-                    {!isFlipped ? (
-                      <div className="cm-tarot-back">
-                        <span className="cm-tarot-moon">🔮</span>
-                        <strong>{labels[idx]}</strong>
-                        <small>Chạm để lật bài ✨</small>
-                      </div>
-                    ) : (
-                      <div className="cm-tarot-front">
-                        <small className="cm-tarot-arcana">{c.cardName}</small>
-                        <strong>{c.title}</strong>
-                        <p>{c.desc}</p>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+            <p className="cm-sub-intro"><CalendarSync size={18} /> Tuần {weeklyPlan.from} → {weeklyPlan.to}. Theo dõi nhanh mức còn được chi.</p>
+            <div className="cm-toolkit-summary-grid">
+              <div><small>Đã chi tuần này</small><strong className="expense">{weeklyPlan.expense.toLocaleString('vi-VN')}đ</strong></div>
+              <div><small>Thu tuần này</small><strong className="income">+{weeklyPlan.income.toLocaleString('vi-VN')}đ</strong></div>
             </div>
+            <div className="cm-week-plan-card">
+              <div className="cm-week-plan-head"><strong>Hạn mức gợi ý tuần</strong><b>{weeklyPlan.weeklyTarget.toLocaleString('vi-VN')}đ</b></div>
+              <div className="cm-week-plan-track"><span style={{ width: weeklyPlan.percent + '%' }} /></div>
+              <div className="cm-week-plan-foot"><span>{weeklyPlan.percent}% đã dùng</span><strong>Còn {weeklyPlan.remaining.toLocaleString('vi-VN')}đ</strong></div>
+            </div>
+            <div className="cm-week-plan-daily">
+              <span><Clock size={18} /> Mức nên chi mỗi ngày còn lại</span>
+              <strong>{weeklyPlan.safeDaily.toLocaleString('vi-VN')}đ/ngày</strong>
+            </div>
+            <p className="cm-sub-intro">Tính theo hạn mức tháng hiện tại chia 4 tuần. Mức này chỉ là gợi ý, không thay đổi giao dịch.</p>
           </div>
         )}
 
@@ -763,13 +687,21 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
                 <div>
                   <span>⏱️</span>
                   <b>{radarStats.workHours}h</b>
-                  <small>Giờ cày cuốc</small>
+                  <small>Giờ làm tương đương</small>
                 </div>
                 <div>
                   <span>🎟️</span>
                   <b>{radarStats.movieTickets}</b>
                   <small>Vé xem phim</small>
                 </div>
+              </div>
+              <div className="cm-work-pay-inline cm-work-pay-radar">
+                <label>Quy đổi theo ca<select aria-label="Ca quy đổi trong thống kê" value={workPay.selectedShift} onChange={e => {
+                  try { selectShift(e.target.value as ShiftId); setPayError(''); }
+                  catch { setPayError('Không lưu được lựa chọn ca trên thiết bị.'); }
+                }}>{SHIFT_PRESETS.map(shift => <option key={shift.id} value={shift.id}>{shift.label}</option>)}</select></label>
+                <small>{Math.round(hourlyPay(workPay)).toLocaleString('vi-VN')}đ/giờ · Chỉnh lương và giá tham khảo trong Cài đặt.</small>
+                {payError && <small role="alert">{payError}</small>}
               </div>
             </div>
 

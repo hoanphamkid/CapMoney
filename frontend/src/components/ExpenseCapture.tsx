@@ -22,6 +22,9 @@ import { ApiError, api, type Wallet } from '../services/api';
 import { scanReceiptImage } from '../utils/receiptOcr';
 import { CameraView } from './CameraView';
 import { ImageCropModal } from './ImageCropModal';
+import { useAuth } from '../contexts/AuthContext';
+import { useWorkPay } from '../hooks/useWorkPay';
+import { equivalentWorkHours, formatEquivalent, hourlyPay, SHIFT_PRESETS, type ShiftId } from '../utils/workPay';
 
 const expenseCategories = [
   { id: 'food', label: 'Ăn uống' },
@@ -56,6 +59,9 @@ export function ExpenseCapture({
   onClose,
   onSaved,
 }: ExpenseCaptureProps) {
+  const { user } = useAuth();
+  const { config: workPay, selectShift } = useWorkPay(user?.email ?? '');
+  const [payError, setPayError] = useState('');
   const [step, setStep] = useState<'camera' | 'form'>('camera');
   const [type, setType] = useState<'expense' | 'income'>(initialType);
   const [expr, setExpr] = useState(''); // calculator expression or plain digits
@@ -469,12 +475,22 @@ export function ExpenseCapture({
               <span className="cm-amount-currency">đ</span>
             </div>
 
-            {rawNumericAmount >= 15000 && (
+            {type === 'expense' && rawNumericAmount > 0 && (
+              <>
               <div className="cm-life-index-hint">
-                ≈ {Math.max(1, Math.round((rawNumericAmount / 50000) * 10) / 10)} bát phở 🍜 •{' '}
-                {Math.max(1, Math.round((rawNumericAmount / 35000) * 10) / 10)} trà sữa 🧋 •{' '}
-                {Math.max(0.5, Math.round((rawNumericAmount / 45000) * 10) / 10)}h cày ⏱️
+                ≈ {formatEquivalent(rawNumericAmount / workPay.phoPrice)} bát phở 🍜 •{' '}
+                {formatEquivalent(rawNumericAmount / workPay.milkTeaPrice)} trà sữa 🧋 •{' '}
+                {formatEquivalent(equivalentWorkHours(rawNumericAmount, workPay))} giờ làm ⏱️
               </div>
+              <div className="cm-work-pay-inline" onClick={e => e.stopPropagation()}>
+                <label><Clock size={12} /><select aria-label="Ca dùng để quy đổi giờ làm" value={workPay.selectedShift} onFocus={() => setKeypadOpen(false)} onChange={e => {
+                  try { selectShift(e.target.value as ShiftId); setPayError(''); }
+                  catch { setPayError('Không lưu được lựa chọn ca trên thiết bị.'); }
+                }}>{SHIFT_PRESETS.map(shift => <option key={shift.id} value={shift.id}>{shift.label}</option>)}</select></label>
+                <small>{workPay.shifts[workPay.selectedShift].pay.toLocaleString('vi-VN')}đ / {workPay.shifts[workPay.selectedShift].hours.toLocaleString('vi-VN')} giờ ≈ {Math.round(hourlyPay(workPay)).toLocaleString('vi-VN')}đ/giờ</small>
+                {payError && <small role="alert">{payError}</small>}
+              </div>
+              </>
             )}
 
             <div

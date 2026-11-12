@@ -62,256 +62,6 @@ type LocalDb = {
 
 const STORAGE_KEY = 'capmoney_local_db_v1';
 
-type CloudAccountSnapshot = {
-  email: string;
-  updatedAt: number;
-  user: StoredUser;
-  profile?: Profile;
-  wallets: StoredWallet[];
-  transactions: StoredTransaction[];
-  reminders: StoredReminder[];
-  budgetRaw?: string | null;
-  savingsJarRaw?: string | null;
-};
-
-function emailToCloudTopic(email: string): string {
-  const normalized = email.trim().toLowerCase();
-  // Deterministic 64-bit FNV-1a style twin hash so every browser produces the exact same topic
-  let h1 = 0x811c9dc5;
-  let h2 = 0x01000193;
-  for (let i = 0; i < normalized.length; i++) {
-    const ch = normalized.charCodeAt(i);
-    h1 ^= ch;
-    h1 = Math.imul(h1, 0x01000193);
-    h2 ^= ch * 31 + i;
-    h2 = Math.imul(h2, 0x85ebca6b);
-  }
-  const hex1 = (h1 >>> 0).toString(16).padStart(8, '0');
-  const hex2 = (h2 >>> 0).toString(16).padStart(8, '0');
-  const safeSlug = normalized.replace(/[^a-z0-9]/g, '').slice(0, 14);
-  return `cm_cloud_v2_${safeSlug}_${hex1}${hex2}`;
-}
-
-let cloudPushTimer: ReturnType<typeof setTimeout> | null = null;
-let initialSessionSyncedForUser: string | null = null;
-
-async function pushAccountToCloudNow(db: LocalDb, targetUserId?: string): Promise<boolean> {
-  const uid = targetUserId ?? db.currentUserId;
-  if (!uid) return false;
-  const user = db.users.find(u => u.id === uid);
-  if (!user || !user.email) return false;
-
-  const topic = emailToCloudTopic(user.email);
-  const snapshot: CloudAccountSnapshot = {
-    email: user.email,
-    updatedAt: Date.now(),
-    user,
-    profile: db.profiles[user.id],
-    wallets: db.wallets.filter(w => w.userId === user.id),
-    transactions: db.transactions.filter(t => t.userId === user.id),
-    reminders: db.reminders.filter(r => r.userId === user.id),
-    budgetRaw: localStorage.getItem('capmoney_budget_v1'),
-    savingsJarRaw: localStorage.getItem('capmoney_savings_jar_v1'),
-  };
-
-  try {
-    const res = await fetch(`https://ntfy.sh/${topic}`, {
-      method: 'PUT',
-      headers: { Filename: 'account.json' },
-      body: JSON.stringify(snapshot),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-function scheduleCloudPush(db: LocalDb) {
-  if (!db.currentUserId) return;
-  if (cloudPushTimer) clearTimeout(cloudPushTimer);
-  cloudPushTimer = setTimeout(() => {
-    void pushAccountToCloudNow(loadDb());
-  }, 450);
-}
-
-async function pullAndMergeCloudAccount(emailInput: string): Promise<{ synced: boolean; txCount: number }> {
-  const email = emailInput.trim().toLowerCase();
-  if (!email) return { synced: false, txCount: 0 };
-  const topic = emailToCloudTopic(email);
-
-  let cloudSnap: CloudAccountSnapshot | null = null;
-  try {
-    const pollRes = await fetch(`https://ntfy.sh/${topic}/json?poll=1&since=12h`);
-    if (pollRes.ok) {
-      const text = await pollRes.text();
-      const lines = text
-        .split(/\r?\n/)
-        .map(l => l.trim())
-        .filter(Boolean);
-
-      for (let i = lines.length - 1; i >= 0; i--) {
-        try {
-          const item = JSON.parse(lines[i]) as {
-            event?: string;
-            message?: string;
-            attachment?: { url?: string };
-          };
-          if (item.event !== 'message') continue;
-          if (item.attachment?.url) {
-            const fileRes = await fetch(item.attachment.url);
-            if (fileRes.ok) {
-              const parsed = (await fileRes.json()) as CloudAccountSnapshot;
-              if (parsed && parsed.email === email && Array.isArray(parsed.transactions)) {
-                cloudSnap = parsed;
-                break;
-              }
-            }
-          } else if (item.message && item.message.startsWith('{')) {
-            const parsed = JSON.parse(item.message) as CloudAccountSnapshot;
-            if (parsed && parsed.email === email && Array.isArray(parsed.transactions)) {
-              cloudSnap = parsed;
-              break;
-            }
-          }
-        } catch {
-          // Continue checking earlier messages
-        }
-      }
-    }
-  } catch {
-    // Offline or network error
-  }
-
-  const db = loadDb();
-  let localUser = db.users.find(u => u.email === email);
-
-  if (!cloudSnap) {
-    // Nothing in cloud yet: if local user already has data, push it to cloud so other browsers get it!
-    if (localUser) {
-      await pushAccountToCloudNow(db, localUser.id);
-      const count = db.transactions.filter(t => t.userId === localUser!.id).length;
-      return { synced: true, txCount: count };
-    }
-    return { synced: false, txCount: 0 };
-  }
-
-  // Merge cloudSnap into local db
-  if (!localUser) {
-    localUser = { ...cloudSnap.user, email };
-    db.users.push(localUser);
-  } else {
-    localUser.name = cloudSnap.user.name || localUser.name;
-    localUser.phone = cloudSnap.user.phone || localUser.phone;
-  }
-
-  const uid = localUser.id;
-  if (cloudSnap.profile) {
-    db.profiles[uid] = cloudSnap.profile;
-  }
-
-  // Merge wallets & build ID mapping so default 'Wallet' and 'Bank' don't duplicate
-  const walletIdMap: Record<string, string> = {};
-  const localUserWallets = db.wallets.filter(w => w.userId === uid);
-
-  for (const cw of cloudSnap.wallets ?? []) {
-    const byId = localUserWallets.find(lw => lw.id === cw.id);
-    if (byId) {
-      walletIdMap[cw.id] = byId.id;
-      byId.name = cw.name;
-      byId.color = cw.color;
-      byId.active = cw.active;
-    } else {
-      const byNameAndType = localUserWallets.find(
-        lw => lw.name.toLowerCase() === cw.name.toLowerCase() && lw.type === cw.type,
-      );
-      if (byNameAndType) {
-        walletIdMap[cw.id] = byNameAndType.id;
-      } else {
-        const added: StoredWallet = { ...cw, userId: uid };
-        db.wallets.push(added);
-        localUserWallets.push(added);
-        walletIdMap[cw.id] = added.id;
-      }
-    }
-  }
-
-  ensureDefaultLocalWallets(db, uid);
-  const fallbackWalletId = db.wallets.find(w => w.userId === uid && w.active)?.id ?? '';
-
-  // Merge transactions by ID
-  const existingTxIds = new Set(db.transactions.filter(t => t.userId === uid).map(t => t.id));
-  let addedFromCloud = 0;
-
-  for (const ctx of cloudSnap.transactions ?? []) {
-    if (!existingTxIds.has(ctx.id)) {
-      const mappedWalletId = walletIdMap[ctx.walletId] || fallbackWalletId || ctx.walletId;
-      const mappedToWalletId = ctx.toWalletId ? walletIdMap[ctx.toWalletId] || ctx.toWalletId : undefined;
-      db.transactions.push({
-        ...ctx,
-        userId: uid,
-        walletId: mappedWalletId,
-        toWalletId: mappedToWalletId,
-      });
-      existingTxIds.add(ctx.id);
-      addedFromCloud++;
-    }
-  }
-
-  // Sort transactions newest first
-  db.transactions.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
-
-  // Recalculate wallet balances from merged transactions
-  const activeWallets = db.wallets.filter(w => w.userId === uid);
-  for (const w of activeWallets) {
-    let balMinor = 0;
-    for (const tx of db.transactions) {
-      if (tx.userId !== uid) continue;
-      if (tx.type === 'income' && tx.walletId === w.id) balMinor += tx.amountMinor;
-      else if (tx.type === 'expense' && tx.walletId === w.id) balMinor -= tx.amountMinor;
-      else if (tx.type === 'transfer') {
-        if (tx.walletId === w.id) balMinor -= tx.amountMinor;
-        if (tx.toWalletId === w.id) balMinor += tx.amountMinor;
-      }
-    }
-    w.balanceMinor = balMinor;
-    w.balance = balMinor / 100;
-  }
-
-  // Merge reminders by ID
-  const existingRemIds = new Set(db.reminders.filter(r => r.userId === uid).map(r => r.id));
-  for (const crem of cloudSnap.reminders ?? []) {
-    if (!existingRemIds.has(crem.id)) {
-      db.reminders.push({ ...crem, userId: uid });
-      existingRemIds.add(crem.id);
-    }
-  }
-
-  if (cloudSnap.budgetRaw && !localStorage.getItem('capmoney_budget_v1')) {
-    try {
-      localStorage.setItem('capmoney_budget_v1', cloudSnap.budgetRaw);
-    } catch {
-      // Ignore
-    }
-  }
-  if (cloudSnap.savingsJarRaw && !localStorage.getItem('capmoney_savings_jar_v1')) {
-    try {
-      localStorage.setItem('capmoney_savings_jar_v1', cloudSnap.savingsJarRaw);
-    } catch {
-      // Ignore
-    }
-  }
-
-  saveDb(db, false);
-
-  // If local had more transactions than cloud, push the merged union back to cloud
-  const mergedUserTxCount = db.transactions.filter(t => t.userId === uid).length;
-  if (mergedUserTxCount > (cloudSnap.transactions?.length ?? 0) || addedFromCloud > 0) {
-    void pushAccountToCloudNow(db, uid);
-  }
-
-  return { synced: true, txCount: mergedUserTxCount };
-}
-
 function loadDb(): LocalDb {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -332,7 +82,7 @@ function loadDb(): LocalDb {
   return { users: [], currentUserId: null, profiles: {}, wallets: [], transactions: [], reminders: [] };
 }
 
-function saveDb(db: LocalDb, syncCloud = true) {
+function saveDb(db: LocalDb) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
   } catch {
@@ -351,9 +101,6 @@ function saveDb(db: LocalDb, syncCloud = true) {
     } catch {
       // Ignore fallback errors
     }
-  }
-  if (syncCloud) {
-    scheduleCloudPush(db);
   }
 }
 
@@ -486,6 +233,52 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+export async function authenticatedRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  try {
+    try {
+      return await request<T>(path, init);
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 401) throw error;
+      await request('/auth/refresh', { method: 'POST' });
+      return await request<T>(path, init);
+    }
+  } catch (error) {
+    if (error instanceof BackendUnavailableError) throw new ApiError(503, 'SYNC_UNAVAILABLE', 'Không kết nối được máy chủ đồng bộ. Hai thiết bị cần mở cùng website và đăng nhập cùng tài khoản.');
+    throw error;
+  }
+}
+
+export function readLocalBackup(email: string) {
+  const db = loadDb();
+  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.id === db.currentUserId);
+  if (!user) return null;
+  return {
+    version: 1 as const,
+    account: { name: user.name, phone: user.phone ?? '' },
+    profile: db.profiles[user.id] ?? { locale: 'vi-VN', currency: 'VND', timezone: 'Asia/Ho_Chi_Minh' },
+    wallets: db.wallets.filter(w => w.userId === user.id).map(w => ({ id: w.id, name: w.name, type: w.type, balanceMinor: w.balanceMinor, currency: w.currency, color: w.color, active: w.active })),
+    transactions: db.transactions.filter(tx => tx.userId === user.id).map(tx => ({
+      id: tx.id, walletId: tx.walletId || undefined, toWalletId: tx.toWalletId || undefined,
+      categoryId: tx.categoryId, type: tx.type, amountMinor: tx.amountMinor, note: tx.note, dateKey: tx.dateKey,
+      transactionTime: tx.transactionTime || undefined, source: tx.source ?? 'manual',
+      status: tx.status === 'completed' ? 'posted' : tx.status,
+      createdAt: tx.createdAt, imageUrl: tx.imageUrl,
+    })),
+    reminders: db.reminders.filter(r => r.userId === user.id).map(r => ({ id: r.id, title: r.title, note: r.note ?? '', dateKey: r.dateKey, time: r.time || undefined, kind: r.kind, status: r.status === 'scheduled' ? 'pending' : r.status, repeat: r.repeat, channels: r.channels })),
+  };
+}
+
+export function clearLocalAccountCache(email: string) {
+  const db = loadDb();
+  const ids = new Set(db.users.filter(user => user.email.toLowerCase() === email.toLowerCase()).map(user => user.id));
+  db.wallets = db.wallets.filter(w => !ids.has(w.userId));
+  db.transactions = db.transactions.filter(tx => !ids.has(tx.userId));
+  db.reminders = db.reminders.filter(r => !ids.has(r.userId));
+  // The restored server data must be fetched again, rather than falling back to stale device data.
+  if (db.currentUserId && ids.has(db.currentUserId)) db.currentUserId = null;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+}
+
 async function upload<T>(path: string, form: FormData, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
   let response: Response;
   try {
@@ -520,23 +313,11 @@ async function withFallback<T>(remoteCall: () => Promise<T>, localCall: () => T 
 }
 
 export const api = {
-  syncCloud: async () => {
-    const db = loadDb();
-    const user = requireLocalUser(db);
-    // First push local state if any, then pull & merge so both directions are synced
-    await pullAndMergeCloudAccount(user.email);
-    const updatedDb = loadDb();
-    await pushAccountToCloudNow(updatedDb, user.id);
-    const txCount = updatedDb.transactions.filter(t => t.userId === user.id).length;
-    return { synced: true, txCount };
-  },
-
   register: (input: { name: string; email: string; password: string; phone?: string }) =>
     withFallback(
       () => request<{ user: User; message: string }>('/auth/register', { method: 'POST', body: JSON.stringify(input) }),
       async () => {
         const email = input.email.trim().toLowerCase();
-        await pullAndMergeCloudAccount(email);
         const db = loadDb();
         let user = db.users.find(u => u.email === email);
         if (user) {
@@ -544,7 +325,6 @@ export const api = {
           if (input.phone?.trim()) user.phone = input.phone.trim();
           user.password = input.password;
           db.currentUserId = user.id;
-          initialSessionSyncedForUser = user.id;
           saveDb(db);
           return { user: publicUser(user), message: 'Đã đồng bộ tài khoản của bạn.' };
         }
@@ -560,7 +340,6 @@ export const api = {
         db.users.push(user);
         db.profiles[user.id] = { locale: 'vi-VN', currency: 'VND', timezone: 'Asia/Ho_Chi_Minh' };
         db.currentUserId = user.id;
-        initialSessionSyncedForUser = user.id;
         ensureDefaultLocalWallets(db, user.id);
         saveDb(db);
         return { user: publicUser(user), message: 'Tài khoản đã được tạo.' };
@@ -572,7 +351,6 @@ export const api = {
       () => request<{ user: User }>('/auth/login', { method: 'POST', body: JSON.stringify(input) }),
       async () => {
         const email = input.email.trim().toLowerCase();
-        await pullAndMergeCloudAccount(email);
         const db = loadDb();
         let user = db.users.find(u => u.email === email);
         if (!user) {
@@ -595,7 +373,6 @@ export const api = {
           user.password = input.password;
         }
         db.currentUserId = user.id;
-        initialSessionSyncedForUser = user.id;
         saveDb(db);
         return { user: publicUser(user) };
       },
@@ -915,13 +692,8 @@ export const api = {
         return request<{ transactions: Transaction[] }>('/transactions' + (query.size ? `?${query}` : ''));
       },
       async () => {
-        let db = loadDb();
+        const db = loadDb();
         const user = requireLocalUser(db);
-        if (initialSessionSyncedForUser !== user.id) {
-          initialSessionSyncedForUser = user.id;
-          await pullAndMergeCloudAccount(user.email);
-          db = loadDb();
-        }
         const transactions = db.transactions
           .filter(tx => {
             if (tx.userId !== user.id) return false;
