@@ -55,7 +55,7 @@ export function CalendarPage() {
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [dayViewDate, setDayViewDate] = useState<string | null>(null);
-  const [dayViewLayout, setDayViewLayout] = useState<'timeline' | 'grid' | 'list'>('timeline');
+  const [dayViewLayout, setDayViewLayout] = useState<'timeline' | 'grid' | 'list'>('grid');
   const [daySlideAnim, setDaySlideAnim] = useState<'next' | 'prev' | null>(null);
   const dayTouchRef = useRef<{ x: number; y: number } | null>(null);
   const [dayTouchDx, setDayTouchDx] = useState(0);
@@ -793,6 +793,8 @@ export function CalendarPage() {
                   const tagLabel = ev.note || categoryNames[ev.categoryId ?? 'other'] || ev.title;
                   const isIncome = ev.kind === 'income';
                   const isMbBank = ev.source === 'webhook_mbbank' || /MB Bank|MBBank/i.test(ev.note ?? '');
+                  const timeLabel = ev.transactionTime?.slice(0, 5) || ev.time?.slice(0, 5)
+                    || (ev.createdAt && !Number.isNaN(Date.parse(ev.createdAt)) ? new Date(ev.createdAt).toTimeString().slice(0, 5) : '--:--');
                   return (
                     <button
                       key={ev.id}
@@ -801,22 +803,24 @@ export function CalendarPage() {
                       onClick={() => setDetailEvent(ev)}
                     >
                       {ev.imageUrl ? (
-                        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                          <img src={ev.imageUrl} alt={tagLabel} className="cm-bill-img" />
-                          {isMbBank && <span className="cm-photo-mbbank-chip">⚡ MB Bank</span>}
-                        </div>
+                        <img src={ev.imageUrl} alt="" className="cm-bill-img" />
                       ) : (
                         <div className={`cm-bill-placeholder ${isIncome ? 'income' : 'expense'}`}>
                           {isIncome ? <ArrowDownLeft size={32} /> : <ArrowUpRight size={32} />}
                         </div>
                       )}
-                      <span className={`cm-bill-badge ${isIncome ? 'income' : 'expense'}`}>
-                        {tagLabel}
+                      <span className="cm-bill-time"><Clock size={12} /><span>{timeLabel}</span></span>
+                      {isMbBank && <span className="cm-bill-source" title="MB Bank Auto">MB Bank</span>}
+                      <span className="cm-bill-caption">
+                        <span className={`cm-bill-badge ${isIncome ? 'income' : 'expense'}`}>
+                          {categoryNames[ev.categoryId ?? 'other'] ?? 'Giao dịch'}
+                        </span>
+                        <span className="cm-bill-note">{tagLabel}</span>
+                        <strong className="cm-bill-price">
+                          {isIncome ? '+' : '−'}
+                          {(ev.amount ?? 0).toLocaleString('vi-VN')}đ
+                        </strong>
                       </span>
-                      <strong className="cm-bill-price">
-                        {isIncome ? '+' : '−'}
-                        {(ev.amount ?? 0).toLocaleString('vi-VN')}đ
-                      </strong>
                     </button>
                   );
                 })}
