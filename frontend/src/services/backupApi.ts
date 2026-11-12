@@ -38,17 +38,25 @@ async function checkAccount(email: string) {
 
 async function imageForBackup(url: string | null) {
   if (!url) return undefined;
-  if (url.startsWith('data:image/')) return url;
-  if (!/^\/api\/transactions\/[a-f\d]{24}\/image$/i.test(url)) throw new Error('Ảnh trên thiết bị không còn truy cập được. Hãy cập nhật ảnh trước khi tạo bản sao.');
-  const response = await fetch(url, { credentials: 'include' });
-  if (!response.ok) throw new Error('Không tải được ảnh giao dịch để sao lưu. Hãy thử lại.');
-  const blob = await response.blob();
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error('Không đọc được ảnh giao dịch.'));
-    reader.readAsDataURL(blob);
-  });
+  try {
+    if (url.startsWith('data:image/')) return url.length <= 12_000_000 ? url : undefined;
+    if (!/^\/api\/transactions\/[a-f\d]{24}\/image$/i.test(url)) return undefined;
+    const response = await fetch(url, { credentials: 'include' });
+    if (!response.ok) return undefined;
+    const blob = await response.blob();
+    return await new Promise<string | undefined>(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const value = String(reader.result ?? '');
+        resolve(value.length <= 12_000_000 ? value : undefined);
+      };
+      reader.onerror = () => resolve(undefined);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    // An unavailable image must not prevent the associated transaction from syncing.
+    return undefined;
+  }
 }
 
 export function localBackupInfo(email: string) {
