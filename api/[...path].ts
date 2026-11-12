@@ -1,12 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createApp } from '../backend/src/app.js';
-import { connectDatabase } from '../backend/src/config/database.js';
 
-let appPromise: Promise<ReturnType<typeof createApp>> | null = null;
+let appPromise: Promise<any> | null = null;
 
 async function getApp() {
   if (!appPromise) {
     appPromise = (async () => {
+      const [{ createApp }, { connectDatabase }] = await Promise.all([
+        import('../backend/src/app.js'),
+        import('../backend/src/config/database.js'),
+      ]);
       await connectDatabase();
       return createApp();
     })();
