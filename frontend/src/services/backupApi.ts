@@ -99,7 +99,6 @@ export async function recoverDeviceSettings(email: string) {
   const marker = `capmoney_backup_applied:${email.toLowerCase()}`;
   if (localStorage.getItem(marker) === result.state.appliedAt) return;
   applyPreferences(result.state.preferences);
-  clearLocalAccountCache(email);
   localStorage.setItem(marker, result.state.appliedAt);
 }
 

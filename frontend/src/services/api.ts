@@ -250,7 +250,9 @@ export async function authenticatedRequest<T>(path: string, init: RequestInit = 
 
 export function readLocalBackup(email: string) {
   const db = loadDb();
-  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.id === db.currentUserId);
+  // Keep device data discoverable after a server login/logout changes currentUserId.
+  // The email is the local account identity used by the sync flow.
+  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
   if (!user) return null;
   return {
     version: 1 as const,
