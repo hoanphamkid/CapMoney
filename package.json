@@ -3,8 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["frontend", "backend"],
-  "engines": { "node": ">=22.12.0" },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "dev": "node scripts/dev.mjs",
@@ -19,7 +24,9 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
+    "@vercel/node": "^30.0.0",
     "dotenv": "^17.2.3",
-    "mongodb-memory-server": "^10.3.0"
+    "mongodb-memory-server": "^10.3.0",
+    "mongoose": "^9.12.1"
   }
 }

@@ -1,103 +1,81 @@
-function emailToCloudTopic(email: string): string {
-  const normalized = email.trim().toLowerCase();
-  let h1 = 0x811c9dc5;
-  let h2 = 0x01000193;
-  for (let i = 0; i < normalized.length; i++) {
-    const ch = normalized.charCodeAt(i);
-    h1 ^= ch;
-    h1 = Math.imul(h1, 0x01000193);
-    h2 ^= ch * 31 + i;
-    h2 = Math.imul(h2, 0x85ebca6b);
-  }
-  const hex1 = (h1 >>> 0).toString(16).padStart(8, '0');
-  const hex2 = (h2 >>> 0).toString(16).padStart(8, '0');
-  const safeSlug = normalized.replace(/[^a-z0-9]/g, '').slice(0, 14);
-  return `cm_cloud_v2_${safeSlug}_${hex1}${hex2}`;
+/**
+ * Vercel Serverless Function: MBBank / SePay Webhook
+ * POST /api/webhooks/mbbank
+ *
+ * Receives transaction notifications from SePay/Casso and stores them
+ * directly in MongoDB Atlas — no Express, no ntfy.sh.
+ */
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import mongoose from 'mongoose';
+
+// ─── Mongoose models (inline to keep this file self-contained) ─────────────
+const TransactionSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    walletId: { type: mongoose.Schema.Types.ObjectId, ref: 'Wallet' },
+    categoryId: { type: String, trim: true, maxlength: 60 },
+    type: { type: String, enum: ['income', 'expense', 'transfer'], required: true },
+    amountMinor: { type: Number, required: true, min: 1 },
+    currency: { type: String, default: 'VND' },
+    note: { type: String, trim: true, maxlength: 500 },
+    imageKey: { type: String, maxlength: 180 },
+    transactionDate: { type: Date, required: true },
+    dateKey: { type: String, required: true, index: true },
+    transactionTime: { type: String, maxlength: 20 },
+    source: { type: String, enum: ['manual', 'camera', 'webhook_mbbank'], default: 'manual' },
+    status: { type: String, enum: ['posted', 'planned', 'cancelled'], default: 'posted' },
+    idempotencyKey: { type: String, maxlength: 120 },
+  },
+  { timestamps: true, collection: 'transactions' },
+);
+TransactionSchema.index({ userId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+
+const WalletSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    name: { type: String, required: true },
+    type: { type: String, default: 'bank' },
+    balanceMinor: { type: Number, default: 0 },
+    currency: { type: String, default: 'VND' },
+    color: String,
+    active: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: 'wallets' },
+);
+
+const UserSchema = new mongoose.Schema(
+  { email: { type: String, required: true, unique: true } },
+  { timestamps: true, collection: 'users' },
+);
+
+// Re-use models if already compiled (Vercel warm-start)
+const Transaction = mongoose.models.Transaction || mongoose.model('Transaction', TransactionSchema);
+const Wallet = mongoose.models.Wallet || mongoose.model('Wallet', WalletSchema);
+const User = mongoose.models.User || mongoose.model('User', UserSchema);
+
+// ─── DB connection (cached across warm invocations) ────────────────────────
+let cachedConn: typeof mongoose | null = null;
+
+async function connectDB() {
+  if (cachedConn && mongoose.connection.readyState === 1) return cachedConn;
+  const uri = process.env.MONGO_URI;
+  if (!uri) throw new Error('MONGO_URI env var is not set');
+  cachedConn = await mongoose.connect(uri);
+  return cachedConn;
 }
 
-function generateMbReceiptSvgDataUrl(options: {
-  amount: number;
-  type: 'income' | 'expense';
-  dateKey: string;
-  timeStr: string;
-  note: string;
-  referenceCode: string;
-  accountNumber?: string;
-}): string {
-  const isIncome = options.type === 'income';
-  const sign = isIncome ? '+' : '−';
-  const colorAccent = isIncome ? '#10b981' : '#f43f5e';
-  const cleanNote = (options.note || 'Thanh toán qua MB Bank').replace(/[<>&'"]/g, ' ').slice(0, 75);
-  const cleanRef = options.referenceCode.replace(/[<>&'"]/g, '').slice(0, 30);
-  const formatted = options.amount.toLocaleString('vi-VN');
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 900" width="720" height="900">
-  <defs>
-    <linearGradient id="mbg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#001844" />
-      <stop offset="50%" stop-color="#002D72" />
-      <stop offset="100%" stop-color="#0a1226" />
-    </linearGradient>
-  </defs>
-  <rect width="720" height="900" fill="url(#mbg)" />
-  <rect x="0" y="0" width="720" height="12" fill="#00A3E0" />
-  <g transform="translate(60, 60)">
-    <rect x="0" y="0" width="56" height="56" rx="14" fill="#00A3E0" />
-    <path d="M 16 38 L 16 18 L 24 28 L 32 18 L 32 38 M 38 18 L 46 18 L 46 28 L 38 28 L 46 38" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-    <text x="72" y="28" font-family="-apple-system, sans-serif" font-weight="900" font-size="24" fill="#ffffff" letter-spacing="1.5">MB BANK</text>
-    <text x="72" y="48" font-family="-apple-system, sans-serif" font-weight="600" font-size="13" fill="#93c5fd">NGÂN HÀNG QUÂN ĐỘI • BIÊN LAI ĐIỆN TỬ</text>
-    <rect x="420" y="8" width="180" height="38" rx="19" fill="rgba(0, 163, 224, 0.22)" stroke="#00A3E0" stroke-width="1.5" />
-    <text x="510" y="32" font-family="-apple-system, sans-serif" font-weight="800" font-size="12" fill="#67e8f9" text-anchor="middle">⚡ MB BANK AUTO</text>
-  </g>
-  <g transform="translate(60, 160)">
-    <rect x="0" y="0" width="600" height="220" rx="24" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
-    <text x="40" y="48" font-family="-apple-system, sans-serif" font-size="14" font-weight="600" fill="#94a3b8">BIẾN ĐỘNG SỐ DƯ TỰ ĐỘNG</text>
-    <text x="40" y="125" font-family="-apple-system, sans-serif" font-size="50" font-weight="900" fill="${colorAccent}">
-      ${sign}${formatted} <tspan font-size="30" font-weight="700">VND</tspan>
-    </text>
-    <rect x="40" y="155" width="130" height="32" rx="8" fill="${isIncome ? 'rgba(16, 185, 129, 0.2)' : 'rgba(244, 63, 94, 0.2)'}" />
-    <text x="105" y="176" font-family="-apple-system, sans-serif" font-size="13" font-weight="700" fill="${colorAccent}" text-anchor="middle">
-      ${isIncome ? 'TIỀN VÀO (+)' : 'TIỀN RA (−)'}
-    </text>
-  </g>
-  <g transform="translate(60, 410)">
-    <rect x="0" y="0" width="600" height="330" rx="20" fill="rgba(10, 18, 38, 0.65)" stroke="rgba(255, 255, 255, 0.1)" stroke-width="1" />
-    <text x="36" y="50" font-family="-apple-system, sans-serif" font-size="13" fill="#94a3b8">Thời gian giao dịch</text>
-    <text x="564" y="50" font-family="-apple-system, sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="end">${options.timeStr} • ${options.dateKey}</text>
-    <line x1="36" y1="78" x2="564" y2="78" stroke="rgba(255, 255, 255, 0.08)" />
-    <text x="36" y="118" font-family="-apple-system, sans-serif" font-size="13" fill="#94a3b8">Mã tham chiếu (Ref ID)</text>
-    <text x="564" y="118" font-family="-apple-system, sans-serif" font-size="14" font-weight="700" fill="#38bdf8" text-anchor="end">${cleanRef}</text>
-    <line x1="36" y1="146" x2="564" y2="146" stroke="rgba(255, 255, 255, 0.08)" />
-    <text x="36" y="186" font-family="-apple-system, sans-serif" font-size="13" fill="#94a3b8">Nội dung</text>
-    <text x="36" y="222" font-family="-apple-system, sans-serif" font-size="16" font-weight="600" fill="#f8fafc">${cleanNote}</text>
-    <line x1="36" y1="254" x2="564" y2="254" stroke="rgba(255, 255, 255, 0.08)" />
-    <text x="36" y="294" font-family="-apple-system, sans-serif" font-size="13" fill="#94a3b8">Kênh tích hợp</text>
-    <text x="564" y="294" font-family="-apple-system, sans-serif" font-size="14" font-weight="700" fill="#a78bfa" text-anchor="end">SePay Webhook (Real-time)</text>
-  </g>
-  <g transform="translate(60, 780)">
-    <rect x="0" y="0" width="600" height="54" rx="14" fill="rgba(0, 163, 224, 0.12)" stroke="rgba(0, 163, 224, 0.3)" stroke-width="1" />
-    <text x="300" y="32" font-family="-apple-system, sans-serif" font-size="13" font-weight="600" fill="#7dd3fc" text-anchor="middle">
-      📸 Chạm vào giao dịch trên CapMoney để chụp hoặc đổi ảnh bill thực tế
-    </text>
-  </g>
-</svg>`;
-
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-export default async function handler(req: any, res: any) {
+// ─── Main handler ──────────────────────────────────────────────────────────
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, x-webhook-secret');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method === 'GET') {
     return res.status(200).json({
       status: 'ok',
-      service: 'CapMoney SePay/MBBank Webhook API',
+      service: 'CapMoney MBBank Webhook API',
       timestamp: new Date().toISOString(),
     });
   }
@@ -107,16 +85,27 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    let body = req.body;
-    if (typeof body === 'string') {
-      try {
-        body = JSON.parse(body);
-      } catch {
-        // Leave as string
-      }
-    }
-    body = body || {};
+    // 1. Verify secret key
+    const configuredSecret = process.env.MBBANK_WEBHOOK_SECRET || 'capmoney_mbbank_secret_key_2026';
+    const authHeader = req.headers['authorization'];
+    const apiKeyHeader = req.headers['x-api-key'] || req.headers['x-webhook-secret'];
+    const querySecret = req.query.apiKey || req.query.secret;
 
+    let providedKey = '';
+    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      providedKey = authHeader.slice(7).trim();
+    } else if (typeof apiKeyHeader === 'string') {
+      providedKey = apiKeyHeader.trim();
+    } else if (typeof querySecret === 'string') {
+      providedKey = querySecret.trim();
+    }
+
+    if (configuredSecret && providedKey !== configuredSecret) {
+      return res.status(401).json({ error: 'Webhook Secret không hợp lệ' });
+    }
+
+    // 2. Parse payload (SePay / Casso / generic)
+    const body = req.body || {};
     let rawAmount = 0;
     let type: 'income' | 'expense' = 'expense';
     let note = '';
@@ -124,24 +113,18 @@ export default async function handler(req: any, res: any) {
     let accountNumber = '';
     let transactionDateTimeStr = '';
 
-    // 1. SePay format
     if ('gateway' in body || 'amountIn' in body || 'amountOut' in body || 'transferAmount' in body) {
+      // SePay format
       const amountIn = Number(body.amountIn) || 0;
       const amountOut = Number(body.amountOut) || 0;
-      if (amountIn > 0) {
-        rawAmount = amountIn;
-        type = 'income';
-      } else {
-        rawAmount = amountOut > 0 ? amountOut : Number(body.transferAmount) || 0;
-        type = 'expense';
-      }
+      rawAmount = amountIn > 0 ? amountIn : (amountOut > 0 ? amountOut : Number(body.transferAmount) || 0);
+      type = amountIn > 0 ? 'income' : 'expense';
       note = String(body.transactionContent || body.content || body.description || '').trim();
       referenceCode = String(body.referenceNumber || body.referenceCode || body.id || `MB_${Date.now()}`);
       accountNumber = String(body.accountNumber || body.subAccount || '');
       transactionDateTimeStr = String(body.transactionDate || '');
-    }
-    // 2. Casso format
-    else if (Array.isArray(body.data) && body.data.length > 0) {
+    } else if (Array.isArray(body.data) && body.data.length > 0) {
+      // Casso format
       const item = body.data[0];
       const val = Number(item.amount) || 0;
       rawAmount = Math.abs(val);
@@ -150,22 +133,22 @@ export default async function handler(req: any, res: any) {
       referenceCode = String(item.tid || item.id || `CASSO_${Date.now()}`);
       accountNumber = String(item.subAccId || item.accountNumber || '');
       transactionDateTimeStr = String(item.when || '');
-    }
-    // 3. Generic format
-    else {
+    } else {
+      // Generic format
       rawAmount = Math.abs(Number(body.amount) || Number(body.money) || 0);
       const rawType = String(body.type || '').toLowerCase();
       type = rawType === 'income' || rawType === 'in' || (Number(body.amountIn) || 0) > 0 ? 'income' : 'expense';
       note = String(body.description || body.content || body.note || body.message || '').trim();
-      referenceCode = String(body.referenceCode || body.refCode || body.id || `MB_${Date.now()}`);
+      referenceCode = String(body.referenceCode || body.refCode || body.id || body.code || `MB_${Date.now()}`);
       accountNumber = String(body.accountNumber || body.subAccount || '');
       transactionDateTimeStr = String(body.transaction_time || body.transactionTime || body.date || '');
     }
 
     if (rawAmount <= 0) {
-      return res.status(200).json({ success: true, message: 'Số tiền bằng 0 hoặc ping webhook' });
+      return res.status(200).json({ success: true, message: 'Số tiền bằng 0 — bỏ qua (ping)' });
     }
 
+    // 3. Date / time
     let dateObj = new Date();
     if (transactionDateTimeStr) {
       const parsed = new Date(transactionDateTimeStr);
@@ -174,152 +157,96 @@ export default async function handler(req: any, res: any) {
     const dateKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
     const timeStr = dateObj.toTimeString().slice(0, 8);
 
-    const targetEmail = (req.query?.email as string) || body.email || 'hoan@gmail.com';
-    const topic = emailToCloudTopic(targetEmail);
+    // 4. Connect to MongoDB
+    await connectDB();
 
-    let categoryId = 'bills';
-    const lowerNote = note.toLowerCase();
-    if (/cơm|phở|bún|ăn|uống|cf|cafe|cà phê|trà sữa|highlands|starbucks|food|grabfood|shopeefood/i.test(lowerNote)) {
-      categoryId = 'food';
-    } else if (/grab|be|xăng|taxi|giao thông|vé xe|vé tàu|vé máy bay/i.test(lowerNote)) {
-      categoryId = 'transport';
-    } else if (/mua|shopee|lazada|tiki|tiktok|quần áo|siêu thị|mart/i.test(lowerNote)) {
-      categoryId = 'shopping';
-    } else if (/lương|thu nhập|bonus|thưởng|tiền về/i.test(lowerNote)) {
-      categoryId = 'salary';
+    // 5. Resolve user (explicit userId → first user)
+    let targetUser: any = null;
+    const explicitUserId = (req.query.userId as string) || (body.userId as string);
+    if (explicitUserId && mongoose.isValidObjectId(explicitUserId)) {
+      targetUser = await User.findById(explicitUserId);
+    }
+    if (!targetUser) {
+      targetUser = await User.findOne().sort({ createdAt: 1 });
+    }
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Chưa có người dùng nào trong hệ thống' });
     }
 
-    const receiptUrl = generateMbReceiptSvgDataUrl({
-      amount: rawAmount,
-      type,
-      dateKey,
-      timeStr,
-      note: note || 'Thanh toán qua MB Bank',
-      referenceCode,
-      accountNumber,
-    });
+    const userId = targetUser._id;
 
-    const amountMinor = Math.round(rawAmount * 100);
-
-    // Fetch existing cloud account snapshot
-    let snapshot: any = null;
-    try {
-      const r = await fetch(`https://ntfy.sh/${topic}/raw`);
-      if (r.ok) {
-        snapshot = await r.json();
-      }
-    } catch {
-      // Ignore
-    }
-
-    if (!snapshot) {
-      snapshot = {
-        email: targetEmail,
-        updatedAt: Date.now(),
-        user: { id: 'u_default', email: targetEmail, name: 'Hoàn', phone: '' },
-        wallets: [
-          {
-            id: 'w_mbbank',
-            userId: 'u_default',
-            name: 'MB Bank',
-            type: 'bank',
-            balance: 0,
-            balanceMinor: 0,
-            currency: 'VND',
-            color: '#002D72',
-            active: true,
-          },
-        ],
-        transactions: [],
-        reminders: [],
-      };
-    }
-
-    if (!Array.isArray(snapshot.transactions)) snapshot.transactions = [];
-    if (!Array.isArray(snapshot.wallets)) snapshot.wallets = [];
-
-    // Idempotency: skip if already imported
-    const exists = snapshot.transactions.some((tx: any) => tx.idempotencyKey === referenceCode);
-    if (exists) {
+    // 6. Idempotency check
+    const existing = await Transaction.findOne({ userId, idempotencyKey: referenceCode }).lean();
+    if (existing) {
       return res.status(200).json({
         success: true,
         message: 'Giao dịch đã được ghi nhận trước đó',
-        referenceNumber: referenceCode,
+        referenceCode,
       });
     }
 
-    let mbWallet = snapshot.wallets.find((w: any) => /MB/i.test(w.name) || w.type === 'bank');
-    if (!mbWallet) {
-      mbWallet = {
-        id: `w_${Date.now()}`,
-        userId: snapshot.user?.id || 'u_default',
-        name: 'MB Bank',
-        type: 'bank',
-        balance: 0,
-        balanceMinor: 0,
-        currency: 'VND',
-        color: '#002D72',
-        active: true,
-      };
-      snapshot.wallets.push(mbWallet);
+    // 7. Find or create MB Bank wallet
+    let wallet: any = await Wallet.findOne({ userId, active: true, $or: [{ name: /MB/i }, { type: 'bank' }] });
+    if (!wallet) {
+      wallet = await Wallet.create({ userId, name: 'MB Bank', type: 'bank', balanceMinor: 0, currency: 'VND', color: '#002D72', active: true });
     }
 
-    const newTx = {
-      id: `tx_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      userId: snapshot.user?.id || 'u_default',
-      type,
-      amount: rawAmount,
-      amountMinor,
-      note: note || (type === 'income' ? 'Nhận tiền MB Bank' : 'Chi tiêu MB Bank'),
-      categoryId,
-      walletId: mbWallet.id,
-      dateKey,
-      transactionTime: timeStr,
-      source: 'webhook_mbbank',
-      status: 'completed',
-      imageUrl: receiptUrl,
-      createdAt: new Date().toISOString(),
-      idempotencyKey: referenceCode,
-    };
+    // 8. Auto-categorise
+    let categoryId = 'bills';
+    const lowerNote = note.toLowerCase();
+    if (/cơm|phở|bún|ăn|uống|cf|cafe|cà phê|trà sữa|highlands|starbucks|food|grabfood|shopeefood/i.test(lowerNote)) categoryId = 'food';
+    else if (/grab|be|xăng|taxi|giao thông|vé xe|vé tàu|vé máy bay/i.test(lowerNote)) categoryId = 'transport';
+    else if (/mua|shopee|lazada|tiki|tiktok|quần áo|siêu thị|mart/i.test(lowerNote)) categoryId = 'shopping';
+    else if (/lương|thu nhập|bonus|thưởng|tiền về/i.test(lowerNote)) categoryId = 'salary';
 
-    if (type === 'income') {
-      mbWallet.balanceMinor = (mbWallet.balanceMinor || 0) + amountMinor;
-    } else {
-      mbWallet.balanceMinor = (mbWallet.balanceMinor || 0) - amountMinor;
-    }
-    mbWallet.balance = mbWallet.balanceMinor / 100;
-
-    snapshot.transactions.unshift(newTx);
-    snapshot.updatedAt = Date.now();
-
-    // Push updated snapshot back to cloud topic
+    // 9. Save transaction + update wallet balance (atomic)
+    const amountMinor = Math.round(rawAmount * 100);
+    const session = await mongoose.startSession();
+    let createdTx: any;
     try {
-      await fetch(`https://ntfy.sh/${topic}`, {
-        method: 'PUT',
-        headers: { Filename: 'account.json' },
-        body: JSON.stringify(snapshot),
+      await session.withTransaction(async () => {
+        [createdTx] = await Transaction.create(
+          [{
+            userId,
+            walletId: wallet._id,
+            type,
+            amountMinor,
+            currency: 'VND',
+            note: note || (type === 'income' ? 'Nhận tiền MB Bank' : 'Chi tiêu MB Bank'),
+            categoryId,
+            transactionDate: dateObj,
+            dateKey,
+            transactionTime: timeStr,
+            source: 'webhook_mbbank',
+            idempotencyKey: referenceCode,
+            status: 'posted',
+          }],
+          { session },
+        );
+        const delta = type === 'income' ? amountMinor : -amountMinor;
+        await Wallet.updateOne({ _id: wallet._id }, { $inc: { balanceMinor: delta } }, { session });
       });
-    } catch {
-      // Ignore
+    } finally {
+      session.endSession();
     }
 
-    return res.status(200).json({
+    return res.status(201).json({
       success: true,
-      message: 'Đã tự động đồng bộ biến động số dư MB Bank thành công!',
+      message: 'Đã tự động đồng bộ giao dịch từ MB Bank',
       transaction: {
-        id: newTx.id,
+        id: String(createdTx._id),
         amount: rawAmount,
         type,
+        note: createdTx.note,
         dateKey,
-        time: timeStr,
-        note: newTx.note,
-        referenceNumber: referenceCode,
+        transactionTime: timeStr,
+        source: 'webhook_mbbank',
+        referenceCode,
+        walletName: wallet.name,
       },
     });
   } catch (err: any) {
-    return res.status(200).json({
-      success: false,
-      message: err?.message || 'Lỗi xử lý webhook',
-    });
+    console.error('[mbbank webhook error]', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Lỗi server' });
   }
 }
