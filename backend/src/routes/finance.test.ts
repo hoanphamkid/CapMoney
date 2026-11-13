@@ -106,6 +106,32 @@ describe('receipt transaction storage', () => {
     expect(await mongoose.connection.db!.collection('transaction_images.files').countDocuments()).toBe(0);
     expect(await mongoose.connection.db!.collection('transaction_images.chunks').countDocuments()).toBe(0);
   });
+
+  it('moves an edited expense and its replacement photo to another wallet with exact balances', async () => {
+    const originalWallet = (await WalletModel.findById(walletId).lean())!;
+    const destination = await WalletModel.create({ userId: originalWallet.userId, name: 'Bank', type: 'bank', balanceMinor: 2000000, color: '#3c6684' });
+    const created = await postReceipt();
+    expect(created.status).toBe(201);
+    const id = created.body.transaction.id;
+    const replacement = Buffer.from('replacement album receipt');
+    const edited = await request(app).put(`/api/transactions/${id}`).set('Cookie', cookie)
+      .field('type', 'expense').field('amount', '3000').field('note', 'Updated receipt')
+      .field('categoryId', 'bills').field('walletId', String(destination._id))
+      .field('transactionDate', '2026-11-13').field('transactionTime', '00:50:00')
+      .attach('image', replacement, { filename: 'album.jpg', contentType: 'image/jpeg' });
+    expect(edited.status).toBe(200);
+    expect(edited.body.transaction.walletId).toBe(String(destination._id));
+    expect((await WalletModel.findById(walletId).lean())!.balanceMinor).toBe(originalWallet.balanceMinor);
+    expect((await WalletModel.findById(destination._id).lean())!.balanceMinor).toBe(1700000);
+    const image = await request(app).get(edited.body.transaction.imageUrl).set('Cookie', cookie);
+    expect(image.body).toEqual(replacement);
+    expect(await mongoose.connection.db!.collection('transaction_images.files').countDocuments()).toBe(1);
+    const renamed = await request(app).patch(`/api/wallets/${destination._id}`).set('Cookie', cookie).send({ name: 'MB Bank' });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.wallet).toMatchObject({ name: 'MB Bank', type: 'bank', color: '#3c6684', balanceMinor: 1700000 });
+    expect((await request(app).delete(`/api/transactions/${id}`).set('Cookie', cookie)).status).toBe(204);
+    expect((await WalletModel.findById(destination._id).lean())!.balanceMinor).toBe(2000000);
+  });
 });
 
 for (const layout of ['', 'frontend/']) {

@@ -7,6 +7,12 @@ import { TransactionModel } from '../models/Transaction.js';
 import { deletePrivateImage, readPrivateImage, savePrivateImage } from '../services/storageService.js';
 
 const walletSchema = z.object({ name: z.string().trim().min(1).max(80), type: z.enum(['cash', 'bank', 'savings', 'e_wallet', 'credit', 'custom']).default('cash'), openingBalance: z.coerce.number().min(0).default(0), currency: z.string().length(3).default('VND'), color: z.string().regex(/^#[0-9a-f]{6}$/i).default('#163e36') });
+const walletUpdateSchema = z.object({
+  name: walletSchema.shape.name.optional(),
+  type: walletSchema.shape.type.unwrap().optional(),
+  currency: walletSchema.shape.currency.unwrap().optional(),
+  color: walletSchema.shape.color.unwrap().optional(),
+});
 const transactionSchema = z.object({
   type: z.enum(['income', 'expense', 'transfer']),
   amount: z.coerce.number().positive().max(1_000_000_000_000),
@@ -48,7 +54,7 @@ async function ensureWallets(userId: mongoose.Types.ObjectId, walletId: mongoose
 
 export const listWallets: RequestHandler = async (request, response) => { const rows = await WalletModel.find({ userId: request.user!.id, active: true }).sort({ createdAt: 1 }).lean(); response.json({ wallets: rows.map(row => ({ id: String(row._id), name: row.name, type: row.type, balance: row.balanceMinor / 100, balanceMinor: row.balanceMinor, currency: row.currency, color: row.color })) }); };
 export const createWallet: RequestHandler = async (request, response) => { const input = walletSchema.parse(request.body); const row = await WalletModel.create({ userId: request.user!.id, name: input.name, type: input.type, balanceMinor: Math.round(input.openingBalance * 100), currency: input.currency.toUpperCase(), color: input.color }); response.status(201).json({ wallet: { id: String(row._id), name: row.name, type: row.type, balance: row.balanceMinor / 100, balanceMinor: row.balanceMinor, currency: row.currency, color: row.color } }); };
-export const updateWallet: RequestHandler = async (request, response) => { const input = walletSchema.partial().omit({ openingBalance: true }).parse(request.body); const row = await WalletModel.findOneAndUpdate({ _id: request.params.id, userId: request.user!.id, active: true }, { $set: input }, { new: true, runValidators: true }); if (!row) throw new AppError(404, 'Không tìm thấy ví', 'WALLET_NOT_FOUND'); response.json({ wallet: { id: String(row._id), name: row.name, type: row.type, balance: row.balanceMinor / 100, balanceMinor: row.balanceMinor, currency: row.currency, color: row.color } }); };
+export const updateWallet: RequestHandler = async (request, response) => { const input = walletUpdateSchema.parse(request.body); const row = await WalletModel.findOneAndUpdate({ _id: request.params.id, userId: request.user!.id, active: true }, { $set: input }, { new: true, runValidators: true }); if (!row) throw new AppError(404, 'Không tìm thấy ví', 'WALLET_NOT_FOUND'); response.json({ wallet: { id: String(row._id), name: row.name, type: row.type, balance: row.balanceMinor / 100, balanceMinor: row.balanceMinor, currency: row.currency, color: row.color } }); };
 export const deleteWallet: RequestHandler = async (request, response) => { const wallet = await WalletModel.findOne({ _id: request.params.id, userId: request.user!.id, active: true }); if (!wallet) throw new AppError(404, 'Không tìm thấy ví', 'WALLET_NOT_FOUND'); const related = await TransactionModel.exists({ userId: request.user!.id, $or: [{ walletId: wallet._id }, { toWalletId: wallet._id }] }); if (related) throw new AppError(409, 'Ví đã có giao dịch, hãy lưu trữ thay vì xóa', 'WALLET_HAS_TRANSACTIONS'); wallet.active = false; await wallet.save(); response.status(204).send(); };
 export const archiveWallet: RequestHandler = async (request, response) => { const wallet = await WalletModel.findOneAndUpdate({ _id: request.params.id, userId: request.user!.id, active: true }, { $set: { active: false } }, { new: true }); if (!wallet) throw new AppError(404, 'Không tìm thấy ví', 'WALLET_NOT_FOUND'); response.status(204).send(); };
 

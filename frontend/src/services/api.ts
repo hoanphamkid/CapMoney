@@ -206,7 +206,7 @@ function txToCalendarEvent(row: StoredTransaction): CalendarEvent {
 
 class BackendUnavailableError extends Error {}
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function requestOnce<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_ROOT}${path}`, {
@@ -233,19 +233,38 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
-async function requestWithRefresh<T>(path: string, init: RequestInit = {}): Promise<T> {
-  try {
-    return await request<T>(path, init);
-  } catch (error) {
-    if (!(error instanceof ApiError) || error.status !== 401) throw error;
-    await request('/auth/refresh', { method: 'POST' });
-    return request<T>(path, init);
+const publicAuthPaths = new Set(['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout']);
+let refreshPromise: Promise<void> | null = null;
+let sessionVersion = 0;
+
+function refreshSession() {
+  if (!refreshPromise) {
+    refreshPromise = requestOnce('/auth/refresh', { method: 'POST' })
+      .then(() => { sessionVersion++; })
+      .finally(() => { refreshPromise = null; });
   }
+  return refreshPromise;
+}
+
+async function withSessionRefresh<T>(path: string, send: () => Promise<T>): Promise<T> {
+  const version = sessionVersion;
+  try {
+    return await send();
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 401 || publicAuthPaths.has(path.split('?')[0])) throw error;
+    // Concurrent requests share one refresh; late responses can use the renewed cookie.
+    if (version === sessionVersion) await refreshSession();
+    return send();
+  }
+}
+
+function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return withSessionRefresh(path, () => requestOnce<T>(path, init));
 }
 
 export async function authenticatedRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
-    return await requestWithRefresh<T>(path, init);
+    return await request<T>(path, init);
   } catch (error) {
     if (error instanceof BackendUnavailableError) throw new ApiError(503, 'SYNC_UNAVAILABLE', 'Không kết nối được máy chủ đồng bộ. Hãy kiểm tra bản triển khai API rồi thử lại; hai thiết bị không cần mở cùng lúc.');
     throw error;
@@ -285,7 +304,7 @@ export function clearLocalAccountCache(email: string) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 }
 
-async function upload<T>(path: string, form: FormData, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
+async function uploadOnce<T>(path: string, form: FormData, method: 'POST' | 'PUT'): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_ROOT}${path}`, { method, body: form, credentials: 'include' });
@@ -305,6 +324,10 @@ async function upload<T>(path: string, form: FormData, method: 'POST' | 'PUT' = 
     throw new ApiError(response.status, body.error?.code ?? 'REQUEST_FAILED', body.error?.message ?? 'Không thể hoàn tất yêu cầu');
   }
   return body as T;
+}
+
+function upload<T>(path: string, form: FormData, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
+  return withSessionRefresh(path, () => uploadOnce<T>(path, form, method));
 }
 
 async function withFallback<T>(remoteCall: () => Promise<T>, localCall: () => T | Promise<T>): Promise<T> {
@@ -685,7 +708,7 @@ export const api = {
 
   deleteTransaction: (id: string) =>
     withFallback(
-      () => requestWithRefresh<void>(`/transactions/${id}`, { method: 'DELETE' }),
+      () => request<void>(`/transactions/${id}`, { method: 'DELETE' }),
       () => {
         const db = loadDb();
         const user = requireLocalUser(db);

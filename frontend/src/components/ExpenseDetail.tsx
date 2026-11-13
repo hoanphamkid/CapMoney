@@ -7,13 +7,14 @@ import {
   Crop,
   Edit3,
   ImageOff,
+  ImagePlus,
   LoaderCircle,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { CalendarEvent } from '../services/api';
+import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import type { CalendarEvent, Wallet } from '../services/api';
 import { ApiError, api } from '../services/api';
 import { ImageCropModal } from './ImageCropModal';
 
@@ -262,6 +263,13 @@ function EditTransaction({
   const [amount, setAmount] = useState(String(event.amount ?? ''));
   const [note, setNote] = useState(event.note ?? '');
   const [category, setCategory] = useState(event.categoryId ?? 'other');
+  const [walletId, setWalletId] = useState(event.walletId ?? '');
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [loadingWallets, setLoadingWallets] = useState(true);
+  const [walletError, setWalletError] = useState('');
+  const [editingWalletName, setEditingWalletName] = useState(false);
+  const [walletName, setWalletName] = useState('');
+  const [renamingWallet, setRenamingWallet] = useState(false);
   const [type, setType] = useState<'expense' | 'income'>(event.kind === 'income' ? 'income' : 'expense');
   const [timeStr, setTimeStr] = useState(event.transactionTime || event.time || new Date().toTimeString().slice(0, 5));
   const [image, setImage] = useState<File | null>(null);
@@ -269,12 +277,47 @@ function EditTransaction({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    let active = true;
+    api.wallets().then(result => {
+      if (active) setWallets(result.wallets);
+    }).catch(() => {
+      if (active) setWalletError('Không tải được danh sách ví. Hãy mở lại phần chỉnh sửa để thử lại.');
+    }).finally(() => {
+      if (active) setLoadingWallets(false);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const selectedWallet = wallets.find(wallet => wallet.id === walletId);
+  const renameWallet = async () => {
+    if (!selectedWallet || renamingWallet) return;
+    if (!walletName.trim()) { setWalletError('Vui lòng nhập tên ví.'); return; }
+    setRenamingWallet(true);
+    setWalletError('');
+    try {
+      const result = await api.updateWallet(selectedWallet.id, { name: walletName.trim() });
+      setWallets(current => current.map(wallet => wallet.id === result.wallet.id ? result.wallet : wallet));
+      setEditingWalletName(false);
+    } catch (caught) {
+      setWalletError(caught instanceof ApiError ? caught.message : 'Không thể đổi tên ví. Vui lòng thử lại.');
+    } finally { setRenamingWallet(false); }
+  };
+
+  const choosePhoto = (input: ChangeEvent<HTMLInputElement>) => {
+    const file = input.target.files?.[0];
+    if (file) setPendingCropFile(file);
+    input.target.value = '';
+  };
+
   const previewUrl = useMemo(() => (image ? URL.createObjectURL(image) : event.imageUrl ?? ''), [image, event.imageUrl]);
   useEffect(() => () => {
     if (image && previewUrl) URL.revokeObjectURL(previewUrl);
   }, [image, previewUrl]);
 
   const save = async () => {
+    if (saving || renamingWallet) return;
+    if (!walletId) { setError('Vui lòng chọn ví cho giao dịch.'); return; }
     setSaving(true);
     setError('');
     try {
@@ -283,15 +326,15 @@ function EditTransaction({
         amount: Number(amount.replace(/[^0-9]/g, '')),
         note,
         categoryId: category,
-        walletId: event.walletId ?? '',
+        walletId,
         transactionDate: event.dateKey,
         transactionTime: timeStr ? (timeStr.length === 5 ? `${timeStr}:00` : timeStr) : undefined,
-        source: image ? 'camera' : (event.source as any),
+        source: image ? 'camera' : event.source === 'camera' || event.source === 'webhook_mbbank' ? event.source : 'manual',
         image,
       });
       onSaved();
-    } catch {
-      setError('Không thể cập nhật giao dịch.');
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'Không thể cập nhật giao dịch.');
     } finally {
       setSaving(false);
     }
@@ -363,22 +406,54 @@ function EditTransaction({
             </select>
           </label>
         </div>
+        <div className="edit-wallet-field">
+          <label className="select-field">
+            <span>Ví của giao dịch</span>
+            <select value={walletId} disabled={loadingWallets || saving || renamingWallet} onChange={input => {
+              setWalletId(input.target.value);
+              setEditingWalletName(false);
+              setWalletError('');
+            }}>
+              {!walletId && <option value="">Chọn ví</option>}
+              {walletId && !selectedWallet && <option value={walletId}>{loadingWallets ? 'Đang tải ví…' : 'Ví hiện tại'}</option>}
+              {wallets.map(wallet => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}
+            </select>
+          </label>
+          {selectedWallet && !editingWalletName && <button type="button" className="text-button" disabled={saving} onClick={() => {
+            setWalletName(selectedWallet.name);
+            setEditingWalletName(true);
+            setWalletError('');
+          }}>Đổi tên ví</button>}
+          {editingWalletName && (
+            <div className="edit-wallet-name">
+              <label className="select-field"><span>Tên ví</span><input value={walletName} maxLength={80} disabled={renamingWallet} onChange={input => setWalletName(input.target.value)} /></label>
+              <small>Tên này áp dụng cho mọi giao dịch dùng ví này.</small>
+              <div className="detail-actions">
+                <button type="button" disabled={renamingWallet} onClick={() => { setEditingWalletName(false); setWalletError(''); }}>Hủy đổi tên</button>
+                <button type="button" disabled={renamingWallet || !walletName.trim()} onClick={() => void renameWallet()}>{renamingWallet ? 'Đang lưu…' : 'Lưu tên ví'}</button>
+              </div>
+            </div>
+          )}
+          {walletError && <div className="capture-error" role="alert">{walletError}</div>}
+        </div>
         <label className="note-field">
           <span>Ghi chú</span>
           <textarea rows={2} value={note} onChange={input => setNote(input.target.value)} placeholder="Nhập ghi chú..." />
         </label>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+        <div className="edit-photo-actions">
           <label className="replace-image">
-            <Camera size={15} /> {event.imageUrl ? 'Thay ảnh khác' : 'Chụp/Gắn ảnh'}
+            <ImagePlus size={15} /> Chọn từ album
+            <input type="file" accept="image/*" aria-label="Chọn ảnh từ album" disabled={saving} onChange={choosePhoto} />
+          </label>
+          <label className="replace-image">
+            <Camera size={15} /> Chụp ảnh
             <input
               type="file"
               accept="image/*"
               capture="environment"
-              onChange={input => {
-                const file = input.target.files?.[0];
-                if (file) setPendingCropFile(file);
-                input.target.value = '';
-              }}
+              aria-label="Chụp ảnh mới"
+              disabled={saving}
+              onChange={choosePhoto}
             />
           </label>
           {image && (
@@ -391,8 +466,8 @@ function EditTransaction({
             </button>
           )}
         </div>
-        {error && <div className="capture-error">{error}</div>}
-        <button className="save-expense" style={{ marginTop: 14, width: '100%' }} disabled={saving} onClick={() => void save()}>
+        {error && <div className="capture-error" role="alert">{error}</div>}
+        <button className="save-expense" style={{ marginTop: 14, width: '100%' }} disabled={saving || loadingWallets || renamingWallet || editingWalletName} onClick={() => void save()}>
           {saving ? <LoaderCircle size={17} className="spin" /> : 'Lưu thay đổi'}
         </button>
       </section>

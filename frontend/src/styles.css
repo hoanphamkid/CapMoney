@@ -150,6 +150,11 @@ a { color: inherit; text-decoration: none; }
 .detail-delete-confirm button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 .edit-transaction { max-height: min(92vh, 700px); overflow-y: auto; }
 .edit-transaction h2 { margin-bottom: 18px; }
+.edit-wallet-field, .edit-wallet-name { display: grid; gap: 9px; margin-top: 12px; }
+.edit-wallet-field > .text-button { justify-self: start; }
+.edit-wallet-name small { color: #9da8b7; font-size: 10px; line-height: 1.5; }
+.edit-wallet-name .detail-actions { margin: 0; padding-top: 0; border-top: 0; }
+.edit-photo-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
 .edit-thumb { width: 100%; max-height: 150px; margin-bottom: 15px; border-radius: 9px; object-fit: cover; }
 .replace-image { display: inline-flex; align-items: center; gap: 7px; width: max-content; padding: 8px 10px; color: #5f8464; border: 1px dashed #c6dbc2; border-radius: 6px; background: #f6fbf4; font-size: 10px; cursor: pointer; }
 .replace-image input { display: none; }
