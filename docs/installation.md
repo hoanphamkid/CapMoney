@@ -12,6 +12,8 @@ Open `http://localhost:5173`. The API health endpoint is `http://127.0.0.1:4000/
 
 The local mail transport writes verification messages to `.local/mail`. Set `MAIL_TRANSPORT=smtp` and the SMTP variables in `.env` when a real mail provider is available. Set `MONGO_URI` to an Atlas replica-set URI to bypass the local database.
 
+Receipt images are stored in MongoDB GridFS (`transaction_images.files` and `transaction_images.chunks`), so uploads persist across Vercel function instances and deployments. The MongoDB account needs read/write access to these collections. Existing receipts in `.local/uploads` remain readable on the original local server.
+
 Useful checks:
 
 ```powershell
