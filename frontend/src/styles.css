@@ -6287,3 +6287,99 @@ html:not(.dark-theme) .cm-app-shell {
     font-size: 12px;
   }
 }
+
+/* Settings redesign: calm, personal control centre */
+.cm-app-shell .settings-redesign {
+  display: grid;
+  gap: 15px;
+}
+
+.cm-app-shell .settings-redesign .settings-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 176px;
+  margin: 0;
+  padding: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(110, 162, 220, .25);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 88% 8%, rgba(132, 192, 255, .2), transparent 34%),
+    radial-gradient(circle at 10% 100%, rgba(117, 218, 166, .1), transparent 36%),
+    linear-gradient(145deg, #202d40, #171b25 70%);
+  box-shadow: 0 18px 35px rgba(0, 0, 0, .18);
+}
+
+.cm-app-shell .settings-redesign .settings-hero::after {
+  right: -42px;
+  top: -92px;
+  width: 210px;
+  height: 210px;
+  border-color: rgba(159, 200, 245, .2);
+  box-shadow: 0 0 0 30px rgba(159, 200, 245, .04), 0 0 0 60px rgba(159, 200, 245, .025);
+}
+
+.settings-hero-copy { position: relative; z-index: 1; min-width: 0; }
+.settings-hero-copy h1 { margin: 0; color: #f4f8ff; font-size: clamp(26px, 7vw, 34px); letter-spacing: -1.1px; }
+.settings-hero-copy .page-subtitle { max-width: 285px; margin-top: 8px; color: #a4b5c9; font-size: 11px; line-height: 1.6; }
+.settings-hero-status { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 17px; color: #a9c8eb; font-size: 10px; }
+.settings-hero-status span { width: 7px; height: 7px; border-radius: 50%; background: #78d6a2; box-shadow: 0 0 0 4px rgba(120, 214, 162, .12); }
+.settings-hero-status strong { color: #d8eaff; font-weight: 600; }
+.settings-hero-status small { color: #8398b0; font-size: 9px; }
+.settings-hero-profile { position: relative; z-index: 1; display: flex; align-items: center; gap: 8px; flex-shrink: 0; max-width: 155px; padding: 8px 10px 8px 8px; border: 1px solid rgba(171, 205, 241, .2); border-radius: 14px; background: rgba(11, 17, 26, .32); }
+.settings-hero-avatar { display: grid; flex: 0 0 auto; place-items: center; width: 31px; height: 31px; border-radius: 10px; background: #94c9f4; color: #17324d; font-size: 13px; font-weight: 800; }
+.settings-hero-profile div { display: grid; min-width: 0; gap: 3px; }
+.settings-hero-profile strong, .settings-hero-profile small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-hero-profile strong { color: #edf5ff; font-size: 10px; }
+.settings-hero-profile small { color: #94a8bf; font-size: 8px; }
+
+.cm-app-shell .settings-redesign .settings-layout { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 0; }
+.cm-app-shell .settings-redesign .settings-main, .cm-app-shell .settings-redesign .settings-side { display: grid; gap: 14px; }
+.cm-app-shell .settings-redesign .settings-card { position: relative; padding: 18px; overflow: hidden; border: 1px solid rgba(255, 255, 255, .09); border-radius: 20px; background: linear-gradient(145deg, #1b1f29, #171a21); box-shadow: 0 10px 25px rgba(0, 0, 0, .12); }
+.cm-app-shell .settings-redesign .settings-card::before { position: absolute; top: 0; right: 18px; left: 18px; height: 1px; content: ''; background: linear-gradient(90deg, transparent, rgba(130, 185, 239, .3), transparent); }
+.cm-app-shell .settings-redesign .settings-card:hover { transform: translateY(-1px); border-color: rgba(110, 168, 254, .32); box-shadow: 0 15px 30px rgba(0, 0, 0, .2); }
+.cm-app-shell .settings-redesign .settings-heading { align-items: center; margin-bottom: 16px; }
+.cm-app-shell .settings-redesign .settings-heading > span { width: 35px; height: 35px; border: 1px solid rgba(125, 179, 236, .17); border-radius: 12px; background: #242d3d !important; color: #91c1f2 !important; }
+.cm-app-shell .settings-redesign .settings-heading h2 { color: #eef3fa; font-size: 14px; letter-spacing: -.15px; }
+.cm-app-shell .settings-redesign .settings-heading p { color: #8793a5; font-size: 10px; line-height: 1.55; }
+.cm-app-shell .settings-redesign .settings-profile { margin-bottom: 15px; padding: 10px; border: 1px solid rgba(255, 255, 255, .07); border-radius: 14px; background: #202530; }
+.cm-app-shell .settings-redesign .large-avatar { width: 40px; height: 40px; border-radius: 12px; background: #31455d; color: #a8d3fa; }
+.cm-app-shell .settings-redesign .settings-profile strong { color: #eef3fa; }
+.cm-app-shell .settings-redesign .settings-profile small { color: #8d9aad; }
+.cm-app-shell .settings-redesign .settings-fields { gap: 10px; }
+.cm-app-shell .settings-redesign .select-field > span { color: #9da9bb; font-size: 10px; }
+.cm-app-shell .settings-redesign .settings-save, .cm-app-shell .settings-redesign .settings-action { min-height: 39px; margin-top: 14px; padding: 9px 13px; border: 1px solid rgba(116, 174, 239, .35); border-radius: 11px; background: #263b55; color: #b8d9fa; font-size: 11px; }
+.cm-app-shell .settings-redesign .settings-save:hover, .cm-app-shell .settings-redesign .settings-action:hover { border-color: #79b5f3; background: #2c496a; color: #fff; }
+.cm-app-shell .settings-redesign .appearance-row { margin-top: 16px; padding: 13px 0 0; border-top-color: rgba(255, 255, 255, .08); }
+.cm-app-shell .settings-redesign .appearance-row strong { color: #e8edf5 !important; font-size: 11px; }
+.cm-app-shell .settings-redesign .appearance-row small { color: #8996a8; font-size: 9px; }
+.cm-app-shell .settings-redesign .settings-row-icon { width: 32px; height: 32px; border: 1px solid rgba(225, 181, 98, .2); border-radius: 10px; background: #3b3124 !important; color: #f1c976 !important; }
+.cm-app-shell .settings-redesign .toggle { width: 40px; height: 23px; background: #333947; }
+.cm-app-shell .settings-redesign .toggle i { width: 19px; height: 19px; }
+.cm-app-shell .settings-redesign .toggle.on { background: #6199d8; }
+.cm-app-shell .settings-redesign .toggle.on i { transform: translateX(17px); }
+.cm-app-shell .settings-redesign .settings-side { grid-template-columns: 1fr 1fr; align-items: start; }
+.cm-app-shell .settings-redesign .settings-side > .settings-card:nth-child(3), .cm-app-shell .settings-redesign .logout-settings { grid-column: 1 / -1; }
+.cm-app-shell .settings-redesign .settings-check-btn { padding: 11px 0; color: #dce3ed; border-bottom-color: rgba(255, 255, 255, .07); font-size: 11px; }
+.cm-app-shell .settings-redesign .settings-check-btn:last-child { border-bottom: 0; }
+.cm-app-shell .settings-redesign .check-box { width: 21px; height: 21px; border-radius: 7px; background: #252b37; }
+.cm-app-shell .settings-redesign .check-box.checked { border-color: #63c489; background: #3c9d69; }
+.cm-app-shell .settings-redesign .settings-side .settings-card { padding: 16px; }
+.cm-app-shell .settings-redesign .settings-side .settings-heading { margin-bottom: 11px; }
+.cm-app-shell .settings-redesign .settings-side .settings-heading > span { width: 31px; height: 31px; }
+.cm-app-shell .settings-redesign .settings-side .settings-action { width: 100%; margin-top: 8px; }
+.cm-app-shell .settings-redesign .settings-action.muted { border-color: rgba(255, 255, 255, .1); background: #222630; color: #b9c3d1; }
+.cm-app-shell .settings-redesign .session-row { padding: 9px 0; border-bottom-color: rgba(255, 255, 255, .07); }
+.cm-app-shell .settings-redesign .session-row strong { color: #e6ecf5 !important; font-size: 10px; }
+.cm-app-shell .settings-redesign .session-row small { color: #8996a8; font-size: 9px; }
+.cm-app-shell .settings-redesign .session-dot { width: 8px; height: 8px; background: #63d093; box-shadow: 0 0 0 4px rgba(99, 208, 147, .1); }
+.cm-app-shell .settings-redesign .logout-settings { min-height: 42px; border: 1px solid rgba(239, 134, 126, .35); border-radius: 12px; background: rgba(224, 109, 100, .12); color: #f49b93; }
+
+@media (max-width: 390px) {
+  .cm-app-shell .settings-redesign .settings-hero { display: grid; gap: 16px; min-height: 0; padding: 18px; }
+  .settings-hero-profile { max-width: none; }
+  .cm-app-shell .settings-redesign .settings-side { grid-template-columns: 1fr; }
+  .cm-app-shell .settings-redesign .settings-side > .settings-card:nth-child(3), .cm-app-shell .settings-redesign .logout-settings { grid-column: auto; }
+}

@@ -105,12 +105,17 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="feature-page settings-page">
+    <div className="feature-page settings-page settings-redesign">
       <div className="page-heading settings-hero">
-        <div>
+        <div className="settings-hero-copy">
           <p className="eyebrow dark">KHÔNG GIAN CỦA BẠN</p>
-          <h1>Cài đặt</h1>
-          <p className="page-subtitle">Điều chỉnh CapMoney để phù hợp với cách bạn quản lý tiền.</p>
+          <h1>Cài đặt của bạn</h1>
+          <p className="page-subtitle">Một vài lựa chọn nhỏ để CapMoney vừa vặn với cách bạn quản lý tiền.</p>
+          <div className="settings-hero-status"><span /><strong>Dữ liệu riêng tư</strong><small>Đồng bộ an toàn trên các thiết bị</small></div>
+        </div>
+        <div className="settings-hero-profile">
+          <span className="settings-hero-avatar">{(name || 'C').charAt(0).toUpperCase()}</span>
+          <div><strong>{name || 'Người dùng CapMoney'}</strong><small>{user?.email || 'Tài khoản CapMoney'}</small></div>
         </div>
       </div>
 
