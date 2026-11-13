@@ -233,15 +233,19 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+async function requestWithRefresh<T>(path: string, init: RequestInit = {}): Promise<T> {
+  try {
+    return await request<T>(path, init);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 401) throw error;
+    await request('/auth/refresh', { method: 'POST' });
+    return request<T>(path, init);
+  }
+}
+
 export async function authenticatedRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
-    try {
-      return await request<T>(path, init);
-    } catch (error) {
-      if (!(error instanceof ApiError) || error.status !== 401) throw error;
-      await request('/auth/refresh', { method: 'POST' });
-      return await request<T>(path, init);
-    }
+    return await requestWithRefresh<T>(path, init);
   } catch (error) {
     if (error instanceof BackendUnavailableError) throw new ApiError(503, 'SYNC_UNAVAILABLE', 'Không kết nối được máy chủ đồng bộ. Hãy kiểm tra bản triển khai API rồi thử lại; hai thiết bị không cần mở cùng lúc.');
     throw error;
@@ -681,7 +685,7 @@ export const api = {
 
   deleteTransaction: (id: string) =>
     withFallback(
-      () => request<void>(`/transactions/${id}`, { method: 'DELETE' }),
+      () => requestWithRefresh<void>(`/transactions/${id}`, { method: 'DELETE' }),
       () => {
         const db = loadDb();
         const user = requireLocalUser(db);

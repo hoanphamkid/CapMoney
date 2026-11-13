@@ -12,17 +12,26 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { CalendarEvent } from '../services/api';
-import { api } from '../services/api';
+import { ApiError, api } from '../services/api';
 import { ImageCropModal } from './ImageCropModal';
 
 export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEvent; onClose: () => void; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [updatingPhoto, setUpdatingPhoto] = useState(false);
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
+  const deleteTitleId = useId();
+  const deleteDescriptionId = useId();
+
+  useEffect(() => {
+    if (confirmingDelete) cancelDeleteRef.current?.focus();
+  }, [confirmingDelete]);
 
   const income = event.kind === 'income';
   const isMbBank = event.source === 'webhook_mbbank' || /MB Bank|MBBank/i.test(event.note ?? '');
@@ -93,21 +102,28 @@ export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEv
   }
 
   const remove = async () => {
-    if (!window.confirm('Xóa giao dịch này? Số dư ví sẽ được hoàn tác.')) return;
+    if (deleting) return;
     setDeleting(true);
+    setDeleteError('');
     try {
       await api.deleteTransaction(event.id);
       onClose();
       onChanged();
+    } catch (error) {
+      setDeleteError(error instanceof ApiError
+        ? error.status === 401
+          ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại rồi xóa giao dịch.'
+          : error.message
+        : 'Không thể xóa giao dịch. Vui lòng thử lại.');
     } finally {
       setDeleting(false);
     }
   };
 
   return (
-    <div className="detail-overlay" onClick={onClose}>
+    <div className="detail-overlay" onClick={deleting ? undefined : onClose}>
       <section className="expense-detail cm-spring-pop" onClick={eventClick => eventClick.stopPropagation()}>
-        <button className="detail-close" onClick={onClose} aria-label="Đóng">
+        <button className="detail-close" disabled={deleting} onClick={onClose} aria-label="Đóng">
           <X size={18} />
         </button>
 
@@ -189,14 +205,45 @@ export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEv
             </span>
             <span>Danh mục: {categoryLabel(event.categoryId)}</span>
           </div>
-          <div className="detail-actions">
-            <button onClick={() => setEditing(true)}>
-              <Edit3 size={14} /> Sửa chi tiết
-            </button>
-            <button className="danger" disabled={deleting} onClick={() => void remove()}>
-              {deleting ? <LoaderCircle size={14} className="spin" /> : <Trash2 size={14} />} Xóa
-            </button>
-          </div>
+          {confirmingDelete ? (
+            <div
+              className="detail-delete-confirm"
+              role="alertdialog"
+              aria-labelledby={deleteTitleId}
+              aria-describedby={deleteDescriptionId}
+              aria-busy={deleting}
+              onKeyDown={e => {
+                if (e.key === 'Escape' && !deleting) {
+                  e.stopPropagation();
+                  setConfirmingDelete(false);
+                  setDeleteError('');
+                }
+              }}
+            >
+              <h3 id={deleteTitleId}>Xóa giao dịch này?</h3>
+              <p id={deleteDescriptionId}>Giao dịch sẽ bị xóa và số dư ví sẽ được hoàn tác.</p>
+              {deleteError && <div className="capture-error" role="alert">{deleteError}</div>}
+              <div className="detail-actions">
+                <button ref={cancelDeleteRef} type="button" disabled={deleting} onClick={() => {
+                  setConfirmingDelete(false);
+                  setDeleteError('');
+                }}>Hủy</button>
+                <button type="button" className="danger" disabled={deleting} onClick={() => void remove()}>
+                  {deleting ? <LoaderCircle size={14} className="spin" /> : <Trash2 size={14} />}
+                  {deleting ? 'Đang xóa…' : 'Xác nhận xóa'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="detail-actions">
+              <button type="button" onClick={() => setEditing(true)}>
+                <Edit3 size={14} /> Sửa chi tiết
+              </button>
+              <button type="button" className="danger" onClick={() => setConfirmingDelete(true)}>
+                <Trash2 size={14} /> Xóa
+              </button>
+            </div>
+          )}
         </div>
       </section>
     </div>
