@@ -22,7 +22,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
@@ -58,8 +58,6 @@ export function CalendarPage() {
   const [dayViewDate, setDayViewDate] = useState<string | null>(null);
   const [dayViewLayout, setDayViewLayout] = useState<'timeline' | 'grid' | 'list'>('grid');
   const [daySlideAnim, setDaySlideAnim] = useState<'next' | 'prev' | null>(null);
-  const dayTouchRef = useRef<{ x: number; y: number } | null>(null);
-  const [dayTouchDx, setDayTouchDx] = useState(0);
   const [captureDate, setCaptureDate] = useState<string | null>(null);
   const [captureType, setCaptureType] = useState<'expense' | 'income'>('expense');
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
@@ -190,27 +188,6 @@ export function CalendarPage() {
     const next = getAdjacentDayKey(dayViewDate, 1);
     setDayViewDate(next);
     if (navigator.vibrate) navigator.vibrate(12);
-  };
-
-  const onDayTouchStart = (clientX: number, clientY: number) => {
-    dayTouchRef.current = { x: clientX, y: clientY };
-    setDayTouchDx(0);
-  };
-
-  const onDayTouchMove = (clientX: number) => {
-    if (!dayTouchRef.current) return;
-    setDayTouchDx(clientX - dayTouchRef.current.x);
-  };
-
-  const onDayTouchEnd = () => {
-    if (!dayTouchRef.current || !dayViewDate) return;
-    const dx = dayTouchDx;
-    dayTouchRef.current = null;
-    setDayTouchDx(0);
-    if (Math.abs(dx) > 42) {
-      if (dx < 0) handleNextDay();
-      else handlePrevDay();
-    }
   };
 
   const dayViewEvents = useMemo(() => {
@@ -646,16 +623,6 @@ export function CalendarPage() {
             </button>
 
             <div className="cm-day-nav-center">
-              <button
-                type="button"
-                className="cm-day-nav-arrow"
-                onClick={handlePrevDay}
-                aria-label="Ngày trước"
-                title="Ngày trước"
-              >
-                <ChevronLeft size={20} />
-              </button>
-
               <div className="cm-day-view-title">
                 <small>{formatWeekday(dayViewDate)}</small>
                 <h2>{formatShortDate(dayViewDate)}</h2>
@@ -665,15 +632,6 @@ export function CalendarPage() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                className="cm-day-nav-arrow"
-                onClick={handleNextDay}
-                aria-label="Ngày sau"
-                title="Ngày sau"
-              >
-                <ChevronRight size={20} />
-              </button>
             </div>
 
             <div className="cm-day-view-toggle">
@@ -707,16 +665,17 @@ export function CalendarPage() {
             </div>
           </header>
 
+          <nav className="cm-day-navigation" aria-label="Chuyển ngày">
+            <button type="button" className="cm-day-nav-button" onClick={handlePrevDay}>
+              <ChevronLeft size={18} aria-hidden="true" /> Ngày trước
+            </button>
+            <button type="button" className="cm-day-nav-button" onClick={handleNextDay}>
+              Ngày sau <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          </nav>
+
           <div
-            className={`cm-day-view-body swipeable ${daySlideAnim ? `slide-${daySlideAnim}` : ''}`}
-            onTouchStart={e => onDayTouchStart(e.touches[0].clientX, e.touches[0].clientY)}
-            onTouchMove={e => onDayTouchMove(e.touches[0].clientX)}
-            onTouchEnd={onDayTouchEnd}
-            onMouseDown={e => onDayTouchStart(e.clientX, e.clientY)}
-            onMouseMove={e => {
-              if (e.buttons === 1) onDayTouchMove(e.clientX);
-            }}
-            onMouseUp={onDayTouchEnd}
+            className={`cm-day-view-body ${daySlideAnim ? `slide-${daySlideAnim}` : ''}`}
             onAnimationEnd={() => setDaySlideAnim(null)}
           >
             {dayViewEvents.length === 0 ? (
@@ -874,9 +833,6 @@ export function CalendarPage() {
               </div>
             )}
 
-            <div className="cm-day-swipe-pill">
-              👆 Vuốt ngang màn hình hoặc bấm mũi tên để chuyển ngày
-            </div>
           </div>
 
           <button

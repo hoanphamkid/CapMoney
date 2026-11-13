@@ -5931,7 +5931,7 @@ html:not(.dark-theme) .cm-app-shell {
   transform: scale(0.94);
 }
 
-/* Day View Navigation Header with Arrows */
+/* Day view heading and explicit navigation buttons. */
 .cm-day-nav-center {
   display: flex;
   align-items: center;
@@ -5940,33 +5940,36 @@ html:not(.dark-theme) .cm-app-shell {
   flex: 1;
 }
 
-.cm-day-nav-arrow {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
-  color: #cbd5e1;
+.cm-day-navigation {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  transition: background 0.15s ease, transform 0.1s ease;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 520px);
+  margin: 0 auto 16px;
+  padding: 8px 0;
+  background: #121318;
 }
 
-.cm-day-nav-arrow:active {
-  transform: scale(0.9);
-  background: rgba(255, 255, 255, 0.15);
+.cm-day-nav-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 1px solid rgba(110, 162, 220, .25);
+  border-radius: 12px;
+  background: #1d2633;
+  color: #c5ddfa;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-/* Swipeable Day Body & Paging Animation */
-.cm-day-view-body.swipeable {
-  touch-action: pan-y;
-  user-select: none;
-  cursor: grab;
-}
-
-.cm-day-view-body.swipeable:active {
-  cursor: grabbing;
+.cm-day-nav-button:focus-visible {
+  outline: 2px solid #8abaf1;
+  outline-offset: 3px;
 }
 
 .cm-day-view-body.slide-next {
@@ -6158,14 +6161,6 @@ html:not(.dark-theme) .cm-app-shell {
   width: fit-content;
 }
 
-.cm-day-swipe-pill {
-  text-align: center;
-  font-size: 11px;
-  color: #94a3b8;
-  padding: 6px 0 12px;
-  opacity: 0.85;
-}
-
 @media (max-width: 640px) {
   .cm-day-view-header {
     gap: 8px;
@@ -6180,11 +6175,6 @@ html:not(.dark-theme) .cm-app-shell {
   .cm-day-nav-center {
     min-width: 0;
     gap: 4px;
-  }
-
-  .cm-day-nav-arrow {
-    width: 28px;
-    height: 28px;
   }
 
   .cm-day-view-title {
@@ -6276,10 +6266,6 @@ html:not(.dark-theme) .cm-app-shell {
     gap: 2px;
   }
 
-  .cm-day-nav-arrow {
-    width: 26px;
-    height: 26px;
-  }
 
   .cm-day-view-title h2 {
     font-size: 12px;

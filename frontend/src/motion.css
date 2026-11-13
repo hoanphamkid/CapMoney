@@ -29,7 +29,7 @@
 
 .cm-app-shell :is(.cm-dock-item, .cm-fab-add, .cm-calc-key, .cm-circle-action,
   .cm-day-slot, .cm-type-btn, .cm-mood-stamp-chip, .cm-lookback-pill,
-  .cm-icon-circle, .cm-month-arrow, .cm-day-nav-arrow, .add-calendar-button,
+  .cm-icon-circle, .cm-month-arrow, .cm-day-nav-button, .add-calendar-button,
   .cm-shutter-btn, .cm-cam-side-btn, .cm-skip-camera, .detail-actions button) {
   -webkit-tap-highlight-color: transparent;
   transition: scale 160ms var(--cm-motion-spring), background-color 160ms ease,
@@ -38,7 +38,7 @@
 
 .cm-app-shell :is(.cm-dock-item, .cm-fab-add, .cm-calc-key, .cm-circle-action,
   .cm-day-slot, .cm-type-btn, .cm-mood-stamp-chip, .cm-lookback-pill,
-  .cm-icon-circle, .cm-month-arrow, .cm-day-nav-arrow, .add-calendar-button,
+  .cm-icon-circle, .cm-month-arrow, .cm-day-nav-button, .add-calendar-button,
   .cm-shutter-btn, .cm-cam-side-btn, .cm-skip-camera, .detail-actions button):active:not(:disabled) {
   scale: .94;
 }
@@ -165,7 +165,7 @@
   .cm-selection-feedback, .cm-amount-change, .cm-camera-sheet, .cm-search-bar,
   .cm-calc-grid, .detail-delete-confirm, .capture-error[role="alert"],
   .cm-capture-error, .cm-save-feedback, .cm-save-feedback svg, .cm-spring-pop,
-  .cm-app-shell .ledger-row {
+  .cm-app-shell .ledger-row, .cm-day-view-body.slide-next, .cm-day-view-body.slide-prev {
     animation: none !important;
   }
   .cm-confetti-burst { display: none; }
