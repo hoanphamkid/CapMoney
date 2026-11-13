@@ -1413,8 +1413,8 @@ html.dark-theme { --ink: #e6eee6; --muted: #9eafa2; --line: #2d4940; --paper: #1
 
 /* Shared motion and the compact settings workspace */
 @keyframes cmPageEnter {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes cmCardRise {
@@ -1423,7 +1423,7 @@ html.dark-theme { --ink: #e6eee6; --muted: #9eafa2; --line: #2d4940; --paper: #1
 }
 
 .cm-app-shell .cm-app-content > * {
-  animation: cmPageEnter .42s ease both;
+  animation: cmPageEnter .26s ease backwards;
 }
 
 .cm-app-shell .panel,

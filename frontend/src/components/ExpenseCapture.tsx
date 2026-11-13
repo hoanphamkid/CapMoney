@@ -85,6 +85,11 @@ export function ExpenseCapture({
   const [capturedTime, setCapturedTime] = useState<string>(() => new Date().toTimeString().slice(0, 5));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+  }, []);
 
   const previewUrl = useMemo(() => (image ? URL.createObjectURL(image) : ''), [image]);
   useEffect(() => () => {
@@ -315,6 +320,7 @@ export function ExpenseCapture({
   };
 
   const saveTransaction = async (keepOpenForNextShot = false) => {
+    if (saving || celebrate) return;
     let numericAmount = evaluateExpression(expr);
     if (!numericAmount && note.trim()) {
       const guessed = parseAmountFromNote(note);
@@ -362,9 +368,9 @@ export function ExpenseCapture({
         setStep('camera');
       } else {
         setCelebrate(true);
-        setTimeout(() => {
+        savedTimerRef.current = setTimeout(() => {
           onSaved();
-        }, 380);
+        }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 380);
       }
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Không thể lưu giao dịch.');
@@ -410,7 +416,13 @@ export function ExpenseCapture({
 
   return (
     <div className="cm-capture-modal" onClick={onClose}>
-      <div className="cm-capture-sheet cm-spring-pop" onClick={event => event.stopPropagation()}>
+      {celebrate && (
+        <div className="cm-save-feedback" role="status">
+          <Check size={18} strokeWidth={3} aria-hidden="true" />
+          <span>Đã lưu giao dịch</span>
+        </div>
+      )}
+      <div className={`cm-capture-sheet cm-spring-pop ${celebrate ? 'is-saved' : ''}`} onClick={event => event.stopPropagation()}>
         {celebrate && (
           <div className="cm-confetti-burst" aria-hidden="true">
             <span>🎉</span>
@@ -471,7 +483,7 @@ export function ExpenseCapture({
           >
             <div className="cm-amount-row">
               <span className={`cm-amount-sign ${type}`}>{type === 'expense' ? '−' : '+'}</span>
-              <span className="cm-amount-display">{formattedDisplay}</span>
+              <span key={expr} className="cm-amount-display cm-amount-change">{formattedDisplay}</span>
               <span className="cm-amount-currency">đ</span>
             </div>
 
@@ -589,7 +601,7 @@ export function ExpenseCapture({
         {/* Category & Wallet Select Pills */}
         <div className="cm-Select-pills">
           <label className="cm-select-pill">
-            <ShoppingCart size={15} />
+            <ShoppingCart key={category} size={15} className="cm-selection-feedback" />
             <select value={category} onChange={event => setCategory(event.target.value)}>
               {categories.map(item => (
                 <option key={item.id} value={item.id}>
@@ -601,7 +613,7 @@ export function ExpenseCapture({
           </label>
 
           <label className="cm-select-pill">
-            <ReceiptText size={15} />
+            <ReceiptText key={walletId} size={15} className="cm-selection-feedback" />
             <select value={walletId} onChange={event => setWalletId(event.target.value)}>
               {wallets.map(wallet => (
                 <option key={wallet.id} value={wallet.id}>
@@ -614,12 +626,14 @@ export function ExpenseCapture({
         </div>
 
         {/* Expense / Income Switcher */}
-        <div className="cm-type-switcher">
+        <div className="cm-type-switcher" data-type={type}>
+          <span className="cm-type-indicator" aria-hidden="true" />
           <button
             type="button"
             className={`cm-type-btn expense ${type === 'expense' ? 'active' : ''}`}
             onClick={() => switchType('expense')}
             aria-label="Khoản chi"
+            aria-pressed={type === 'expense'}
           >
             <ArrowUpRight size={18} />
           </button>
@@ -628,6 +642,7 @@ export function ExpenseCapture({
             className={`cm-type-btn income ${type === 'income' ? 'active' : ''}`}
             onClick={() => switchType('income')}
             aria-label="Khoản thu"
+            aria-pressed={type === 'income'}
           >
             <ArrowDownLeft size={18} />
           </button>
@@ -732,7 +747,7 @@ export function ExpenseCapture({
             <button
               type="button"
               className={`cm-calc-key done-tall ${type}`}
-              disabled={saving}
+              disabled={saving || celebrate}
               onClick={() => {
                 if (hasOperator) {
                   setExpr(String(evaluateExpression(expr)));
@@ -775,7 +790,7 @@ export function ExpenseCapture({
             <button
               type="button"
               className="cm-circle-action primary"
-              disabled={saving}
+              disabled={saving || celebrate}
               onClick={() => void saveTransaction(false)}
               aria-label="Lưu giao dịch"
             >
@@ -786,7 +801,7 @@ export function ExpenseCapture({
               <button
                 type="button"
                 className="cm-circle-action add-more"
-                disabled={saving}
+                disabled={saving || celebrate}
                 onClick={() => {
                   if (rawNumericAmount > 0) {
                     void saveTransaction(true);

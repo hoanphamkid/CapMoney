@@ -1,0 +1,172 @@
+/* Short, interaction-driven feedback for the everyday controls. */
+.cm-app-shell {
+  --cm-motion-ease: cubic-bezier(.2, .75, .25, 1);
+  --cm-motion-spring: cubic-bezier(.22, 1.25, .4, 1);
+}
+
+.cm-bottom-dock {
+  grid-template-columns: repeat(var(--cm-dock-count), minmax(0, 1fr));
+}
+
+.cm-dock-highlight {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 8px;
+  width: calc((100% - 16px) / var(--cm-dock-count));
+  border: 1px solid rgba(114, 168, 238, .18);
+  border-radius: 999px;
+  background: linear-gradient(145deg, #2c3b50, #232730);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .06);
+  transform: translateX(calc(var(--cm-dock-index) * 100%));
+  transition: transform 300ms var(--cm-motion-spring);
+  pointer-events: none;
+}
+
+.cm-dock-item { position: relative; z-index: 1; }
+.cm-dock-item.active { background: transparent; }
+.cm-dock-item.active svg { animation: cmIconSelect 300ms var(--cm-motion-spring); }
+
+.cm-app-shell :is(.cm-dock-item, .cm-fab-add, .cm-calc-key, .cm-circle-action,
+  .cm-day-slot, .cm-type-btn, .cm-mood-stamp-chip, .cm-lookback-pill,
+  .cm-icon-circle, .cm-month-arrow, .cm-day-nav-arrow, .add-calendar-button,
+  .cm-shutter-btn, .cm-cam-side-btn, .cm-skip-camera, .detail-actions button) {
+  -webkit-tap-highlight-color: transparent;
+  transition: scale 160ms var(--cm-motion-spring), background-color 160ms ease,
+    border-color 160ms ease, box-shadow 180ms ease, color 160ms ease;
+}
+
+.cm-app-shell :is(.cm-dock-item, .cm-fab-add, .cm-calc-key, .cm-circle-action,
+  .cm-day-slot, .cm-type-btn, .cm-mood-stamp-chip, .cm-lookback-pill,
+  .cm-icon-circle, .cm-month-arrow, .cm-day-nav-arrow, .add-calendar-button,
+  .cm-shutter-btn, .cm-cam-side-btn, .cm-skip-camera, .detail-actions button):active:not(:disabled) {
+  scale: .94;
+}
+
+.cm-app-shell :is(.cm-dock-item, .cm-fab-add, .cm-calc-key, .cm-day-slot,
+  .cm-type-btn, .cm-select-pill, .cm-lookback-pill, .ledger-row,
+  .add-calendar-button, .cm-icon-circle, .detail-actions button):focus-visible {
+  outline: 2px solid #8abaf1;
+  outline-offset: 3px;
+}
+
+.cm-fab-add > svg { transition: rotate 220ms var(--cm-motion-spring); }
+.cm-fab-add:active > svg { rotate: 90deg; }
+.cm-day-circle, .cm-thumb-stack { transition: scale 180ms var(--cm-motion-spring); }
+.cm-day-slot[aria-pressed="true"] .cm-day-number { color: #8abaf1; }
+.cm-day-slot[aria-pressed="true"] .cm-day-visual::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 1px solid rgba(138, 186, 241, .65);
+  border-radius: 14px;
+  pointer-events: none;
+  animation: cmSelectRing 260ms var(--cm-motion-ease);
+}
+
+.cm-type-switcher { position: relative; isolation: isolate; }
+.cm-type-indicator {
+  position: absolute;
+  z-index: -1;
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: 48px;
+  border-radius: 999px;
+  background: #e06d64;
+  transform: translateX(0);
+  transition: transform 260ms var(--cm-motion-spring), background-color 180ms ease;
+  pointer-events: none;
+}
+.cm-type-switcher[data-type="income"] .cm-type-indicator {
+  transform: translateX(54px);
+  background: #5fc278;
+}
+.cm-app-shell .cm-type-btn.active { background: transparent; }
+.cm-type-btn.active > svg, .cm-selection-feedback { animation: cmIconSelect 260ms var(--cm-motion-spring); }
+.cm-select-pill:focus-within { box-shadow: 0 0 0 3px rgba(110, 162, 220, .16); }
+.cm-amount-change { display: inline-block; animation: cmAmountChange 160ms var(--cm-motion-ease); }
+.cm-amount-display { font-variant-numeric: tabular-nums; }
+
+.cm-camera-sheet, .cm-search-bar, .cm-calc-grid, .detail-delete-confirm {
+  animation: cmControlEnter 220ms var(--cm-motion-ease) backwards;
+}
+.cm-app-shell .ledger-row { animation-fill-mode: backwards; }
+.cm-app-shell .ledger-row:nth-of-type(2) { animation-delay: 25ms; }
+.cm-app-shell .ledger-row:nth-of-type(3) { animation-delay: 50ms; }
+.cm-app-shell .ledger-row:nth-of-type(4) { animation-delay: 75ms; }
+.ledger-row > svg { transition: translate 180ms var(--cm-motion-ease); }
+.ledger-search { transition: box-shadow 180ms ease; }
+.ledger-search:focus-within { box-shadow: 0 0 0 2px rgba(138, 186, 241, .5); }
+.capture-error[role="alert"], .cm-capture-error { animation: cmErrorNudge 220ms ease-out; }
+
+.cm-save-feedback {
+  position: fixed;
+  z-index: 6;
+  top: max(20px, env(safe-area-inset-top));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border: 1px solid rgba(125, 232, 154, .5);
+  border-radius: 999px;
+  background: #163d2d;
+  color: #a5f3bc;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  translate: -50% 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
+  animation: cmControlEnter 200ms var(--cm-motion-spring);
+}
+.cm-save-feedback svg { stroke-dasharray: 32; animation: cmCheckDraw 240ms ease-out both; }
+.cm-capture-sheet.is-saved .cm-entry-card { border-color: rgba(125, 232, 154, .6); }
+
+@media (hover: hover) and (pointer: fine) {
+  .cm-dock-item:hover, .cm-fab-add:hover, .cm-circle-action:hover { scale: 1.05; }
+  .cm-fab-add:hover > svg { rotate: 90deg; }
+  .cm-day-slot:hover :is(.cm-day-circle, .cm-thumb-stack) { scale: 1.06; }
+  .ledger-row:hover > svg { translate: 3px 0; }
+}
+
+@keyframes cmIconSelect {
+  0% { scale: .8; }
+  55% { scale: 1.13; }
+  100% { scale: 1; }
+}
+@keyframes cmSelectRing {
+  from { opacity: 0; scale: .85; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes cmAmountChange {
+  from { opacity: .65; translate: 0 3px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes cmControlEnter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes cmErrorNudge {
+  0%, 100% { translate: 0 0; }
+  30% { translate: -3px 0; }
+  65% { translate: 3px 0; }
+}
+@keyframes cmCheckDraw {
+  from { stroke-dashoffset: 32; }
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-app-shell *, .cm-app-shell *::before, .cm-app-shell *::after {
+    transition: none !important;
+  }
+  .cm-dock-item.active svg, .cm-day-visual::after, .cm-type-btn.active > svg,
+  .cm-selection-feedback, .cm-amount-change, .cm-camera-sheet, .cm-search-bar,
+  .cm-calc-grid, .detail-delete-confirm, .capture-error[role="alert"],
+  .cm-capture-error, .cm-save-feedback, .cm-save-feedback svg, .cm-spring-pop,
+  .cm-app-shell .ledger-row {
+    animation: none !important;
+  }
+  .cm-confetti-burst { display: none; }
+}

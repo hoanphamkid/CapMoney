@@ -581,6 +581,7 @@ export function CalendarPage() {
                   key={key}
                   type="button"
                   className={`cm-day-slot ${isToday ? 'today' : ''} ${hasEvents ? 'has-events' : ''}`}
+                  aria-pressed={selectedDate === key}
                   onClick={() => handleDayClick(key)}
                 >
                   <div className="cm-day-visual">
