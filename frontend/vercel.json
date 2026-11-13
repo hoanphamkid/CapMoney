@@ -5,7 +5,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/api/webhooks/mbbank", "destination": "/api/webhooks/mbbank" },
+    { "source": "/api/webhooks/sepay", "destination": "/api/webhooks/sepay" },
+    { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
