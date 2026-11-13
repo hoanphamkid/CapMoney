@@ -1,5 +1,6 @@
 import {
   ArrowDownLeft,
+  ArrowLeftRight,
   ArrowUpRight,
   CalendarDays,
   Camera,
@@ -18,7 +19,7 @@ import type { CalendarEvent, Wallet } from '../services/api';
 import { ApiError, api } from '../services/api';
 import { ImageCropModal } from './ImageCropModal';
 
-export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEvent; onClose: () => void; onChanged: () => void }) {
+export function ExpenseDetail({ event, wallets = [], onClose, onChanged }: { event: CalendarEvent; wallets?: Wallet[]; onClose: () => void; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -35,6 +36,7 @@ export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEv
   }, [confirmingDelete]);
 
   const income = event.kind === 'income';
+  const transfer = event.kind === 'transfer';
   const isMbBank = event.source === 'webhook_mbbank' || /MB Bank|MBBank/i.test(event.note ?? '');
 
   const timeDisplay = useMemo(() => {
@@ -157,13 +159,13 @@ export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEv
             <img className="detail-photo" src={event.imageUrl} alt="Ảnh giao dịch" />
           ) : (
             <div className="detail-no-photo">
-              <ImageOff size={28} />
-              <span>Giao dịch chưa có ảnh</span>
+              {transfer ? <ArrowLeftRight size={28} /> : <ImageOff size={28} />}
+              <span>{transfer ? 'Chuyển tiền giữa các ví' : 'Giao dịch chưa có ảnh'}</span>
             </div>
           )}
 
           {/* Quick Snap/Replace Photo Button directly on Card */}
-          <button
+          {!transfer && <button
             type="button"
             className="cm-detail-snap-btn"
             disabled={updatingPhoto}
@@ -178,7 +180,7 @@ export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEv
                 <span>{event.imageUrl ? (isMbBank ? 'Thay bằng ảnh bill thật' : 'Thay ảnh') : 'Chụp / Gắn ảnh'}</span>
               </>
             )}
-          </button>
+          </button>}
           <input
             ref={fileInputRef}
             type="file"
@@ -194,9 +196,9 @@ export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEv
         </div>
 
         <div className="detail-content">
-          <span className={`detail-kind ${income ? 'income' : 'expense'}`}>
-            {income ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-            {income ? 'Thu nhập' : 'Chi tiêu'}
+          <span className={`detail-kind ${transfer ? 'transfer' : income ? 'income' : 'expense'}`}>
+            {transfer ? <ArrowLeftRight size={14} /> : income ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
+            {transfer ? 'Chuyển ví' : income ? 'Thu nhập' : 'Chi tiêu'}
           </span>
           <h2>{formatMoney(event.amount ?? 0)}</h2>
           <p className="detail-note">{event.note || event.title}</p>
@@ -204,7 +206,8 @@ export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEv
             <span>
               <CalendarDays size={14} /> {formatDate(event.dateKey)}
             </span>
-            <span>Danh mục: {categoryLabel(event.categoryId)}</span>
+            <span>{transfer ? 'Không tính vào tổng thu chi' : `Danh mục: ${categoryLabel(event.categoryId)}`}</span>
+            {transfer && <><span>Từ ví: {wallets.find(wallet => wallet.id === event.walletId)?.name ?? 'Ví nguồn'}</span><span>Đến ví: {wallets.find(wallet => wallet.id === event.toWalletId)?.name ?? 'Ví nhận'}</span></>}
           </div>
           {confirmingDelete ? (
             <div
@@ -237,9 +240,9 @@ export function ExpenseDetail({ event, onClose, onChanged }: { event: CalendarEv
             </div>
           ) : (
             <div className="detail-actions">
-              <button type="button" onClick={() => setEditing(true)}>
+              {!transfer && <button type="button" onClick={() => setEditing(true)}>
                 <Edit3 size={14} /> Sửa chi tiết
-              </button>
+              </button>}
               <button type="button" className="danger" onClick={() => setConfirmingDelete(true)}>
                 <Trash2 size={14} /> Xóa
               </button>

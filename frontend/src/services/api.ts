@@ -19,6 +19,7 @@ export type CalendarEvent = {
   note?: string;
   categoryId?: string;
   walletId?: string;
+  toWalletId?: string;
   imageUrl?: string | null;
   status: string;
   source: 'transaction' | 'reminder' | 'manual' | 'camera' | 'webhook_mbbank';

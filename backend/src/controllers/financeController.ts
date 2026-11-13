@@ -71,8 +71,9 @@ export const createTransaction: RequestHandler = async (request, response) => {
   const timePart = input.transactionTime ? (input.transactionTime.length === 5 ? `${input.transactionTime}:00` : input.transactionTime) : new Date().toTimeString().slice(0, 8);
   const txDateTime = new Date(`${input.transactionDate}T${timePart}.000Z`);
   const finalSource = input.source !== 'manual' ? input.source : (file ? 'camera' : 'manual');
+  const session = await mongoose.startSession();
   try {
-    const session = await mongoose.startSession(); let created: any;
+    let created: any;
     await session.withTransaction(async () => {
       created = await TransactionModel.create([{
         userId,
@@ -94,13 +95,15 @@ export const createTransaction: RequestHandler = async (request, response) => {
       }], { session }).then(rows => rows[0]);
       if (walletId && input.type !== 'transfer') await WalletModel.updateOne({ _id: walletId }, { $inc: { balanceMinor: delta(input.type, amountMinor) } }, { session });
       if (input.type === 'transfer') {
-        await WalletModel.updateOne({ _id: walletId }, { $inc: { balanceMinor: -amountMinor } }, { session });
-        await WalletModel.updateOne({ _id: toWalletId }, { $inc: { balanceMinor: amountMinor } }, { session });
+        const debited = await WalletModel.updateOne({ _id: walletId, userId, active: true, balanceMinor: { $gte: amountMinor } }, { $inc: { balanceMinor: -amountMinor } }, { session });
+        if (!debited.matchedCount) throw new AppError(400, 'Số dư ví nguồn không đủ', 'INSUFFICIENT_BALANCE');
+        const credited = await WalletModel.updateOne({ _id: toWalletId, userId, active: true }, { $inc: { balanceMinor: amountMinor } }, { session });
+        if (!credited.matchedCount) throw new AppError(403, 'Ví nhận không còn hoạt động', 'WALLET_FORBIDDEN');
       }
     });
-    session.endSession();
     response.status(201).json({ transaction: toPublic(created) });
   } catch (error) { await deletePrivateImage(imageKey); throw error; }
+  finally { await session.endSession(); }
 };
 
 export const updateTransaction: RequestHandler = async (request, response) => {

@@ -132,6 +132,27 @@ describe('receipt transaction storage', () => {
     expect((await request(app).delete(`/api/transactions/${id}`).set('Cookie', cookie)).status).toBe(204);
     expect((await WalletModel.findById(destination._id).lean())!.balanceMinor).toBe(2000000);
   });
+
+  it('transfers funds atomically and prevents concurrent transfers from overspending', async () => {
+    const owner = (await WalletModel.findById(walletId).lean())!.userId;
+    const [source, destination] = await WalletModel.create([
+      { userId: owner, name: 'Transfer source', type: 'cash', balanceMinor: 1000000 },
+      { userId: owner, name: 'Transfer destination', type: 'bank', balanceMinor: 0 },
+    ]);
+    const transfer = () => request(app).post('/api/transactions').set('Cookie', cookie)
+      .field('type', 'transfer').field('amount', '7000').field('note', 'Internal transfer')
+      .field('walletId', String(source._id)).field('toWalletId', String(destination._id))
+      .field('transactionDate', '2026-11-13').field('idempotencyKey', randomUUID());
+    const results = await Promise.all([transfer(), transfer()]);
+    expect(results.map(result => result.status).sort()).toEqual([201, 400]);
+    expect((await WalletModel.findById(source._id).lean())!.balanceMinor).toBe(300000);
+    expect((await WalletModel.findById(destination._id).lean())!.balanceMinor).toBe(700000);
+    expect(await TransactionModel.countDocuments({ walletId: source._id })).toBe(1);
+    const created = results.find(result => result.status === 201)!;
+    expect((await request(app).delete(`/api/transactions/${created.body.transaction.id}`).set('Cookie', cookie)).status).toBe(204);
+    expect((await WalletModel.findById(source._id).lean())!.balanceMinor).toBe(1000000);
+    expect((await WalletModel.findById(destination._id).lean())!.balanceMinor).toBe(0);
+  });
 });
 
 for (const layout of ['', 'frontend/']) {

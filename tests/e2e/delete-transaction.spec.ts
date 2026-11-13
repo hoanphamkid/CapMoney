@@ -22,6 +22,8 @@ async function openTransaction(page: Page, mode: 'success' | 'error' | 'expired'
         : { json: { user: { id: 'owner' } } });
     } else if (path === '/api/transactions') {
       await route.fulfill({ json: { transactions: deleted ? [] : [transaction] } });
+    } else if (path === '/api/wallets') {
+      await route.fulfill({ json: { wallets: [{ id: transaction.walletId, name: 'Wallet', type: 'cash', balance: 100000, balanceMinor: 10000000, currency: 'VND', color: '#163e36' }] } });
     } else if (path === `/api/transactions/${transaction.id}` && route.request().method() === 'DELETE') {
       deletes++;
       if ((mode === 'expired' && deletes === 1) || mode === 'logged-out') {
