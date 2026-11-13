@@ -5223,6 +5223,17 @@ html:not(.dark-theme) .cm-app-shell {
   gap: 6px;
 }
 
+.cm-photobooth-export-note {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 158, 153, .35);
+  border-radius: 10px;
+  background: rgba(255, 142, 136, .1);
+  color: #ffc2bd;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 /* Mood Stamp & Life Index on Expense Capture */
 .cm-photo-mood-stamp {
   position: absolute;

@@ -63,6 +63,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   const [slideDir, setSlideDir] = useState<'next' | 'prev'>('next');
   const [pulseTick, setPulseTick] = useState(0);
   const [boothTheme, setBoothTheme] = useState<'dark' | 'pink' | 'neon' | 'retro'>('dark');
+  const [exportError, setExportError] = useState('');
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -213,6 +214,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
 
   // Export Korean Photobooth 4-Cut Strip with real photos
   const downloadPhotoboothStrip = async () => {
+    setExportError('');
     const cuts = displayTxs.slice(0, 4);
     const canvas = document.createElement('canvas');
     canvas.width = 640;
@@ -253,7 +255,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
       ctx.fillRect(48, boxY, 544, 265);
 
-      if (tx?.imageUrl) {
+      if (tx?.imageUrl && canvasImageIsSafe(tx.imageUrl)) {
         try {
           const img = new Image();
           img.crossOrigin = 'anonymous';
@@ -295,14 +297,16 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
     ctx.font = 'bold 22px sans-serif';
     ctx.fillText('✨ cap-money.vercel.app • Nhật ký chi tiêu bằng ảnh', 72, 1320);
 
-    const link = document.createElement('a');
-    link.download = `capmoney-photobooth-${period}d.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    try {
+      await saveCanvasPng(canvas, `capmoney-photobooth-${period}d.png`, 'CapMoney Photobooth');
+    } catch {
+      setExportError('Không thể lưu PNG trên trình duyệt này. Hãy thử nút chia sẻ hoặc chụp màn hình ảnh đang mở.');
+    }
   };
 
   // Export Story Card as PNG Image
-  const downloadStoryCard = () => {
+  const downloadStoryCard = async () => {
+    setExportError('');
     const canvas = document.createElement('canvas');
     canvas.width = 720;
     canvas.height = 1080;
@@ -362,10 +366,11 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
     ctx.font = '24px sans-serif';
     ctx.fillText('cap-money.vercel.app • Quản lý chi tiêu bằng hình ảnh', 48, 1020);
 
-    const link = document.createElement('a');
-    link.download = `capmoney-lookback-${period}d.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    try {
+      await saveCanvasPng(canvas, `capmoney-lookback-${period}d.png`, 'CapMoney Story');
+    } catch {
+      setExportError('Không thể lưu PNG trên trình duyệt này. Hãy thử nút chia sẻ hoặc chụp màn hình ảnh đang mở.');
+    }
   };
 
   return (
@@ -796,8 +801,9 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
                 className="cm-photobooth-dl-btn"
                 onClick={() => void downloadPhotoboothStrip()}
               >
-                <Download size={14} /> Tải Dải Phim Photobooth (PNG)
+                <Download size={14} /> Lưu / chia sẻ Photobooth (PNG)
               </button>
+            {exportError && <p className="cm-photobooth-export-note" role="alert">{exportError}</p>}
             </div>
           </div>
         )}
@@ -836,6 +842,52 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
       </div>
     </div>
   );
+}
+
+function canvasImageIsSafe(source: string) {
+  try {
+    const url = new URL(source, window.location.href);
+    return url.protocol === 'data:' || url.protocol === 'blob:' || url.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+async function saveCanvasPng(canvas: HTMLCanvasElement, filename: string, title: string) {
+  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('PNG blob unavailable');
+
+  const file = new File([blob], filename, { type: 'image/png' });
+  if (typeof navigator.share === 'function' && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+    try {
+      await navigator.share({ title, files: [file] });
+      return;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!opened) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+  } else {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 function formatVNDate(dateKey: string) {
