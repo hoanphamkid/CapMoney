@@ -2,6 +2,7 @@ import type { MeResponse, Profile, User } from '../types/auth';
 export type { MeResponse } from '../types/auth';
 
 const API_ROOT = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || '/api';
+export const realtimeUrl = `${API_ROOT}/realtime/events`;
 
 export class ApiError extends Error {
   public status: number; public code: string;

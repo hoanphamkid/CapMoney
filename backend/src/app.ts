@@ -10,6 +10,8 @@ import { financeRouter } from './routes/finance.js';
 import { calendarRouter } from './routes/calendar.js';
 import { webhookRouter } from './routes/webhook.js';
 import { backupsRouter } from './routes/backups.js';
+import { notificationsRouter } from './routes/notifications.js';
+import { realtimeRouter } from './routes/realtime.js';
 import { errorHandler, logger, notFound } from './middleware/error.js';
 
 export function createApp() {
@@ -25,6 +27,8 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
   app.use('/api/auth', authRouter);
   app.use('/api/webhooks', webhookRouter);
+  app.use('/api/notifications', notificationsRouter);
+  app.use('/api/realtime', realtimeRouter);
   app.use('/api', financeRouter);
   app.use('/api/calendar', calendarRouter);
   app.use(notFound);

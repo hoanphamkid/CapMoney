@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, type MeResponse } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { bankPushEnabled, disableBankPush, enableBankPush } from '../services/bankNotifications';
 
 export function SettingsPage() {
   const { user, logout, refreshUser } = useAuth();
@@ -22,6 +23,26 @@ export function SettingsPage() {
   const [error, setError] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [bankPush, setBankPush] = useState(false);
+  const [bankPushBusy, setBankPushBusy] = useState(true);
+
+  useEffect(() => {
+    let disposed = false;
+    void bankPushEnabled().then(enabled => { if (!disposed) setBankPush(enabled); })
+      .catch(() => {}).finally(() => { if (!disposed) setBankPushBusy(false); });
+    return () => { disposed = true; };
+  }, []);
+
+  const toggleBankPush = async () => {
+    setBankPushBusy(true); setError(''); setNotice('');
+    try {
+      if (bankPush) await disableBankPush(); else await enableBankPush();
+      setBankPush(!bankPush);
+      setNotice(bankPush ? 'Đã tắt thông báo MB Bank trên thiết bị này.' : 'Đã bật thông báo tiền vào và tiền ra MB Bank trên thiết bị này.');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Không thể thay đổi thông báo MB Bank.');
+    } finally { setBankPushBusy(false); }
+  };
 
   useEffect(() => {
     void Promise.all([api.me(), api.sessions()])
@@ -245,6 +266,14 @@ export function SettingsPage() {
               title="Thông báo"
               description="Bật hoặc tắt các nhắc nhở thông minh trong ứng dụng."
             />
+            <button type="button" className="settings-check-btn" role="switch" aria-checked={bankPush}
+              aria-label="Thông báo tiền vào và tiền ra MB Bank" disabled={bankPushBusy} onClick={() => void toggleBankPush()}>
+              <span className={`check-box ${bankPush ? 'checked' : ''}`}>
+                {bankPushBusy ? <LoaderCircle size={13} className="spin" /> : bankPush && <Check size={13} />}
+              </span>
+              <span>Thông báo tiền vào và tiền ra MB Bank</span>
+            </button>
+            <p className="page-subtitle">Nhận thông báo trên thiết bị này kể cả khi đóng trang. Với iPhone/iPad, hãy thêm CapMoney vào Màn hình chính rồi bật thông báo trong ứng dụng.</p>
             <button
               type="button"
               className="settings-check-btn"

@@ -4,6 +4,7 @@
   "installCommand": "rm -rf node_modules ../node_modules && npm install --include=optional",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": { "api/**/*.ts": { "maxDuration": 60 } },
   "rewrites": [
     { "source": "/api/webhooks/mbbank", "destination": "/api/webhooks/mbbank" },
     { "source": "/api/webhooks/sepay", "destination": "/api/webhooks/sepay" },

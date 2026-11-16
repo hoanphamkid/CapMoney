@@ -16,6 +16,7 @@ export function DashboardPage() {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const recentListRef = useRef<HTMLDivElement>(null);
+  const requestVersion = useRef(0);
   const [scrollEdges, setScrollEdges] = useState({ above: false, below: false });
   useAutoRefresh(() => load());
 
@@ -57,8 +58,10 @@ export function DashboardPage() {
   }, [recentTransactions]);
 
   const load = async () => {
+    const version = ++requestVersion.current;
     try {
       const [w, t] = await Promise.all([api.wallets(), api.transactions()]);
+      if (version !== requestVersion.current) return;
       setWallets(w.wallets);
       setTransactions(t.transactions);
     } catch {
@@ -68,6 +71,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     void load();
+    return () => { requestVersion.current++; };
   }, []);
 
   const stats = useMemo(() => {

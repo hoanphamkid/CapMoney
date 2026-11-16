@@ -58,7 +58,20 @@ Thành công trả HTTP 200 và `success: true`. Gửi lại cùng tài khoản/
 
 Ngày giờ không có timezone được hiểu là giờ Việt Nam. Casso gửi nhiều phần tử trong `data` được xử lý toàn bộ trong một transaction database. Thiếu khóa, thiếu cấu hình tài khoản, số tiền sai, thiếu mã tham chiếu hoặc lưu thất bại đều trả lỗi để không báo thành công giả.
 
-Trang lịch, giao dịch và thống kê tải dữ liệu mới mỗi 10 giây khi đang hiển thị, đồng thời tải lại khi bạn quay về từ app ngân hàng. Khoảng này tính từ lúc webhook đã lưu thành công; độ trễ của ngân hàng/nhà cung cấp nằm ngoài CapMoney.
+Trang lịch, giao dịch, số dư ví và thống kê nhận cập nhật trực tiếp qua `GET /api/realtime/events` (SSE, có xác thực cookie). Máy chủ theo dõi các giao dịch MB Bank vừa commit bằng MongoDB Change Streams, nên vẫn nhận được giao dịch do function webhook Vercel khác ghi vào. Không cần reload trang. Kết nối tự mở lại định kỳ để phù hợp giới hạn serverless; mỗi lần nối lại sẽ tải bù dữ liệu. Nếu kết nối trực tiếp gián đoạn, web vẫn kiểm tra mỗi 10 giây và khi quay về từ app ngân hàng. Độ trễ của ngân hàng/nhà cung cấp trước khi gửi webhook nằm ngoài CapMoney.
+
+## Thông báo MB Bank trên thiết bị
+
+1. Chạy `npm run push:keys` một lần để tạo `VAPID_PUBLIC_KEY` và `VAPID_PRIVATE_KEY`. Giữ khóa riêng ngoài Git; không đặt vào biến `VITE_*`. Giữ nguyên bộ khóa giữa các lần deploy.
+2. Đặt hai biến đó cùng `VAPID_SUBJECT=mailto:<email-lien-he-cua-ban>` trên **cả API web lẫn các function webhook MB Bank/SePay**. Dùng cùng bộ khóa cho mọi deployment cùng database. Khi chạy local, cấu hình trong `.env` gốc cho `npm run dev`, hoặc `backend/.env` cho `npm run dev:backend`.
+3. Triển khai lại frontend và backend. Website phải dùng HTTPS (localhost được hỗ trợ khi phát triển). MongoDB phải là replica set/Atlas như yêu cầu sẵn có của webhook. Vercel đã được cấu hình thời gian chạy 60 giây; SSE luân phiên kết nối sau 25 giây. Reverse proxy riêng cần tắt buffering cho `/api/realtime/events`.
+4. Trên từng thiết bị, đăng nhập rồi vào **Cá nhân → Thông báo → Thông báo tiền vào và tiền ra MB Bank** và cho phép trình duyệt gửi thông báo. Với iPhone/iPad, thêm web vào Màn hình chính rồi mở ứng dụng từ biểu tượng đó để bật Web Push.
+
+Sau khi webhook commit thành công, máy chủ gửi Web Push đến những thiết bị đã bật của đúng tài khoản; service worker hiển thị tiền vào/tiền ra và số tiền kể cả khi trang đã đóng. Bấm thông báo để mở trang Ví. Khi đang mở web còn có thông báo trong ứng dụng, không phụ thuộc quyền thông báo hệ thống. Webhook gửi lại cùng mã tham chiếu không gửi thông báo lần nữa. Tắt thông báo hoặc đăng xuất sẽ hủy đăng ký trên thiết bị hiện tại; endpoint hết hạn được máy chủ dọn khi push trả 404/410.
+
+Nếu chưa có cấu hình VAPID, cập nhật trực tiếp và thông báo trong web vẫn chạy, còn nút bật thông báo thiết bị sẽ giải thích cấu hình thiếu. Web Push phụ thuộc kết nối mạng, quyền trình duyệt và cài đặt thông báo của hệ điều hành. Lỗi gửi push được ghi nhận nhưng không làm mất hoặc ghi lại giao dịch ngân hàng; hiện chưa có hàng đợi gửi lại push khi dịch vụ push lỗi tạm thời. Luồng webhook ntfy cũ (không có `MONGO_URI`) chưa hỗ trợ thông báo và SSE này; cần chuyển về MongoDB dùng chung như hướng dẫn ở trên.
+
+Tài liệu kỹ thuật: [Push API](https://developer.mozilla.org/en-US/docs/Web/API/Push_API), [giới hạn thời gian Vercel Functions](https://vercel.com/docs/functions/configuring-functions/duration).
 
 Đồng bộ bản sao không yêu cầu hai thiết bị mở cùng lúc. Trên điện thoại, đăng nhập và tạo bản sao từ nguồn “Dữ liệu lưu trên thiết bị này”; sau đó có thể đóng điện thoại. Khi thuận tiện, đăng nhập cùng tài khoản trên máy tính, chọn bản sao đó và khôi phục. Máy chủ giữ bản sao cho đến khi máy tính áp dụng.
 

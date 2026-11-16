@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import type { User } from '../types/auth';
 import { api } from '../services/api';
+import { disableBankPush } from '../services/bankNotifications';
 
 type AuthContextValue = { user: User | null; loading: boolean; login: (input: { email: string; password: string; remember: boolean }) => Promise<User>; register: (input: { name: string; email: string; password: string; phone?: string }) => Promise<User>; logout: () => Promise<void>; refreshUser: () => Promise<void> };
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -22,7 +23,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     loading,
     login: async input => { const result = await api.login(input); setUser(result.user); return result.user; },
     register: async input => { const result = await api.register(input); setUser(result.user); return result.user; },
-    logout: async () => { await api.logout(); setUser(null); },
+    logout: async () => { await disableBankPush().catch(() => {}); await api.logout(); setUser(null); },
     refreshUser,
   }), [loading, refreshUser, user]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

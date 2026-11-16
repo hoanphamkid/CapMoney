@@ -22,7 +22,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
@@ -63,6 +63,7 @@ export function CalendarPage() {
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const requestVersion = useRef(0);
   const [loading, setLoading] = useState(true);
 
   const [hideAll, setHideAll] = useState(false);
@@ -84,12 +85,14 @@ export function CalendarPage() {
   }, [cursor]);
 
   const reload = async (quiet = false) => {
+    const version = ++requestVersion.current;
     if (!quiet) setLoading(true);
     try {
       const txRes = await api.transactions({ from: monthRange.from, to: monthRange.to });
+      if (version !== requestVersion.current) return;
       setTransactions(txRes.transactions);
     } finally {
-      if (!quiet) setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
 
@@ -97,6 +100,7 @@ export function CalendarPage() {
 
   useEffect(() => {
     void reload();
+    return () => { requestVersion.current++; };
   }, [monthRange.from, monthRange.to]);
 
   const filteredTransactions = useMemo(() => {

@@ -1,6 +1,7 @@
-import { Home, PieChart, UserRound, WalletCards } from 'lucide-react';
-import type { CSSProperties, ReactNode } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Home, PieChart, UserRound, WalletCards, X } from 'lucide-react';
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useBankRealtime, type BankEvent } from '../hooks/useBankRealtime';
 
 const dockItems = [
   { label: 'Trang chủ', icon: Home, to: '/app', matchPaths: ['/app', '/app/calendar'] },
@@ -12,10 +13,25 @@ const dockItems = [
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const activeIndex = dockItems.findIndex(item => item.matchPaths.includes(location.pathname));
+  const [bankEvent, setBankEvent] = useState<BankEvent | null>(null);
+  const onTransaction = useCallback((event: BankEvent) => setBankEvent(event), []);
+  useBankRealtime(onTransaction);
+  useEffect(() => {
+    if (!bankEvent) return;
+    const timer = setTimeout(() => setBankEvent(null), 8000);
+    return () => clearTimeout(timer);
+  }, [bankEvent]);
 
   return (
     <div className="cm-app-shell">
       <main className="cm-app-content">{children}</main>
+      {bankEvent && <div className="bank-notification-toast" role="status" aria-live="polite">
+        <Link to="/app/transactions" onClick={() => setBankEvent(null)}>
+          <strong>MB Bank · {bankEvent.type === 'income' ? 'Nhận tiền' : 'Chuyển tiền'}</strong>
+          <span>{bankEvent.type === 'income' ? '+' : '−'}{bankEvent.amount.toLocaleString('vi-VN')} ₫</span>
+        </Link>
+        <button type="button" aria-label="Đóng thông báo" onClick={() => setBankEvent(null)}><X size={18} /></button>
+      </div>}
 
       <nav
         className="cm-bottom-dock"

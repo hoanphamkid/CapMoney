@@ -13,6 +13,15 @@ import { TransactionModel } from '../models/Transaction.js';
 import { deletePrivateImage } from '../services/storageService.js';
 import { logger } from '../middleware/error.js';
 import { bankDate, parseBankTransactions, verifyBankWebhook } from '../utils/bankWebhook.js';
+import * as webPush from 'web-push';
+import { signAccessToken } from '../utils/jwt.js';
+import { subscriptionId } from '../services/bankNotificationService.js';
+import { once } from 'node:events';
+
+vi.mock('web-push', async importOriginal => ({
+  ...await importOriginal<typeof import('web-push')>(),
+  sendNotification: vi.fn(),
+}));
 // Import the deployment entry point without pulling it into the backend build's rootDir.
 const serverlessEntry = '../../../api/webhooks/mbbank.js';
 const { default: serverlessHandler } = await import(serverlessEntry);
@@ -80,7 +89,7 @@ afterAll(async () => {
   await serverlessDb.disconnect();
   await mongoose.disconnect();
   await database?.stop();
-  for (const key of ['MONGO_URI', 'MBBANK_WEBHOOK_SECRET', 'SEPAY_WEBHOOK_SECRET', 'MBBANK_USER_ID', 'MBBANK_ACCOUNT_NUMBER']) {
+  for (const key of ['MONGO_URI', 'MBBANK_WEBHOOK_SECRET', 'SEPAY_WEBHOOK_SECRET', 'MBBANK_USER_ID', 'MBBANK_ACCOUNT_NUMBER', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT']) {
     if (savedEnv[key] === undefined) delete process.env[key]; else process.env[key] = savedEnv[key];
   }
 }, 30000);
@@ -122,6 +131,34 @@ for (const [name, post] of [
       const unrelated = await WalletModel.findOne({ userId: owner, name: 'Vietcombank' }).lean();
       expect(unrelated!.balanceMinor).toBe(900000);
     });
+    it('pushes committed income and expense once, only to the linked user devices', async () => {
+      const keys = webPush.generateVAPIDKeys();
+      Object.assign(process.env, { VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey, VAPID_SUBJECT: 'mailto:push@example.test' });
+      const endpoint = `https://fcm.googleapis.com/fcm/send/${name}-owner`;
+      const cookie = `capmoney_access=${signAccessToken({ sub: owner, role: 'user' })}`;
+      const otherCookie = `capmoney_access=${signAccessToken({ sub: other, role: 'user' })}`;
+      const subscription = { endpoint, keys: { p256dh: 'A'.repeat(87), auth: 'B'.repeat(22) } };
+      const send = vi.mocked(webPush.sendNotification).mockReset().mockResolvedValue({ statusCode: 201, headers: {}, body: '' });
+      try {
+        expect((await request(app).post('/api/notifications/subscription').send(subscription)).status).toBe(401);
+        expect((await request(app).post('/api/notifications/subscription').set('Cookie', cookie).send({ ...subscription, endpoint: 'https://127.0.0.1/internal' })).status).toBe(400);
+        expect((await request(app).post('/api/notifications/subscription').set('Cookie', cookie).send({ ...subscription, userId: other })).status).toBe(201);
+        expect((await request(app).post('/api/notifications/subscription/status').set('Cookie', otherCookie).send({ endpoint })).body.enabled).toBe(false);
+        expect((await request(app).delete('/api/notifications/subscription').set('Cookie', otherCookie).send({ endpoint })).status).toBe(204);
+        for (const direction of ['in', 'out']) {
+          const body = payload(`${name}-push-${direction}`, direction, 12345);
+          expect((await post(body)).status).toBe(200);
+          expect((await post(body)).status).toBe(200);
+        }
+        expect(send).toHaveBeenCalledTimes(2);
+        expect(send.mock.calls.every(call => call[0].endpoint === endpoint)).toBe(true);
+        expect(JSON.parse(send.mock.calls[0][1] as string)).toMatchObject({ title: 'MB Bank: Nhận tiền', body: '+12.345 ₫', url: '/app/transactions' });
+        expect(JSON.parse(send.mock.calls[1][1] as string).title).toBe('MB Bank: Chuyển tiền');
+        send.mockRejectedValueOnce({ statusCode: 410 });
+        expect((await post(payload(`${name}-push-expired`, 'in', 1000))).status).toBe(200);
+        expect(await mongoose.connection.db!.collection('pushsubscriptions').findOne({ _id: subscriptionId(endpoint) as any })).toBeNull();
+      } finally { send.mockReset(); }
+    });
     it('handles every item in a Casso batch and keeps balances exact', async () => {
       const before = (await WalletModel.findOne({ userId: owner, name: 'MB Bank' }).lean())!.balanceMinor;
       const result = await post({ data: [
@@ -152,3 +189,43 @@ for (const [name, post] of [
     });
   });
 }
+
+describe('bank realtime stream', () => {
+  it('requires a session and streams only this user bank inserts from standalone webhooks', async () => {
+    expect((await request(app).get('/api/realtime/events')).status).toBe(401);
+    const server = app.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const address = server.address() as { port: number };
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 12000);
+    const cookie = `capmoney_access=${signAccessToken({ sub: owner, role: 'user' })}`;
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/realtime/events`, { headers: { Cookie: cookie }, signal: abort.signal });
+      expect(response.headers.get('content-type')).toContain('text/event-stream');
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let received = '';
+      const until = async (text: string) => {
+        while (!received.includes(text)) {
+          const chunk = await reader.read();
+          if (chunk.done) throw new Error('Stream ended before the bank event');
+          received += decoder.decode(chunk.value, { stream: true });
+        }
+      };
+      await until('event: ready');
+      await TransactionModel.create({ userId: other, type: 'income', amountMinor: 100, source: 'webhook_mbbank', dateKey: '2026-11-12', transactionDate: new Date() });
+      const result = await serverlessPost(payload('realtime-serverless-in', 'in', 98765));
+      expect(result.status).toBe(200);
+      await until(result.body.transaction.id);
+      expect(received.match(/event: bank-transaction/g)).toHaveLength(1);
+      expect(received).toContain('"amount":98765');
+      expect(received).toContain('"type":"income"');
+      abort.abort();
+      await reader.cancel().catch(() => {});
+    } finally {
+      clearTimeout(timeout); abort.abort();
+      server.closeAllConnections();
+      await new Promise<void>(resolve => server.close(() => resolve()));
+    }
+  }, 15000);
+});
