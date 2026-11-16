@@ -56,9 +56,11 @@ export function SettingsPage() {
   const sendBankPushTest = async () => {
     setBankPushTestBusy(true); setError(''); setNotice('');
     try {
-      const result = await authenticatedRequest<{ sent: number; removed: number; failed: number }>('/notifications/test', { method: 'POST' });
+      const result = await authenticatedRequest<{ sent: number; removed: number; failed: number; devices: number }>('/notifications/test', { method: 'POST' });
       if (result.sent > 0) setNotice('Đã gửi thông báo thử. Kiểm tra Notification Center trên iPhone.');
       else if (result.removed > 0) setError('Subscription trên thiết bị đã hết hạn. Hãy tắt rồi bật lại thông báo.');
+      else if (result.devices === 0) setError('Thiết bị này chưa đăng ký nhận thông báo. Hãy tắt rồi bật lại công tắc MB Bank.');
+      else if (result.failed > 0) setError('Apple từ chối subscription hiện tại. Hãy tắt rồi bật lại công tắc MB Bank để tạo subscription mới.');
       else setError('Máy chủ chưa gửi được thông báo tới thiết bị này. Hãy kiểm tra VAPID và quyền thông báo trên iPhone.');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Không thể gửi thông báo thử.');

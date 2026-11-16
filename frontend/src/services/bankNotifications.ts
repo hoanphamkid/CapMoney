@@ -15,7 +15,12 @@ export async function getBankPushConfig() {
 
 async function getRegistration() {
   const current = await navigator.serviceWorker.getRegistration();
-  return current ?? navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  const registration = current ?? await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  // iOS can keep the installed worker alive for a long time. Check for the
+  // current push handler before subscribing so an older worker cannot swallow
+  // a valid push event.
+  await registration.update();
+  return registration;
 }
 
 export async function bankPushEnabled() {
@@ -46,7 +51,7 @@ export async function enableBankPush(preloadedConfig?: BankPushConfig) {
   let subscription = await registration.pushManager.getSubscription();
   if (subscription) {
     const existingKey = subscription.options.applicationServerKey;
-    if (existingKey && new Uint8Array(existingKey).join() !== key.join()) {
+    if (!existingKey || new Uint8Array(existingKey).join() !== key.join()) {
       await subscription.unsubscribe();
       subscription = null;
     }

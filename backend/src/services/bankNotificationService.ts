@@ -28,11 +28,11 @@ export function isPushEndpoint(endpoint: string) {
   } catch { return false; }
 }
 
-type PushDeliveryResult = { sent: number; removed: number; failed: number; configured: boolean };
+type PushDeliveryResult = { sent: number; removed: number; failed: number; devices: number; configured: boolean };
 
 async function sendPayload(db: NotificationDatabase, userId: string, payload: string): Promise<PushDeliveryResult> {
   const configuration = pushConfiguration();
-  if (!configuration) return { sent: 0, removed: 0, failed: 0, configured: false };
+  if (!configuration) return { sent: 0, removed: 0, failed: 0, devices: 0, configured: false };
   const devices = await db.collection('pushsubscriptions').find({ userId }).limit(50).toArray() as Array<DeviceSubscription & { _id: string }>;
   let sent = 0;
   let removed = 0;
@@ -52,7 +52,7 @@ async function sendPayload(db: NotificationDatabase, userId: string, payload: st
       }
     }
   }));
-  return { sent, removed, failed, configured: true };
+  return { sent, removed, failed, devices: devices.length, configured: true };
 }
 
 export async function sendTestNotification(db: NotificationDatabase, userId: string) {
