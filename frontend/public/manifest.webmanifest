@@ -1,5 +1,5 @@
 {
-  "name": "CapMoney", "short_name": "CapMoney", "lang": "vi",
+  "id": "/", "name": "CapMoney", "short_name": "CapMoney", "lang": "vi",
   "start_url": "/app", "scope": "/", "display": "standalone",
   "background_color": "#163e36", "theme_color": "#163e36",
   "icons": [

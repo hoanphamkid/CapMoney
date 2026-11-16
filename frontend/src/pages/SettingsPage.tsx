@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, type MeResponse } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { bankPushEnabled, disableBankPush, enableBankPush } from '../services/bankNotifications';
+import { bankPushEnabled, disableBankPush, enableBankPush, getBankPushConfig, isHomeScreenApp, supportsBankPush, type BankPushConfig } from '../services/bankNotifications';
 
 export function SettingsPage() {
   const { user, logout, refreshUser } = useAuth();
@@ -25,10 +25,13 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [bankPush, setBankPush] = useState(false);
   const [bankPushBusy, setBankPushBusy] = useState(true);
+  const [bankPushConfig, setBankPushConfig] = useState<BankPushConfig | null>(null);
 
   useEffect(() => {
     let disposed = false;
-    void bankPushEnabled().then(enabled => { if (!disposed) setBankPush(enabled); })
+    void Promise.all([bankPushEnabled(), getBankPushConfig()]).then(([enabled, config]) => {
+      if (!disposed) { setBankPush(enabled); setBankPushConfig(config); }
+    })
       .catch(() => {}).finally(() => { if (!disposed) setBankPushBusy(false); });
     return () => { disposed = true; };
   }, []);
@@ -36,7 +39,10 @@ export function SettingsPage() {
   const toggleBankPush = async () => {
     setBankPushBusy(true); setError(''); setNotice('');
     try {
-      if (bankPush) await disableBankPush(); else await enableBankPush();
+      if (bankPush) await disableBankPush(); else {
+        if (!bankPushConfig?.enabled || !bankPushConfig.publicKey) throw new Error('Máy chủ chưa cấu hình thông báo đẩy. Cần thêm bộ khóa VAPID rồi triển khai lại.');
+        await enableBankPush(bankPushConfig);
+      }
       setBankPush(!bankPush);
       setNotice(bankPush ? 'Đã tắt thông báo MB Bank trên thiết bị này.' : 'Đã bật thông báo tiền vào và tiền ra MB Bank trên thiết bị này.');
     } catch (error) {
@@ -273,7 +279,7 @@ export function SettingsPage() {
               </span>
               <span>Thông báo tiền vào và tiền ra MB Bank</span>
             </button>
-            <p className="page-subtitle">Nhận thông báo trên thiết bị này kể cả khi đóng trang. Với iPhone/iPad, hãy thêm CapMoney vào Màn hình chính rồi bật thông báo trong ứng dụng.</p>
+            <p className="page-subtitle">Nhận thông báo trên thiết bị này kể cả khi đóng trang. Với iPhone/iPad, hãy dùng Safari trên HTTPS, chọn Chia sẻ → Thêm vào Màn hình chính, rồi mở CapMoney từ biểu tượng ứng dụng{supportsBankPush() && !isHomeScreenApp() ? ' (hiện tại chưa mở ở chế độ ứng dụng)' : ''}.</p>
             <button
               type="button"
               className="settings-check-btn"
