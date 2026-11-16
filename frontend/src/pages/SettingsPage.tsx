@@ -41,8 +41,10 @@ export function SettingsPage() {
     setBankPushBusy(true); setError(''); setNotice('');
     try {
       if (bankPush) await disableBankPush(); else {
-        if (!bankPushConfig?.enabled || !bankPushConfig.publicKey) throw new Error('Máy chủ chưa cấu hình thông báo đẩy. Cần thêm bộ khóa VAPID rồi triển khai lại.');
-        await enableBankPush(bankPushConfig);
+        // Keep permission.request() as the first async operation after the
+        // tap; this is required by Safari/iOS. The helper loads VAPID config
+        // after the permission prompt when the initial probe is still pending.
+        await enableBankPush(bankPushConfig ?? undefined);
       }
       setBankPush(!bankPush);
       setNotice(bankPush ? 'Đã tắt thông báo MB Bank trên thiết bị này.' : 'Đã bật thông báo tiền vào và tiền ra MB Bank trên thiết bị này.');
@@ -285,8 +287,8 @@ export function SettingsPage() {
               title="Thông báo"
               description="Bật hoặc tắt các nhắc nhở thông minh trong ứng dụng."
             />
-            <button type="button" className="settings-check-btn" role="switch" aria-checked={bankPush}
-              aria-label="Thông báo tiền vào và tiền ra MB Bank" disabled={bankPushBusy} onClick={() => void toggleBankPush()}>
+            <button type="button" className="settings-check-btn" role="switch" aria-checked={bankPush} aria-busy={bankPushBusy}
+              aria-label="Thông báo tiền vào và tiền ra MB Bank" onClick={() => void toggleBankPush()}>
               <span className={`check-box ${bankPush ? 'checked' : ''}`}>
                 {bankPushBusy ? <LoaderCircle size={13} className="spin" /> : bankPush && <Check size={13} />}
               </span>
