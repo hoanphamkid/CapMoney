@@ -6393,3 +6393,6 @@ html:not(.dark-theme) .cm-app-shell {
 .bank-notification-toast a { display: grid; gap: 5px; flex: 1; color: inherit; text-decoration: none; }
 .bank-notification-toast span { font-size: 20px; font-weight: 700; }
 .bank-notification-toast button { padding: 8px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.settings-push-status { margin: 9px 0 0; font-size: 10px; line-height: 1.5; }
+.settings-push-status.ready { color: #79d69d; }
+.settings-push-status.blocked { color: #f1aa9f; }

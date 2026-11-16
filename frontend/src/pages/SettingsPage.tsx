@@ -297,6 +297,13 @@ export function SettingsPage() {
             <button type="button" className="settings-action" disabled={!bankPush || bankPushTestBusy} onClick={() => void sendBankPushTest()}>
               {bankPushTestBusy ? <LoaderCircle size={15} className="spin" /> : <Bell size={15} />} Gửi thử thông báo trên thiết bị này
             </button>
+            <p className={`settings-push-status ${bankPushConfig?.enabled ? 'ready' : 'blocked'}`} role="status">
+              {bankPushConfig === null
+                ? 'Đang kiểm tra kết nối thông báo…'
+                : bankPushConfig.enabled
+                  ? 'Máy chủ đã sẵn sàng gửi thông báo.'
+                  : 'Máy chủ chưa có cấu hình VAPID. Hãy thêm VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY và VAPID_SUBJECT trên Vercel.'}
+            </p>
             <p className="page-subtitle">Nhận thông báo trên thiết bị này kể cả khi đóng trang. Với iPhone/iPad, hãy dùng Safari trên HTTPS, chọn Chia sẻ → Thêm vào Màn hình chính, rồi mở CapMoney từ biểu tượng ứng dụng{supportsBankPush() && !isHomeScreenApp() ? ' (hiện tại chưa mở ở chế độ ứng dụng)' : ''}.</p>
             <button
               type="button"
