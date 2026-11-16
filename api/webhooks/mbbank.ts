@@ -72,7 +72,10 @@ async function connectDB() {
 
 // ─── Main handler ──────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method === 'GET') return res.status(200).json({ status: 'ok', service: 'CapMoney MBBank Webhook API' });
+  if (req.method === 'GET') return res.status(200).json({
+    status: 'ok', service: 'CapMoney MBBank Webhook API',
+    pushConfigured: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY && process.env.VAPID_SUBJECT),
+  });
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'GET, POST');
     return res.status(405).json({ success: false, message: 'Method Not Allowed' });

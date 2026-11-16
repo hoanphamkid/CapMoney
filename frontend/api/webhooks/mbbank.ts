@@ -188,6 +188,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       status: 'ok',
       service: 'CapMoney SePay/MBBank Webhook API',
+      pushConfigured: Boolean((globalThis as any).process?.env?.VAPID_PUBLIC_KEY && (globalThis as any).process?.env?.VAPID_PRIVATE_KEY && (globalThis as any).process?.env?.VAPID_SUBJECT),
       timestamp: new Date().toISOString(),
     });
   }
