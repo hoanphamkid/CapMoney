@@ -145,6 +145,10 @@ for (const [name, post] of [
         expect((await request(app).post('/api/notifications/subscription').set('Cookie', cookie).send({ ...subscription, userId: other })).status).toBe(201);
         expect((await request(app).post('/api/notifications/subscription/status').set('Cookie', otherCookie).send({ endpoint })).body.enabled).toBe(false);
         expect((await request(app).delete('/api/notifications/subscription').set('Cookie', otherCookie).send({ endpoint })).status).toBe(204);
+        const testNotification = await request(app).post('/api/notifications/test').set('Cookie', cookie);
+        expect(testNotification.status).toBe(200);
+        expect(testNotification.body).toMatchObject({ sent: 1, removed: 0, failed: 0, configured: true });
+        send.mockClear();
         for (const direction of ['in', 'out']) {
           const body = payload(`${name}-push-${direction}`, direction, 12345);
           expect((await post(body)).status).toBe(200);

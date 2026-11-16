@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/error.js';
-import { isPushEndpoint, pushConfiguration, subscriptionId } from '../services/bankNotificationService.js';
+import { isPushEndpoint, pushConfiguration, sendTestNotification, subscriptionId } from '../services/bankNotificationService.js';
 
 export const notificationsRouter = Router();
 notificationsRouter.use(requireAuth);
@@ -40,4 +40,10 @@ notificationsRouter.delete('/subscription', async (request, response) => {
   const { endpoint } = z.object({ endpoint: endpointSchema }).parse(request.body);
   await mongoose.connection.db!.collection('pushsubscriptions').deleteOne({ _id: subscriptionId(endpoint) as any, userId: request.user!.id });
   response.status(204).end();
+});
+
+notificationsRouter.post('/test', async (request, response) => {
+  if (!pushConfiguration()) throw new AppError(503, 'Máy chủ chưa cấu hình thông báo đẩy (VAPID).', 'PUSH_NOT_CONFIGURED');
+  const result = await sendTestNotification(mongoose.connection.db!, request.user!.id);
+  response.json(result);
 });

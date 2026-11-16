@@ -1,7 +1,7 @@
 import { Bell, Check, CloudUpload, Download, FileText, Globe2, KeyRound, LoaderCircle, LogOut, Save, ShieldCheck, Sun, UserRound } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, type MeResponse } from '../services/api';
+import { api, authenticatedRequest, type MeResponse } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { bankPushEnabled, disableBankPush, enableBankPush, getBankPushConfig, isHomeScreenApp, supportsBankPush, type BankPushConfig } from '../services/bankNotifications';
 
@@ -26,6 +26,7 @@ export function SettingsPage() {
   const [bankPush, setBankPush] = useState(false);
   const [bankPushBusy, setBankPushBusy] = useState(true);
   const [bankPushConfig, setBankPushConfig] = useState<BankPushConfig | null>(null);
+  const [bankPushTestBusy, setBankPushTestBusy] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -48,6 +49,18 @@ export function SettingsPage() {
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Không thể thay đổi thông báo MB Bank.');
     } finally { setBankPushBusy(false); }
+  };
+
+  const sendBankPushTest = async () => {
+    setBankPushTestBusy(true); setError(''); setNotice('');
+    try {
+      const result = await authenticatedRequest<{ sent: number; removed: number; failed: number }>('/notifications/test', { method: 'POST' });
+      if (result.sent > 0) setNotice('Đã gửi thông báo thử. Kiểm tra Notification Center trên iPhone.');
+      else if (result.removed > 0) setError('Subscription trên thiết bị đã hết hạn. Hãy tắt rồi bật lại thông báo.');
+      else setError('Máy chủ chưa gửi được thông báo tới thiết bị này. Hãy kiểm tra VAPID và quyền thông báo trên iPhone.');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Không thể gửi thông báo thử.');
+    } finally { setBankPushTestBusy(false); }
   };
 
   useEffect(() => {
@@ -278,6 +291,9 @@ export function SettingsPage() {
                 {bankPushBusy ? <LoaderCircle size={13} className="spin" /> : bankPush && <Check size={13} />}
               </span>
               <span>Thông báo tiền vào và tiền ra MB Bank</span>
+            </button>
+            <button type="button" className="settings-action" disabled={!bankPush || bankPushTestBusy} onClick={() => void sendBankPushTest()}>
+              {bankPushTestBusy ? <LoaderCircle size={15} className="spin" /> : <Bell size={15} />} Gửi thử thông báo trên thiết bị này
             </button>
             <p className="page-subtitle">Nhận thông báo trên thiết bị này kể cả khi đóng trang. Với iPhone/iPad, hãy dùng Safari trên HTTPS, chọn Chia sẻ → Thêm vào Màn hình chính, rồi mở CapMoney từ biểu tượng ứng dụng{supportsBankPush() && !isHomeScreenApp() ? ' (hiện tại chưa mở ở chế độ ứng dụng)' : ''}.</p>
             <button
