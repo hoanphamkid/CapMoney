@@ -6,7 +6,6 @@ import { AppError } from '../middleware/error.js';
 import { isPushEndpoint, pushConfiguration, sendTestNotification, subscriptionId } from '../services/bankNotificationService.js';
 
 export const notificationsRouter = Router();
-notificationsRouter.use(requireAuth);
 notificationsRouter.use((_request, response, next) => { response.setHeader('Cache-Control', 'no-store'); next(); });
 
 const endpointSchema = z.string().max(2048).refine(isPushEndpoint, 'Địa chỉ nhận thông báo không hợp lệ.');
@@ -19,6 +18,10 @@ notificationsRouter.get('/config', (_request, response) => {
   const config = pushConfiguration();
   response.json({ enabled: !!config, publicKey: config?.publicKey ?? null });
 });
+
+// The VAPID public key is intentionally public; exposing this read-only status
+// lets an administrator verify deployment configuration before testing a device.
+notificationsRouter.use(requireAuth);
 
 notificationsRouter.post('/subscription/status', async (request, response) => {
   const { endpoint } = z.object({ endpoint: endpointSchema }).parse(request.body);
