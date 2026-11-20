@@ -157,7 +157,7 @@
 .loans-amount-field { position: relative; }
 .loans-amount-field input { padding-right: 26px; }
 .loans-amount-field > span { position: absolute; inset: 0 10px 0 auto; display: grid; align-content: center; color: var(--loan-accent); }
-.loans-date-fields, .loans-detail-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.loans-date-fields, .loans-detail-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .loans-help, .loans-detail-status, .loans-detail-note, .loans-form-error { margin: 0; color: var(--loan-muted); font-size: .8125rem; line-height: 1.5; overflow-wrap: anywhere; }
 .loans-help svg { display: inline; vertical-align: -.18em; }
 .loans-form-error { color: var(--loan-borrow); }
@@ -211,5 +211,5 @@
   .loans-overview, .loans-journal { padding: 10px; }
   .loans-row { grid-template-columns: auto minmax(0, 1fr) minmax(0, auto); }
   .loans-row-chevron { display: none; }
-  .loans-date-fields { grid-template-columns: 1fr; }
+  .loans-date-fields { grid-template-columns: 1fr; gap: 12px; }
 }
