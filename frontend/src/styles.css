@@ -4826,8 +4826,9 @@ html:not(.dark-theme) .cm-app-shell {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: #f8fafc;
-  background: rgba(10, 14, 22, 0.45);
+  color: #f8fbff !important;
+  background: rgba(10, 14, 22, 0.72);
+  border: 1px solid rgba(190, 210, 255, 0.18);
   padding: 10px 12px;
   border-radius: 12px;
 }
@@ -4838,9 +4839,9 @@ html:not(.dark-theme) .cm-app-shell {
   gap: 8px;
   font-size: 12px;
   line-height: 1.45;
-  color: #fde68a;
-  background: rgba(250, 204, 21, 0.1);
-  border: 1px solid rgba(250, 204, 21, 0.25);
+  color: #fff4bd !important;
+  background: rgba(97, 72, 14, 0.42);
+  border: 1px solid rgba(255, 214, 82, 0.5);
   padding: 9px 11px;
   border-radius: 12px;
 }
