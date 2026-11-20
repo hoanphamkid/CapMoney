@@ -105,19 +105,26 @@ test('adds multiple loan photos at once and can reopen and remove them', async (
   });
   const row = page.getByRole('button', { name: /Bạn Minh/ });
   await row.click();
-  const gallery = page.getByRole('region', { name: 'Ảnh đính kèm' });
+  const details = page.getByRole('dialog', { name: 'Bạn Minh' });
+  await details.getByRole('button', { name: 'Sửa thông tin' }).click();
+  const form = page.getByRole('dialog', { name: 'Sửa khoản vay/mượn' });
+  const gallery = form.getByRole('region', { name: 'Ảnh đính kèm' });
   await gallery.getByLabel('Chọn nhiều ảnh đính kèm').setInputFiles(['biên nhận', 'giấy vay'].map(name => ({
     name: name + '.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64'),
   })));
   await expect(gallery.getByRole('status')).toHaveText('Đã thêm 2 ảnh.');
   await expect(gallery.getByRole('button', { name: /^Xem ảnh/ })).toHaveCount(2);
 
+  await form.getByRole('button', { name: 'Đóng' }).click();
   await page.reload();
   await row.click();
-  await gallery.getByRole('button', { name: 'Xem ảnh 2' }).click();
-  const image = gallery.getByRole('img', { name: 'Ảnh đính kèm 2' });
+  await page.getByRole('dialog', { name: 'Bạn Minh' }).getByRole('button', { name: 'Sửa thông tin' }).click();
+  const reopenedForm = page.getByRole('dialog', { name: 'Sửa khoản vay/mượn' });
+  const reopenedGallery = reopenedForm.getByRole('region', { name: 'Ảnh đính kèm' });
+  await reopenedGallery.getByRole('button', { name: 'Xem ảnh 2' }).click();
+  const image = reopenedGallery.getByRole('img', { name: 'Ảnh đính kèm 2' });
   await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalHeight)).toBe(80);
-  await gallery.getByRole('button', { name: 'Xóa ảnh', exact: true }).click();
-  await gallery.getByRole('button', { name: 'Xác nhận xóa ảnh' }).click();
-  await expect(gallery.getByRole('button', { name: /^Xem ảnh/ })).toHaveCount(1);
+  await reopenedGallery.getByRole('button', { name: 'Xóa ảnh', exact: true }).click();
+  await reopenedGallery.getByRole('button', { name: 'Xác nhận xóa ảnh' }).click();
+  await expect(reopenedGallery.getByRole('button', { name: /^Xem ảnh/ })).toHaveCount(1);
 });

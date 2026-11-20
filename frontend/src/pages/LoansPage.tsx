@@ -168,7 +168,7 @@ export function LoansPage() {
           onSave={async (id, details) => saved((await loansApi.create(id, details)).loan, 'Đã thêm khoản mới.')} />
       )}
       {selected && panel?.view === 'detail' && (
-        <LoanDetail loan={selected} today={today} onClose={() => setPanel(null)} onLoanChange={updateLoan}
+        <LoanDetail loan={selected} today={today} onClose={() => setPanel(null)}
           onAction={view => setPanel({ view, id: selected.id })} />
       )}
       {selected && panel?.view === 'edit' && (
@@ -203,18 +203,16 @@ function loanStatus(loan: Loan, remaining: number, today: string) {
   return 'Hạn ' + prettyDate(loan.dueOn);
 }
 
-function LoanDetail({ loan, today, onClose, onAction, onLoanChange }: {
+function LoanDetail({ loan, today, onClose, onAction }: {
   loan: Loan;
   today: string;
   onClose: () => void;
   onAction: (view: 'edit' | 'pay' | 'remove') => void;
-  onLoanChange: (loan: Loan) => void;
 }) {
-  const [photosBusy, setPhotosBusy] = useState(false);
   const remaining = outstanding(loan);
   const paid = loan.amount - remaining;
   return (
-    <LoanDialog title={loan.person} onClose={onClose} locked={photosBusy}>
+    <LoanDialog title={loan.person} onClose={onClose}>
       <p className="loans-detail-status">{kindLabels[loan.kind]} · {loanStatus(loan, remaining, today)}</p>
       <div className="loans-detail-money">
         <span>{loan.kind === 'borrow' ? 'Còn phải trả' : 'Còn phải thu'}</span>
@@ -224,7 +222,6 @@ function LoanDetail({ loan, today, onClose, onAction, onLoanChange }: {
       </div>
       <p className="loans-help"><CalendarDays size={15} /> Ngày phát sinh {prettyDate(loan.openedOn)}</p>
       {loan.note && <p className="loans-detail-note">{loan.note}</p>}
-      <LoanPhotos loan={loan} onChange={onLoanChange} onBusy={setPhotosBusy} />
       {remaining > 0 && <button className="loans-primary" type="button" onClick={() => onAction('pay')}>{loan.kind === 'borrow' ? 'Ghi trả tiền' : 'Ghi nhận thu tiền'}</button>}
       <div className="loans-detail-actions">
         <button className="loans-secondary" type="button" onClick={() => onAction('edit')}>Sửa thông tin</button>
@@ -256,9 +253,11 @@ function LoanForm({ today, initialKind, loan, onClose, onSave }: {
   const [dueOn, setDueOn] = useState(loan?.dueOn ?? '');
   const [note, setNote] = useState(loan?.note ?? '');
   const [id] = useState(() => loan?.id ?? crypto.randomUUID());
+  const [photoLoan, setPhotoLoan] = useState(loan);
+  const [photosBusy, setPhotosBusy] = useState(false);
 
   return (
-    <LoanDialog title={loan ? 'Sửa khoản vay/mượn' : kindLabels[kind]} onClose={onClose} submitLabel={loan ? 'Lưu thay đổi' : 'Lưu khoản mới'}
+    <LoanDialog title={loan ? 'Sửa khoản vay/mượn' : kindLabels[kind]} onClose={onClose} locked={photosBusy} submitLabel={loan ? 'Lưu thay đổi' : 'Lưu khoản mới'}
       onSubmit={async () => {
         const value = Number(amount);
         if (!person.trim()) throw new Error('Hãy nhập tên người hoặc đơn vị.');
@@ -277,6 +276,7 @@ function LoanForm({ today, initialKind, loan, onClose, onSave }: {
         <label>Hạn trả (tùy chọn)<input type="date" min={openedOn || undefined} value={dueOn} onChange={event => setDueOn(event.target.value)} /></label>
       </div>
       <label>Ghi chú<textarea maxLength={500} rows={2} value={note} onChange={event => setNote(event.target.value)} /></label>
+      {photoLoan && <LoanPhotos loan={photoLoan} onChange={setPhotoLoan} onBusy={setPhotosBusy} />}
       <p className="loans-help">Khoản này được theo dõi riêng trong sổ vay mượn. Số dư ví giữ nguyên.</p>
     </LoanDialog>
   );
@@ -346,7 +346,7 @@ function LoanDialog({ title, children, onClose, onSubmit, submitLabel, locked = 
         <header><h2>{title}</h2><button type="button" className="loans-close" onClick={onClose} disabled={busy || locked} aria-label="Đóng"><X size={20} /></button></header>
         <fieldset disabled={busy || locked}>{children}</fieldset>
         {error && <p className="loans-form-error" role="alert">{error}</p>}
-        {submitLabel && <button className="loans-primary" type="submit" disabled={busy}>{busy ? 'Đang lưu…' : submitLabel}</button>}
+        {submitLabel && <button className="loans-primary" type="submit" disabled={busy || locked}>{busy ? 'Đang lưu…' : submitLabel}</button>}
       </form>
     </dialog>
   );
