@@ -61,3 +61,63 @@ test('opens the loan journal from the dock and records partial and full payments
   await page.getByRole('link', { name: 'Sổ ví' }).click();
   await expect(page.getByRole('heading', { name: 'Ví của tôi' })).toBeVisible();
 });
+
+test('adds multiple loan photos at once and can reopen and remove them', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  const loan: Loan = {
+    id: 'loan', kind: 'lend', person: 'Bạn Minh', amount: 200000, openedOn: '2026-01-01', dueOn: null,
+    note: '', payments: [], photos: [],
+  };
+  const images = new Map<string, string>();
+  await page.route('**/api/**', async route => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: 'owner', name: 'An', email: 'owner@example.test' }, profile: {} } });
+    if (path === '/api/loans') return route.fulfill({ json: { loans: [loan] } });
+    if (path === '/api/loans/loan/photos' && request.method() === 'POST') {
+      const { id, jpeg } = request.postDataJSON();
+      images.set(id, jpeg);
+      loan.photos!.push({ id, url: path + '/' + id });
+      return route.fulfill({ status: 201, json: { loan } });
+    }
+    if (path.startsWith('/api/loans/loan/photos/')) {
+      const id = path.split('/').pop()!;
+      if (request.method() === 'DELETE') {
+        loan.photos = loan.photos!.filter(photo => photo.id !== id);
+        images.delete(id);
+        return route.fulfill({ json: { loan } });
+      }
+      const jpeg = images.get(id);
+      if (jpeg) return route.fulfill({ contentType: 'image/jpeg', body: Buffer.from(jpeg, 'base64') });
+    }
+    return route.fulfill({ status: 404, json: {} });
+  });
+
+  await page.goto('/app/loans');
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 50;
+    canvas.height = 80;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#673ab7';
+    ctx.fillRect(0, 0, 50, 80);
+    return canvas.toDataURL('image/png').split(',')[1];
+  });
+  const row = page.getByRole('button', { name: /Bạn Minh/ });
+  await row.click();
+  const gallery = page.getByRole('region', { name: 'Ảnh đính kèm' });
+  await gallery.getByLabel('Chọn nhiều ảnh đính kèm').setInputFiles(['biên nhận', 'giấy vay'].map(name => ({
+    name: name + '.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64'),
+  })));
+  await expect(gallery.getByRole('status')).toHaveText('Đã thêm 2 ảnh.');
+  await expect(gallery.getByRole('button', { name: /^Xem ảnh/ })).toHaveCount(2);
+
+  await page.reload();
+  await row.click();
+  await gallery.getByRole('button', { name: 'Xem ảnh 2' }).click();
+  const image = gallery.getByRole('img', { name: 'Ảnh đính kèm 2' });
+  await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalHeight)).toBe(80);
+  await gallery.getByRole('button', { name: 'Xóa ảnh', exact: true }).click();
+  await gallery.getByRole('button', { name: 'Xác nhận xóa ảnh' }).click();
+  await expect(gallery.getByRole('button', { name: /^Xem ảnh/ })).toHaveCount(1);
+});

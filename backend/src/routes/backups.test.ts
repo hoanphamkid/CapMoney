@@ -198,4 +198,38 @@ describe('account backup history and restore', () => {
     expect((await asOwner(request(app).get('/api/loans'))).body.loans).toEqual([{ ...loan, payments: [payment] }]);
     expect((await asOwner(request(app).post(path + '/payments')).send({ ...payment, id: randomUUID(), amount: 300000 })).status).toBe(201);
   });
+
+  it('keeps multiple loan images private and restores their bytes from a backup', async () => {
+    const id = randomUUID();
+    const loan = { id, kind: 'lend', person: 'Lan', amount: 200000, openedOn: '2026-11-10', dueOn: null, note: '' };
+    const path = `/api/loans/${id}/photos`;
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9]).toString('base64');
+    const first = { id: randomUUID(), jpeg };
+    const second = { id: randomUUID(), jpeg };
+    expect((await asOwner(request(app).post('/api/loans')).send(loan)).status).toBe(201);
+    expect((await asOwner(request(app).post(path)).send(first)).status).toBe(201);
+    const added = await asOwner(request(app).post(path)).send(second);
+    expect(added.status).toBe(201);
+    expect(added.body.loan.photos).toEqual([first, second].map(photo => ({ id: photo.id, url: path + '/' + photo.id })));
+    expect((await asOwner(request(app).post(path)).send(first)).body.loan.photos).toHaveLength(2);
+    expect((await request(app).get(path + '/' + first.id).set('Cookie', otherCookie)).status).toBe(404);
+    expect((await request(app).delete(path + '/' + first.id).set('Cookie', otherCookie)).status).toBe(404);
+    expect((await request(app).post(path).send({ id: randomUUID(), jpeg }).set('Cookie', otherCookie)).status).toBe(404);
+    const original = await asOwner(request(app).get(path + '/' + first.id));
+    expect(original.status).toBe(200);
+    expect(original.headers['content-type']).toBe('image/jpeg');
+    expect(original.headers['cache-control']).toBe('no-store');
+    expect(original.body.toString('base64')).toBe(jpeg);
+
+    const backup = await asOwner(request(app).post('/api/backups')).send({ ...mobile, preferences });
+    expect(backup.status).toBe(201);
+    const removed = await asOwner(request(app).delete(path + '/' + first.id));
+    expect(removed.body.loan.photos).toHaveLength(1);
+    expect((await asOwner(request(app).get(path + '/' + first.id))).status).toBe(404);
+    const restored = await asOwner(request(app).post('/api/backups/' + backup.body.backup.id + '/restore')).send({ ...laptop, preferences });
+    expect(restored.status).toBe(200);
+    expect((await asOwner(request(app).get(path + '/' + first.id))).body.toString('base64')).toBe(jpeg);
+    const rows = (await asOwner(request(app).get('/api/loans'))).body.loans;
+    expect(rows.find((row: { id: string }) => row.id === id).photos).toHaveLength(2);
+  });
 });

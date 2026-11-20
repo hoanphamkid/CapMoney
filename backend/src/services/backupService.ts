@@ -7,7 +7,7 @@ import { TransactionModel } from '../models/Transaction.js';
 import { CalendarReminderModel } from '../models/CalendarReminder.js';
 import { ProfileModel } from '../models/Profile.js';
 import { UserModel } from '../models/User.js';
-import { LoanModel, loanSnapshot, publicLoan } from '../models/Loan.js';
+import { LoanModel, loanSnapshot, snapshotLoan } from '../models/Loan.js';
 import { readPrivateImage } from './storageService.js';
 
 export const PREFERENCE_KEYS = [
@@ -104,14 +104,14 @@ export async function captureAccount(userId: string, preferences: Record<string,
     wallets: wallets.map(w => ({ id: String(w._id), name: w.name, type: w.type, balanceMinor: w.balanceMinor, currency: w.currency, color: w.color, active: w.active })),
     transactions: txs,
     reminders: reminders.map(r => ({ id: String(r._id), title: r.title, note: r.note ?? '', dateKey: r.dateKey, time: r.time || undefined, kind: r.kind, status: r.status, repeat: r.repeat, channels: r.channels })),
-    loans: loans.map(publicLoan),
+    loans: loans.map(snapshotLoan),
     preferences,
   });
 }
 
 export async function storeBackup(userId: string, payload: BackupPayload, metadata: { deviceId: string; deviceName: string; label?: string; kind?: 'manual' | 'before_restore' }, session?: ClientSession) {
   const sizeBytes = Buffer.byteLength(JSON.stringify(payload));
-  if (sizeBytes > 12 * 1024 * 1024) throw new AppError(413, 'Bản sao vượt quá 12MB. Hãy giảm kích thước ảnh giao dịch.', 'BACKUP_TOO_LARGE');
+  if (sizeBytes > 12 * 1024 * 1024) throw new AppError(413, 'Bản sao vượt quá 12MB. Hãy giảm kích thước các ảnh đính kèm.', 'BACKUP_TOO_LARGE');
   const [backup] = await AccountBackupModel.create([{
     userId, ...metadata, walletCount: payload.wallets.length, transactionCount: payload.transactions.length,
     reminderCount: payload.reminders.length, sizeBytes, payload,

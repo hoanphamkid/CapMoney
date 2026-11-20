@@ -1,6 +1,7 @@
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronRight, CircleCheck, Clock3, HandCoins, Plus, Search, WalletCards, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { LoanPhotos } from '../components/LoanPhotos';
 import { ApiError } from '../services/api';
 import { loansApi, type Loan, type LoanDetails, type LoanKind } from '../services/loansApi';
 import './loans.css';
@@ -66,10 +67,14 @@ export function LoansPage() {
       && normalize(loan.person + ' ' + loan.note).includes(normalize(query)));
   const selected = panel && 'id' in panel ? loans.find(loan => loan.id === panel.id) : undefined;
 
-  function saved(loan: Loan, message: string) {
+  function updateLoan(loan: Loan) {
     setLoans(previous => previous.some(item => item.id === loan.id)
       ? previous.map(item => item.id === loan.id ? loan : item)
       : [loan, ...previous]);
+  }
+
+  function saved(loan: Loan, message: string) {
+    updateLoan(loan);
     setPanel({ view: 'detail', id: loan.id });
     setNotice(message);
   }
@@ -163,7 +168,7 @@ export function LoansPage() {
           onSave={async (id, details) => saved((await loansApi.create(id, details)).loan, 'Đã thêm khoản mới.')} />
       )}
       {selected && panel?.view === 'detail' && (
-        <LoanDetail loan={selected} today={today} onClose={() => setPanel(null)}
+        <LoanDetail loan={selected} today={today} onClose={() => setPanel(null)} onLoanChange={updateLoan}
           onAction={view => setPanel({ view, id: selected.id })} />
       )}
       {selected && panel?.view === 'edit' && (
@@ -198,16 +203,18 @@ function loanStatus(loan: Loan, remaining: number, today: string) {
   return 'Hạn ' + prettyDate(loan.dueOn);
 }
 
-function LoanDetail({ loan, today, onClose, onAction }: {
+function LoanDetail({ loan, today, onClose, onAction, onLoanChange }: {
   loan: Loan;
   today: string;
   onClose: () => void;
   onAction: (view: 'edit' | 'pay' | 'remove') => void;
+  onLoanChange: (loan: Loan) => void;
 }) {
+  const [photosBusy, setPhotosBusy] = useState(false);
   const remaining = outstanding(loan);
   const paid = loan.amount - remaining;
   return (
-    <LoanDialog title={loan.person} onClose={onClose}>
+    <LoanDialog title={loan.person} onClose={onClose} locked={photosBusy}>
       <p className="loans-detail-status">{kindLabels[loan.kind]} · {loanStatus(loan, remaining, today)}</p>
       <div className="loans-detail-money">
         <span>{loan.kind === 'borrow' ? 'Còn phải trả' : 'Còn phải thu'}</span>
@@ -217,6 +224,7 @@ function LoanDetail({ loan, today, onClose, onAction }: {
       </div>
       <p className="loans-help"><CalendarDays size={15} /> Ngày phát sinh {prettyDate(loan.openedOn)}</p>
       {loan.note && <p className="loans-detail-note">{loan.note}</p>}
+      <LoanPhotos loan={loan} onChange={onLoanChange} onBusy={setPhotosBusy} />
       {remaining > 0 && <button className="loans-primary" type="button" onClick={() => onAction('pay')}>{loan.kind === 'borrow' ? 'Ghi trả tiền' : 'Ghi nhận thu tiền'}</button>}
       <div className="loans-detail-actions">
         <button className="loans-secondary" type="button" onClick={() => onAction('edit')}>Sửa thông tin</button>
@@ -308,8 +316,8 @@ function AmountField({ label, value, onChange }: { label: string; value: string;
   );
 }
 
-function LoanDialog({ title, children, onClose, onSubmit, submitLabel }: {
-  title: string; children: ReactNode; onClose: () => void; onSubmit?: () => Promise<void>; submitLabel?: string;
+function LoanDialog({ title, children, onClose, onSubmit, submitLabel, locked = false }: {
+  title: string; children: ReactNode; onClose: () => void; onSubmit?: () => Promise<void>; submitLabel?: string; locked?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const pending = useRef(false);
@@ -333,10 +341,10 @@ function LoanDialog({ title, children, onClose, onSubmit, submitLabel }: {
   }
 
   return (
-    <dialog ref={dialog} className="loans-dialog" aria-label={title} onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
+    <dialog ref={dialog} className="loans-dialog" aria-label={title} onCancel={event => { event.preventDefault(); if (!busy && !locked) onClose(); }}>
       <form className="loans-dialog-content" onSubmit={event => void submit(event)}>
-        <header><h2>{title}</h2><button type="button" className="loans-close" onClick={onClose} disabled={busy} aria-label="Đóng"><X size={20} /></button></header>
-        <fieldset disabled={busy}>{children}</fieldset>
+        <header><h2>{title}</h2><button type="button" className="loans-close" onClick={onClose} disabled={busy || locked} aria-label="Đóng"><X size={20} /></button></header>
+        <fieldset disabled={busy || locked}>{children}</fieldset>
         {error && <p className="loans-form-error" role="alert">{error}</p>}
         {submitLabel && <button className="loans-primary" type="submit" disabled={busy}>{busy ? 'Đang lưu…' : submitLabel}</button>}
       </form>

@@ -96,8 +96,9 @@ backupsRouter.post('/:id/restore', async (req, res) => {
           paid: loan.payments.reduce((sum, payment) => sum + payment.amount, 0),
         }));
         await LoanModel.deleteMany({ userId, _id: { $nin: entries.map(loan => loan._id) } }, { session });
-        if (entries.length) await LoanModel.bulkWrite(entries.map(loan => ({
-          replaceOne: { filter: { _id: loan._id, userId }, replacement: loan, upsert: true },
+        // Older snapshots omit photos. Only snapshots with a photo list replace it.
+        if (entries.length) await LoanModel.bulkWrite(entries.map(({ _id, ...loan }) => ({
+          updateOne: { filter: { _id, userId }, update: { $set: loan }, upsert: true },
         })), { session });
       }
       await UserModel.updateOne({ _id: userId }, { $set: payload.account }, { session });
