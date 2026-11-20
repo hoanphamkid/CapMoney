@@ -7,6 +7,7 @@ import { TransactionModel } from '../models/Transaction.js';
 import { CalendarReminderModel } from '../models/CalendarReminder.js';
 import { ProfileModel } from '../models/Profile.js';
 import { UserModel } from '../models/User.js';
+import { LoanModel, loanSnapshot, publicLoan } from '../models/Loan.js';
 import { readPrivateImage } from './storageService.js';
 
 export const PREFERENCE_KEYS = [
@@ -51,9 +52,10 @@ export const backupPayloadSchema = z.object({
     repeat: z.enum(['none', 'daily', 'weekly', 'monthly', 'yearly']).default('none'),
     channels: z.array(z.string().max(40)).max(10).default(['in_app']),
   })).max(10000),
+  loans: z.array(loanSnapshot).optional(),
   preferences: preferencesSchema,
 }).superRefine((data, context) => {
-  for (const [key, rows] of Object.entries({ wallets: data.wallets, transactions: data.transactions, reminders: data.reminders })) {
+  for (const [key, rows] of Object.entries({ wallets: data.wallets, transactions: data.transactions, reminders: data.reminders, loans: data.loans ?? [] })) {
     if (new Set(rows.map(row => row.id)).size !== rows.length) context.addIssue({ code: 'custom', message: 'Mã dữ liệu bị trùng', path: [key] });
   }
   const walletIds = new Set(data.wallets.map(w => w.id));
@@ -75,6 +77,7 @@ export async function captureAccount(userId: string, preferences: Record<string,
   const wallets = await WalletModel.find({ userId }).session(session ?? null).lean();
   const transactions = await TransactionModel.find({ userId }).session(session ?? null).lean();
   const reminders = await CalendarReminderModel.find({ userId }).session(session ?? null).lean();
+  const loans = await LoanModel.find({ userId }).session(session ?? null).lean();
   if (!user) throw new AppError(404, 'Không tìm thấy tài khoản', 'USER_NOT_FOUND');
   const txs = [];
   for (const tx of transactions) {
@@ -101,6 +104,7 @@ export async function captureAccount(userId: string, preferences: Record<string,
     wallets: wallets.map(w => ({ id: String(w._id), name: w.name, type: w.type, balanceMinor: w.balanceMinor, currency: w.currency, color: w.color, active: w.active })),
     transactions: txs,
     reminders: reminders.map(r => ({ id: String(r._id), title: r.title, note: r.note ?? '', dateKey: r.dateKey, time: r.time || undefined, kind: r.kind, status: r.status, repeat: r.repeat, channels: r.channels })),
+    loans: loans.map(publicLoan),
     preferences,
   });
 }

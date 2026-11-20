@@ -18,6 +18,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, type Transaction } from '../services/api';
 import { loadBudget } from './SpendingLimitModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -836,6 +837,7 @@ export function SmartToolkitModal({ transactions, onClose, onTransactionAdded }:
         {/* TAB 2: DEBT & LOAN IOU TRACKER (SỔ NỢ) */}
         {tab === 'debts' && (
           <div className="cm-toolkit-body fade-in">
+            <Link to="/app/loans" className="cm-text-link-btn" onClick={onClose}>Mở sổ vay mượn trên tài khoản</Link>
             <div className="cm-story-stats-row">
               <div className="cm-story-stat-box income">
                 <small>Cần thu về (Cho vay)</small>

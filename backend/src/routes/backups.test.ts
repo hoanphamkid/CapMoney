@@ -11,6 +11,7 @@ import { WalletModel } from '../models/Wallet.js';
 import { TransactionModel } from '../models/Transaction.js';
 import { CalendarReminderModel } from '../models/CalendarReminder.js';
 import { ProfileModel } from '../models/Profile.js';
+import { LoanModel } from '../models/Loan.js';
 import { AccountBackupModel, BackupDeviceModel, BackupActivityModel } from '../models/AccountBackup.js';
 import { deletePrivateImage, savePrivateImage } from '../services/storageService.js';
 import { logger } from '../middleware/error.js';
@@ -36,7 +37,7 @@ beforeAll(async () => {
   const systemBinary = [process.env.MONGOMS_SYSTEM_BINARY, 'C:/Program Files/MongoDB/Server/8.2/bin/mongod.exe', 'C:/Program Files/MongoDB/Server/8.0/bin/mongod.exe'].find(candidate => candidate && existsSync(candidate));
   database = await MongoMemoryReplSet.create({ binary: { ...(systemBinary ? { systemBinary } : {}), checkMD5: false }, replSet: { count: 1 } });
   await mongoose.connect(database.getUri('backup_tests'));
-  for (const model of [UserModel, WalletModel, TransactionModel, CalendarReminderModel, ProfileModel, AccountBackupModel, BackupDeviceModel, BackupActivityModel]) await model.init();
+  for (const model of [UserModel, WalletModel, TransactionModel, CalendarReminderModel, ProfileModel, LoanModel, AccountBackupModel, BackupDeviceModel, BackupActivityModel]) await model.init();
   const user = await UserModel.create({ email: 'backup-owner@example.test', name: 'Mobile Owner', passwordHash: 'untouched-password-hash' });
   const stranger = await UserModel.create({ email: 'stranger@example.test', name: 'Other User', passwordHash: 'other-hash' });
   owner = String(user._id); other = String(stranger._id);
@@ -169,5 +170,32 @@ describe('account backup history and restore', () => {
       expect(await AccountBackupModel.countDocuments({ userId: owner })).toBe(originalCount);
       expect(String((await WalletModel.findOne({ userId: owner }).lean())!._id)).toBe(String(wallet!._id));
     } finally { profileWrite.mockRestore(); }
+  });
+
+  it('keeps loan payments private, atomic and recoverable from account backups', async () => {
+    const id = randomUUID();
+    const loan = { id, kind: 'borrow', person: 'An', amount: 500000, openedOn: '2026-11-10', dueOn: '2026-11-15', note: '' };
+    const path = '/api/loans/' + id;
+    const payment = { id: randomUUID(), amount: 200000, date: '2026-11-12', note: 'Đợt 1' };
+    expect((await request(app).get('/api/loans')).status).toBe(401);
+    expect((await asOwner(request(app).post('/api/loans')).send(loan)).status).toBe(201);
+    expect((await asOwner(request(app).post('/api/loans')).send(loan)).status).toBe(201);
+    expect((await asOwner(request(app).get('/api/loans'))).body.loans).toHaveLength(1);
+    expect((await request(app).post(path + '/payments').set('Cookie', otherCookie).send(payment)).status).toBe(404);
+    expect((await request(app).get('/api/loans').set('Cookie', otherCookie)).body.loans).toEqual([]);
+    expect((await asOwner(request(app).post(path + '/payments')).send(payment)).status).toBe(201);
+    expect((await asOwner(request(app).post(path + '/payments')).send(payment)).body.loan.payments).toEqual([payment]);
+    expect((await asOwner(request(app).patch(path)).send({ ...loan, amount: 199999 })).status).toBe(409);
+    expect((await asOwner(request(app).delete(path))).status).toBe(409);
+    const backup = await asOwner(request(app).post('/api/backups')).send({ ...mobile, preferences });
+    expect(backup.status).toBe(201);
+
+    const results = await Promise.all(Array.from({ length: 2 }, () =>
+      asOwner(request(app).post(path + '/payments')).send({ ...payment, id: randomUUID(), amount: 300000 })));
+    expect(results.map(result => result.status).sort()).toEqual([201, 409]);
+    const restored = await asOwner(request(app).post('/api/backups/' + backup.body.backup.id + '/restore')).send({ ...laptop, preferences });
+    expect(restored.status).toBe(200);
+    expect((await asOwner(request(app).get('/api/loans'))).body.loans).toEqual([{ ...loan, payments: [payment] }]);
+    expect((await asOwner(request(app).post(path + '/payments')).send({ ...payment, id: randomUUID(), amount: 300000 })).status).toBe(201);
   });
 });

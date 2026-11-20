@@ -12,6 +12,7 @@ import { webhookRouter } from './routes/webhook.js';
 import { backupsRouter } from './routes/backups.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { realtimeRouter } from './routes/realtime.js';
+import { loansRouter } from './routes/loans.js';
 import { errorHandler, logger, notFound } from './middleware/error.js';
 
 export function createApp() {
@@ -29,6 +30,7 @@ export function createApp() {
   app.use('/api/webhooks', webhookRouter);
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/realtime', realtimeRouter);
+  app.use('/api/loans', loansRouter);
   app.use('/api', financeRouter);
   app.use('/api/calendar', calendarRouter);
   app.use(notFound);

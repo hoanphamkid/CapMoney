@@ -9,6 +9,7 @@ import { TransactionModel } from '../models/Transaction.js';
 import { CalendarReminderModel } from '../models/CalendarReminder.js';
 import { ProfileModel } from '../models/Profile.js';
 import { UserModel } from '../models/User.js';
+import { LoanModel, loanKey } from '../models/Loan.js';
 import { backupPayloadSchema, backupSummary, captureAccount, newId, preferencesSchema, storeBackup } from '../services/backupService.js';
 import { deletePrivateImage, savePrivateImage } from '../services/storageService.js';
 
@@ -88,6 +89,17 @@ backupsRouter.post('/:id/restore', async (req, res) => {
         };
       }), { session });
       if (payload.reminders.length) await CalendarReminderModel.insertMany(payload.reminders.map(({ id: _id, ...r }) => ({ ...r, userId })), { session });
+      if (payload.loans) {
+        const entries = payload.loans.map(({ id, ...loan }) => ({
+          ...loan,
+          ...loanKey(userId, id),
+          paid: loan.payments.reduce((sum, payment) => sum + payment.amount, 0),
+        }));
+        await LoanModel.deleteMany({ userId, _id: { $nin: entries.map(loan => loan._id) } }, { session });
+        if (entries.length) await LoanModel.bulkWrite(entries.map(loan => ({
+          replaceOne: { filter: { _id: loan._id, userId }, replacement: loan, upsert: true },
+        })), { session });
+      }
       await UserModel.updateOne({ _id: userId }, { $set: payload.account }, { session });
       await ProfileModel.updateOne({ userId }, { $set: payload.profile }, { upsert: true, session });
       await BackupDeviceModel.updateOne({ userId, deviceId: input.deviceId }, { $set: { backupId, appliedAt, preferences: payload.preferences } }, { upsert: true, session });

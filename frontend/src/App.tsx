@@ -4,6 +4,7 @@ import { AuthPage, RequireAuth } from './pages/AuthPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { TransactionsPage } from './pages/TransactionsPage';
+import { LoansPage } from './pages/LoansPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SyncPage } from './pages/SyncPage';
 
@@ -23,6 +24,7 @@ export function App() {
                 <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="wallets" element={<Navigate to="/app/transactions" replace />} />
                 <Route path="transactions" element={<TransactionsPage />} />
+                <Route path="loans" element={<LoansPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="sync" element={<SyncPage />} />
                 <Route path="*" element={<Navigate to="/app" replace />} />

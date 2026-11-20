@@ -1,4 +1,4 @@
-import { Home, PieChart, UserRound, WalletCards, X } from 'lucide-react';
+import { HandCoins, Home, PieChart, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useBankRealtime, type BankEvent } from '../hooks/useBankRealtime';
@@ -6,7 +6,7 @@ import { useBankRealtime, type BankEvent } from '../hooks/useBankRealtime';
 const dockItems = [
   { label: 'Trang chủ', icon: Home, to: '/app', matchPaths: ['/app', '/app/calendar'] },
   { label: 'Thống kê', icon: PieChart, to: '/app/dashboard', matchPaths: ['/app/dashboard'] },
-  { label: 'Ví', icon: WalletCards, to: '/app/transactions', matchPaths: ['/app/transactions'] },
+  { label: 'Vay & cho mượn', icon: HandCoins, to: '/app/loans', matchPaths: ['/app/loans', '/app/transactions'] },
   { label: 'Cá nhân', icon: UserRound, to: '/app/settings', matchPaths: ['/app/settings'] },
 ];
 

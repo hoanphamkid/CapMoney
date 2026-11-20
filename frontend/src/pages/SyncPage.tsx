@@ -100,7 +100,7 @@ export function SyncPage() {
       {error && <div className="cm-sync-error" role="alert"><p>{error}</p><button type="button" onClick={() => void refresh()} disabled={Boolean(busy)}>Thử lại</button><Link to="/login">Đăng nhập</Link></div>}
       <section className="panel cm-sync-create">
         <h2><CloudUpload size={20} /> Tạo bản sao</h2>
-        <p>Lưu ví, giao dịch, ảnh hóa đơn, lịch nhắc, hạn mức, hũ tiết kiệm, sổ nợ và cài đặt thành một phiên bản mới.</p>
+        <p>Lưu ví, giao dịch, ảnh hóa đơn, lịch nhắc, hạn mức, hũ tiết kiệm, sổ vay mượn và cài đặt thành một phiên bản mới.</p>
         {local && <label className="select-field"><span>Nguồn dữ liệu</span><select value={source} disabled={Boolean(busy)} onChange={e => setSource(e.target.value as 'server' | 'device')}><option value="server">Dữ liệu trên web + cài đặt thiết bị</option><option value="device">Dữ liệu lưu trên thiết bị này ({local.transactions} giao dịch)</option></select></label>}
         <label className="select-field"><span>Tên bản sao (tùy chọn)</span><input maxLength={80} value={label} disabled={Boolean(busy)} onChange={e => setLabel(e.target.value)} placeholder="Ví dụ: Điện thoại sau khi nhập chi tiêu" /></label>
         <button type="button" className="cm-sync-primary" disabled={Boolean(busy) || loading || !history} onClick={() => void create()}><CloudUpload size={18} /> Tạo bản sao lên web</button>
