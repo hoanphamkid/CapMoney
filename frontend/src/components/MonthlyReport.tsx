@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Download, ListFilter, TrendingDown, Trending
 import { useMemo, useState } from 'react';
 import type { Transaction } from '../services/api';
 import { loadBudget } from './SpendingLimitModal';
+import { isInReportRange, offsetReportDay, REPORT_PERIODS, reportRange, reportRangeLabel, type ReportPeriod, type ReportRange } from './reportPeriod';
 
 export const CATEGORY_LABELS: Record<string, string> = {
   food: 'Ăn uống',
@@ -41,31 +42,26 @@ function monthKey(year: number, month: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
-function dayKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function periodStartKey(days: number) {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - (days - 1));
-  return dayKey(date);
-}
-
 function money(value: number) {
   return `${value.toLocaleString('vi-VN')} ₫`;
 }
 
-export function MonthlyReport({ transactions, selectedCategory, flowType, incomeCategory, onCategoryChange, onFilterChange }: {
+export function MonthlyReport({
+  transactions, selectedCategory, flowType, incomeCategory, selectedPeriod, dateRange, today,
+  onCategoryChange, onFilterChange, onPeriodChange,
+}: {
   transactions: Transaction[];
   selectedCategory: string;
   flowType: ReportFlowType;
   incomeCategory: string;
+  selectedPeriod: ReportPeriod | null;
+  dateRange: ReportRange | null;
+  today: string;
+  onPeriodChange: (period: ReportPeriod | null) => void;
   onCategoryChange: (category: string) => void;
   onFilterChange?: (filter: { flowType: ReportFlowType; categoryId: string }) => void;
 }) {
-  const now = new Date();
-  const [cursor, setCursor] = useState(new Date(now.getFullYear(), now.getMonth(), 1));
+  const [cursor, setCursor] = useState(() => new Date(`${today.slice(0, 7)}-01T12:00:00`));
   const budget = useMemo(() => loadBudget(), []);
 
   const report = useMemo(() => {
@@ -77,15 +73,16 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
     let expense = 0;
     let prevExpense = 0;
     const byCategory: Record<string, number> = {};
-    const monthTxs: Transaction[] = [];
+    const reportTxs: Transaction[] = [];
 
     for (const tx of transactions) {
       const k = tx.dateKey.slice(0, 7);
       if (k === prevKey && tx.type === 'expense') prevExpense += tx.amount;
-      if (k !== key) continue;
+      if (dateRange ? !isInReportRange(tx.dateKey, dateRange) : k !== key) continue;
       if (flowType !== 'all' && tx.type !== flowType) continue;
       if (flowType === 'income' && incomeCategory !== 'all' && tx.categoryId !== incomeCategory) continue;
-      monthTxs.push(tx);
+      if (dateRange && flowType === 'expense' && selectedCategory !== 'all' && tx.categoryId !== selectedCategory) continue;
+      reportTxs.push(tx);
       if (tx.type === 'income') income += tx.amount;
       else if (tx.type === 'expense') {
         expense += tx.amount;
@@ -104,7 +101,7 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
       }));
 
     const incomeCategories = Object.entries(
-      monthTxs
+      reportTxs
         .filter(tx => tx.type === 'income')
         .reduce<Record<string, number>>((totals, tx) => {
           totals[tx.categoryId] = (totals[tx.categoryId] ?? 0) + tx.amount;
@@ -152,38 +149,37 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
       categories,
       incomeCategories,
       trend,
-      monthTxs,
+      reportTxs,
       isCurrent,
       daysLeft,
-      dailyAvg,
       projected,
       remaining,
       safePerDay,
     };
-  }, [transactions, cursor, budget, selectedCategory, flowType, incomeCategory]);
+  }, [transactions, cursor, budget, selectedCategory, flowType, incomeCategory, dateRange]);
 
   const categoryName = CATEGORY_LABELS[selectedCategory] ?? 'Khác';
   const visibleCategories = useMemo(() => report.categories.filter(c => selectedCategory === 'all' || c.id === selectedCategory), [report.categories, selectedCategory]);
   const visibleExpense = visibleCategories.reduce((sum, c) => sum + c.amount, 0);
-  const categoryTransactions = report.monthTxs.filter(tx => tx.type === 'expense' && tx.categoryId === selectedCategory);
+  const categoryTransactions = report.reportTxs.filter(tx => tx.type === 'expense' && tx.categoryId === selectedCategory);
   const flowTotal = flowType === 'income' ? report.income : report.expense;
   const visibleBreakdown = flowType === 'income' ? report.incomeCategories : visibleCategories;
   const visibleTotal = flowType === 'income' ? report.income : visibleExpense;
   const activeIncomeCategoryName = incomeCategory === 'all' ? 'Tất cả tiền vào' : INCOME_CATEGORY_LABELS[incomeCategory] ?? 'Thu khác';
-  const largestTransaction = report.monthTxs.reduce((largest, tx) => tx.amount > (largest?.amount ?? 0) ? tx : largest, null as Transaction | null);
-  const averagePerDay = Math.round(flowTotal / Math.max(1, new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()));
+  const largestTransaction = report.reportTxs.reduce((largest, tx) => tx.amount > (largest?.amount ?? 0) ? tx : largest, null as Transaction | null);
+  const daysInView = selectedPeriod?.days ?? new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+  const averagePerDay = Math.round(flowTotal / daysInView);
 
-  const periodTotals = [1, 7, 30].map(days => ({
-    days,
-    amount: transactions
-      .filter(tx => tx.dateKey >= periodStartKey(days))
-      .filter(tx => tx.dateKey <= dayKey(new Date()))
-      .filter(tx => flowType === 'income' ? tx.type === 'income' : tx.type === 'expense')
-      .filter(tx => flowType === 'income'
-        ? incomeCategory === 'all' || tx.categoryId === incomeCategory
-        : selectedCategory === 'all' || tx.categoryId === selectedCategory)
-      .reduce((sum, tx) => sum + tx.amount, 0),
-  }));
+  const periodTotals = REPORT_PERIODS.map(period => {
+    const range = reportRange(period, today);
+    const category = flowType === 'income' ? incomeCategory : selectedCategory;
+    const type = flowType === 'income' ? 'income' : 'expense';
+    const amount = transactions.reduce((sum, tx) =>
+      tx.type === type && (category === 'all' || tx.categoryId === category) && isInReportRange(tx.dateKey, range)
+        ? sum + tx.amount
+        : sum, 0);
+    return { period, amount };
+  });
 
   const donut = useMemo(() => {
     if (visibleBreakdown.length === 0) return 'conic-gradient(#2a2d38 0 100%)';
@@ -200,13 +196,14 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
   const diffPct = report.prevExpense > 0 ? Math.round((diff / report.prevExpense) * 100) : null;
   const showIncomeTrend = flowType === 'income' || (flowType === 'all' && selectedCategory === 'all');
   const showExpenseTrend = flowType !== 'income';
-  const maxTrend = Math.max(1, ...report.trend.map(t => Math.max(showIncomeTrend ? t.income : 0, showExpenseTrend ? t.expense : 0)));
+  const trend = selectedPeriod && dateRange ? periodTrend(report.reportTxs, selectedPeriod, dateRange) : report.trend;
+  const maxTrend = Math.max(1, ...trend.map(t => Math.max(showIncomeTrend ? t.income : 0, showExpenseTrend ? t.expense : 0)));
   const budgetPct = budget.monthlyLimit > 0 ? Math.min(100, (report.expense / budget.monthlyLimit) * 100) : 0;
   const budgetState = budgetPct >= 100 ? 'over' : budgetPct >= 80 ? 'warn' : 'ok';
 
   const exportCsv = () => {
     const header = 'Ngày,Loại,Danh mục,Ghi chú,Số tiền';
-    const rows = report.monthTxs
+    const rows = report.reportTxs
       .filter(tx => (flowType === 'all' || tx.type === flowType) && (selectedCategory === 'all' || (tx.type === 'expense' && tx.categoryId === selectedCategory)))
       .slice()
       .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
@@ -214,7 +211,7 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
         [
           tx.dateKey,
           tx.type === 'income' ? 'Thu' : tx.type === 'expense' ? 'Chi' : 'Chuyển',
-          CATEGORY_LABELS[tx.categoryId] ?? 'Khác',
+          tx.type === 'income' ? INCOME_CATEGORY_LABELS[tx.categoryId] ?? 'Thu khác' : CATEGORY_LABELS[tx.categoryId] ?? 'Khác',
           `"${(tx.note || '').replace(/"/g, '""')}"`,
           tx.amount,
         ].join(','),
@@ -223,7 +220,9 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `capmoney-${report.key}-${flowType}${selectedCategory === 'all' ? '' : `-${selectedCategory}`}.csv`;
+    const exportDate = dateRange ? `${dateRange.from}_${dateRange.to}` : report.key;
+    const exportCategory = flowType === 'income' ? incomeCategory : selectedCategory;
+    a.download = `capmoney-${exportDate}-${flowType}${exportCategory === 'all' ? '' : `-${exportCategory}`}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -232,15 +231,17 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
     <section className="panel cm-report" style={{ marginTop: 16 }}>
       <div className="panel-head">
         <div>
-          <h2>Báo cáo chi tiêu tháng</h2>
-          <p>Phân tích theo danh mục, so sánh và dự báo</p>
+          <h2>{dateRange ? 'Báo cáo theo thời gian' : 'Báo cáo chi tiêu tháng'}</h2>
+          <p>{dateRange ? 'Tổng hợp dòng tiền theo khoảng đã chọn' : 'Phân tích theo danh mục, so sánh và dự báo'}</p>
         </div>
-        <button type="button" className="outline-button small" onClick={exportCsv} aria-label={selectedCategory === 'all' ? 'Xuất CSV tháng này' : `Xuất CSV ${categoryName}`}>
+        <button type="button" className="outline-button small" onClick={exportCsv} aria-label={dateRange ? 'Xuất CSV theo thời gian đã chọn' : selectedCategory === 'all' ? 'Xuất CSV tháng này' : `Xuất CSV ${categoryName}`}>
           <Download size={14} /> CSV
         </button>
       </div>
 
-      <div className="cm-report-month">
+      {dateRange ? (
+        <p className="cm-report-range" aria-live="polite">{reportRangeLabel(dateRange)}</p>
+      ) : <div className="cm-report-month">
         <button type="button" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} aria-label="Tháng trước">
           <ChevronLeft size={16} />
         </button>
@@ -250,7 +251,7 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
         <button type="button" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} aria-label="Tháng sau">
           <ChevronRight size={16} />
         </button>
-      </div>
+      </div>}
 
       <div className="cm-report-summary">
         <div>
@@ -292,12 +293,12 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
               </button>
             ))}
           </div>
-          <p>Chọn loại tiền vào để xem đúng tổng tiền, biểu đồ và giao dịch trong tháng.</p>
+          <p>Chọn loại tiền vào để lọc tổng tiền, biểu đồ và giao dịch.</p>
         </div>
       )}
 
       <div className="cm-report-insights">
-        <div><small>Số giao dịch</small><strong>{report.monthTxs.length}</strong></div>
+        <div><small>Số giao dịch</small><strong>{report.reportTxs.length}</strong></div>
         <div><small>Khoản lớn nhất</small><strong>{largestTransaction ? money(largestTransaction.amount) : '0 ₫'}</strong></div>
         <div><small>Trung bình/ngày</small><strong>{money(averagePerDay)}</strong></div>
       </div>
@@ -305,43 +306,58 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
       <div className="cm-report-periods" aria-label={`${flowType === 'income' ? 'Tổng tiền vào' : 'Tổng chi tiêu'} theo thời gian`}>
         <div className="cm-report-periods-heading">
           <strong>{flowType === 'income' ? 'Tổng tiền vào' : 'Tổng tiền chi tiêu'} theo thời gian</strong>
-          <span>theo bộ lọc đang chọn</span>
+          {selectedPeriod ? (
+            <button type="button" className="cm-report-period-clear" onClick={() => onPeriodChange(null)}>Bỏ lọc thời gian</button>
+          ) : <span>{flowType === 'all' ? 'theo bộ lọc đang chọn' : 'Chạm để lọc đến hôm nay'}</span>}
         </div>
-        <div className="cm-report-period-grid">
-          {periodTotals.map(period => (
-            <div key={period.days}>
-              <small>{period.days === 1 ? '1 ngày' : period.days === 7 ? '1 tuần' : '1 tháng'}</small>
-              <strong className={flowType === 'income' ? 'income-text' : 'expense-text'}>{money(period.amount)}</strong>
+        <div className="cm-report-period-grid" role="group" aria-label="Lọc theo thời gian">
+          {periodTotals.map(({ period, amount }) => {
+            const content = (
+              <>
+                <small>{period.label}</small>
+                <strong className={flowType === 'income' ? 'income-text' : 'expense-text'}>{money(amount)}</strong>
+              </>
+            );
+            return flowType === 'all' ? <div key={period.days}>{content}</div> : (
+              <button key={period.days} type="button" aria-pressed={selectedPeriod === period}
+                title={reportRangeLabel(reportRange(period, today))}
+                onClick={() => onPeriodChange(selectedPeriod === period ? null : period)}>
+                {content}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {!dateRange && (
+        <>
+          <div className={`cm-report-compare ${diff > 0 ? 'up' : 'down'}`}>
+            {diff > 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
+            {report.prevExpense === 0
+              ? 'Chưa có dữ liệu tháng trước để so sánh.'
+              : `${diff > 0 ? 'Chi nhiều hơn' : 'Chi ít hơn'} tháng trước ${money(Math.abs(diff))}${diffPct !== null ? ` (${diff > 0 ? '+' : ''}${diffPct}%)` : ''}`}
+          </div>
+
+          <div className="cm-report-budget">
+            <div className="cm-report-budget-head">
+              <span>Hạn mức tháng: {money(budget.monthlyLimit)}</span>
+              <b className={budgetState}>{Math.round(budgetPct)}%</b>
             </div>
-          ))}
-        </div>
-      </div>
-
-      <div className={`cm-report-compare ${diff > 0 ? 'up' : 'down'}`}>
-        {diff > 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
-        {report.prevExpense === 0
-          ? 'Chưa có dữ liệu tháng trước để so sánh.'
-          : `${diff > 0 ? 'Chi nhiều hơn' : 'Chi ít hơn'} tháng trước ${money(Math.abs(diff))}${diffPct !== null ? ` (${diff > 0 ? '+' : ''}${diffPct}%)` : ''}`}
-      </div>
-
-      <div className="cm-report-budget">
-        <div className="cm-report-budget-head">
-          <span>Hạn mức tháng: {money(budget.monthlyLimit)}</span>
-          <b className={budgetState}>{Math.round(budgetPct)}%</b>
-        </div>
-        <div className="cm-report-bar">
-          <span className={budgetState} style={{ width: `${budgetPct}%` }} />
-        </div>
-        {budgetState === 'over' && <p className="cm-report-alert over">Đã vượt hạn mức tháng {money(Math.abs(report.remaining))}!</p>}
-        {budgetState === 'warn' && <p className="cm-report-alert warn">Đã dùng trên 80% hạn mức, còn {money(report.remaining)}.</p>}
-        {report.isCurrent && budgetState !== 'over' && (
-          <p className="cm-report-hint">
-            Còn {report.daysLeft} ngày: nên chi tối đa <b>{money(report.safePerDay)}</b>/ngày. Dự báo cuối tháng:{' '}
-            <b>{money(report.projected)}</b>
-            {report.projected > budget.monthlyLimit ? ' (vượt hạn mức)' : ''}.
-          </p>
-        )}
-      </div>
+            <div className="cm-report-bar">
+              <span className={budgetState} style={{ width: `${budgetPct}%` }} />
+            </div>
+            {budgetState === 'over' && <p className="cm-report-alert over">Đã vượt hạn mức tháng {money(Math.abs(report.remaining))}!</p>}
+            {budgetState === 'warn' && <p className="cm-report-alert warn">Đã dùng trên 80% hạn mức, còn {money(report.remaining)}.</p>}
+            {report.isCurrent && budgetState !== 'over' && (
+              <p className="cm-report-hint">
+                Còn {report.daysLeft} ngày: nên chi tối đa <b>{money(report.safePerDay)}</b>/ngày. Dự báo cuối tháng:{' '}
+                <b>{money(report.projected)}</b>
+                {report.projected > budget.monthlyLimit ? ' (vượt hạn mức)' : ''}.
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
       {flowType !== 'income' && <div className="cm-report-category-filter">
         <div className="cm-report-filter-heading">
@@ -360,7 +376,10 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
         {selectedCategory !== 'all' && (
           <div className="cm-report-category-total" aria-live="polite">
             <div><span>Chi cho {categoryName}</span><strong>−{money(visibleExpense)}</strong></div>
-            <div><span>{categoryTransactions.length} khoản chi trong tháng</span><small>{report.expense > 0 ? Math.round((visibleExpense / report.expense) * 100) : 0}% tổng chi tháng này</small></div>
+            <div>
+              <span>{categoryTransactions.length} khoản chi {dateRange ? 'trong khoảng đã chọn' : 'trong tháng'}</span>
+              {!dateRange && <small>{report.expense > 0 ? Math.round((visibleExpense / report.expense) * 100) : 0}% tổng chi tháng này</small>}
+            </div>
           </div>
         )}
       </div>}
@@ -373,7 +392,9 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
           </span>
         </div>
         <ul className="cm-report-legend">
-          {visibleBreakdown.length === 0 && <li className="cm-report-category-empty">{flowType === 'income' ? `Chưa có khoản ${incomeCategory === 'all' ? 'tiền vào' : activeIncomeCategoryName.toLowerCase()} trong tháng này.` : `Chưa có khoản chi${selectedCategory === 'all' ? '' : ` ${categoryName}`} trong tháng này.`}</li>}
+          {visibleBreakdown.length === 0 && <li className="cm-report-category-empty">
+            Chưa có {flowType === 'income' ? (incomeCategory === 'all' ? 'tiền vào' : activeIncomeCategoryName.toLowerCase()) : (selectedCategory === 'all' ? 'khoản chi' : `khoản chi ${categoryName}`)} {dateRange ? 'trong khoảng đã chọn.' : 'trong tháng này.'}
+          </li>}
           {visibleBreakdown.map(c => (
             <li key={c.id}>
               <button type="button" className="cm-report-category-row" onClick={() => flowType === 'income' ? onFilterChange?.({ flowType: 'income', categoryId: c.id }) : onCategoryChange(c.id)} aria-label={`Lọc ${flowType === 'income' ? 'loại tiền vào' : 'danh mục'} ${flowType === 'income' ? INCOME_CATEGORY_LABELS[c.id] ?? 'Thu khác' : CATEGORY_LABELS[c.id] ?? 'Khác'}`}>
@@ -391,9 +412,10 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
       </div>
 
       <div className="cm-report-trend">
-        <strong>{selectedCategory === 'all' ? 'Xu hướng 6 tháng' : `Xu hướng chi ${categoryName} · 6 tháng`}</strong>
-        <div className="cm-report-trend-bars">
-          {report.trend.map(t => (
+        <strong>{selectedPeriod ? `Dòng tiền trong ${selectedPeriod.days} ngày` : selectedCategory === 'all' ? 'Xu hướng 6 tháng' : `Xu hướng chi ${categoryName} · 6 tháng`}</strong>
+        {selectedPeriod?.days === 30 && <small>Mỗi cột gộp 5 ngày</small>}
+        <div className="cm-report-trend-bars" style={{ gridTemplateColumns: `repeat(${trend.length}, minmax(0, 1fr))` }}>
+          {trend.map(t => (
             <div key={t.label}>
               <div className="cm-report-trend-pair">
                 {showIncomeTrend && <span className="inc" style={{ height: `${Math.max(3, (t.income / maxTrend) * 80)}px` }} />}
@@ -414,4 +436,21 @@ export function MonthlyReport({ transactions, selectedCategory, flowType, income
       </div>
     </section>
   );
+}
+
+function periodTrend(transactions: Transaction[], period: ReportPeriod, range: ReportRange) {
+  const bucketDays = period.days === 30 ? 5 : 1;
+  return Array.from({ length: period.days / bucketDays }, (_, index) => {
+    const from = offsetReportDay(range.from, index * bucketDays);
+    const to = offsetReportDay(from, bucketDays - 1);
+    let income = 0;
+    let expense = 0;
+    for (const tx of transactions) {
+      if (!isInReportRange(tx.dateKey, { from, to })) continue;
+      if (tx.type === 'income') income += tx.amount;
+      if (tx.type === 'expense') expense += tx.amount;
+    }
+    const label = `${Number(from.slice(8))}/${Number(from.slice(5, 7))}`;
+    return { label, income, expense };
+  });
 }

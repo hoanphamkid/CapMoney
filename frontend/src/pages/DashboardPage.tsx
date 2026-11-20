@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
 import { CATEGORY_LABELS, INCOME_CATEGORY_LABELS, MonthlyReport, type ReportFlowType } from '../components/MonthlyReport';
+import { isInReportRange, reportRange, reportRangeLabel, type ReportPeriod } from '../components/reportPeriod';
 import { useAuth } from '../contexts/AuthContext';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { api, type CalendarEvent, type Transaction, type Wallet } from '../services/api';
@@ -19,6 +20,9 @@ export function DashboardPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedFlowType, setSelectedFlowType] = useState<ReportFlowType>('all');
   const [selectedIncomeCategory, setSelectedIncomeCategory] = useState('all');
+  const [selectedPeriod, setSelectedPeriod] = useState<ReportPeriod | null>(null);
+  const today = todayKey();
+  const dateRange = useMemo(() => selectedPeriod ? reportRange(selectedPeriod, today) : null, [selectedPeriod, today]);
   const recentListRef = useRef<HTMLDivElement>(null);
   const requestVersion = useRef(0);
   const [scrollEdges, setScrollEdges] = useState({ above: false, below: false });
@@ -26,23 +30,26 @@ export function DashboardPage() {
 
   const recentTransactions = useMemo(() => transactions
     .filter(tx => {
+      if (dateRange && !isInReportRange(tx.dateKey, dateRange)) return false;
       if (selectedFlowType === 'income') return tx.type === 'income' && (selectedIncomeCategory === 'all' || tx.categoryId === selectedIncomeCategory);
       if (selectedFlowType === 'expense') return tx.type === 'expense' && (selectedCategory === 'all' || tx.categoryId === selectedCategory);
       return selectedCategory === 'all' || (tx.type === 'expense' && tx.categoryId === selectedCategory);
     })
     .sort((a, b) => b.dateKey.localeCompare(a.dateKey) || (b.transactionTime ?? '').localeCompare(a.transactionTime ?? '') || (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
-  [transactions, selectedCategory, selectedFlowType, selectedIncomeCategory]);
+  [transactions, selectedCategory, selectedFlowType, selectedIncomeCategory, dateRange]);
 
-  const recentFilterLabel = selectedFlowType === 'income'
+  const recentFlowLabel = selectedFlowType === 'income'
     ? `Tiền vào${selectedIncomeCategory === 'all' ? '' : ` · ${INCOME_CATEGORY_LABELS[selectedIncomeCategory] ?? 'Thu khác'}`}`
     : selectedFlowType === 'expense'
       ? `Tiền ra${selectedCategory === 'all' ? '' : ` · ${CATEGORY_LABELS[selectedCategory] ?? 'Khác'}`}`
       : selectedCategory === 'all' ? '' : `Chi · ${CATEGORY_LABELS[selectedCategory] ?? 'Khác'}`;
+  const recentFilterLabel = dateRange ? `${recentFlowLabel} · ${reportRangeLabel(dateRange)}` : recentFlowLabel;
 
   const clearRecentFilter = () => {
     setSelectedCategory('all');
     setSelectedFlowType('all');
     setSelectedIncomeCategory('all');
+    setSelectedPeriod(null);
   };
 
   useEffect(() => {
@@ -161,8 +168,13 @@ export function DashboardPage() {
         selectedCategory={selectedCategory}
         flowType={selectedFlowType}
         incomeCategory={selectedIncomeCategory}
+        selectedPeriod={selectedPeriod}
+        dateRange={dateRange}
+        today={today}
+        onPeriodChange={setSelectedPeriod}
         onCategoryChange={setSelectedCategory}
         onFilterChange={({ flowType, categoryId }) => {
+          if (flowType !== selectedFlowType) setSelectedPeriod(null);
           setSelectedFlowType(flowType);
           setSelectedIncomeCategory(flowType === 'income' ? categoryId : 'all');
         }}

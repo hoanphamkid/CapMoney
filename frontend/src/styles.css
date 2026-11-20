@@ -5464,7 +5464,15 @@ html:not(.dark-theme) .cm-app-shell {
 .cm-report-periods-heading strong { color: #e8edf5; font-size: 12px; }
 .cm-report-periods-heading span { color: #8693a5; font-size: 10px; }
 .cm-report-period-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 9px; }
-.cm-report-period-grid > div { display: grid; gap: 5px; min-width: 0; padding: 9px; border-radius: 10px; background: rgba(255,255,255,.035); }
+.cm-report-period-grid > :is(div, button) { display: grid; gap: 5px; min-width: 0; padding: 9px; border-radius: 10px; background: rgba(255,255,255,.035); }
+.cm-report-period-grid > button { border: 1px solid #3b485a; text-align: left; }
+.cm-report-period-grid > button:hover { border-color: #78a8dc; }
+.cm-report-period-grid > button[aria-pressed="true"] { border-color: #8ab5e4; background: #253a53; }
+.cm-report-period-grid > button[aria-pressed="true"] small { color: #e3eefc; }
+.cm-report-period-grid > button:focus-visible,
+.cm-report-period-clear:focus-visible { outline: 2px solid #9dc4ff; outline-offset: 2px; }
+.cm-report-period-clear { border: 0; padding: 4px 0; background: none; color: #a6cdf6; font-size: 11px; }
+.cm-report-range { margin: 4px 0 12px; text-align: center; font-size: 13px; font-weight: 700; color: #b7d8ff; }
 .cm-report-period-grid small { color: #9da8b7; font-size: 10px; }
 .cm-report-period-grid strong { overflow-wrap: anywhere; font-size: 12px; }
 .cm-report-compare { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; font-weight: 600; }
