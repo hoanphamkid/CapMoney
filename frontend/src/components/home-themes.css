@@ -235,6 +235,25 @@
     border-color: var(--home-line);
   }
 
+  .cm-day-navigation {
+    background: var(--home-panel);
+  }
+
+  .cm-day-nav-button {
+    background: var(--home-tint);
+    border-color: var(--home-line);
+    color: var(--home-accent);
+  }
+
+  .cm-day-nav-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--home-accent) 16%, var(--home-tint));
+  }
+
+  .cm-day-nav-button:disabled {
+    color: var(--home-muted);
+    opacity: .5;
+  }
+
   :is(.cm-month-arrow, .cm-mode-btn.active, .cm-icon-circle, .cm-day-circle, .cm-day-close, .cm-day-view-toggle) {
     background: var(--home-tint);
     border-color: var(--home-line);
