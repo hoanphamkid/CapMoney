@@ -26,6 +26,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
+import { HomeThemePicker, readHomeTheme, saveHomeTheme, SLEEPY_CAT_IMAGE } from '../components/HomeThemePicker';
 import { LookbackModal } from '../components/LookbackModal';
 import { SmartToolkitModal } from '../components/SmartToolkitModal';
 import { loadBudget, SpendingLimitModal, type BudgetConfig } from '../components/SpendingLimitModal';
@@ -74,6 +75,8 @@ export function CalendarPage() {
   const [lookbackPeriod, setLookbackPeriod] = useState<1 | 3 | 7 | null>(null);
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [toolkitOpen, setToolkitOpen] = useState(false);
+  const [homeTheme, setHomeTheme] = useState(readHomeTheme);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [budget, setBudget] = useState<BudgetConfig>(() => loadBudget());
 
   const monthRange = useMemo(() => {
@@ -262,7 +265,7 @@ export function CalendarPage() {
   }, [budget, totals.expense, todayExpense, byDay]);
 
   return (
-    <div className="cm-home-screen">
+    <div className="cm-home-screen" data-home-theme={homeTheme}>
       {/* Top User Greeting Header */}
       <header className="cm-top-header">
         <div className="cm-greeting-block">
@@ -321,9 +324,13 @@ export function CalendarPage() {
           aria-expanded={toolkitOpen}
           aria-controls="cm-toolkit-dialog"
         >
-          <span className="cm-toolkit-launch-icon" aria-hidden="true">
-            <PiggyBank size={28} />
-          </span>
+          {homeTheme === 'sleepy-cat' ? (
+            <img className="cm-home-theme-cat" src={SLEEPY_CAT_IMAGE} width={78} height={52} alt="" />
+          ) : (
+            <span className="cm-toolkit-launch-icon" aria-hidden="true">
+              <PiggyBank size={28} />
+            </span>
+          )}
           <span className="cm-toolkit-launch-copy">
             <strong>Hũ & Chia bill</strong>
             <small>Tiết kiệm • Chia tiền nhóm</small>
@@ -372,12 +379,14 @@ export function CalendarPage() {
           </button>
           <button
             type="button"
-            className={`cm-icon-circle ${toolkitOpen ? 'active' : ''}`}
-            onClick={() => setToolkitOpen(true)}
-            title="Tiện ích, Hũ tiết kiệm & Chia bill"
-            aria-label="Tiện ích"
+            className="cm-home-theme-launch"
+            onClick={() => setThemePickerOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={themePickerOpen}
+            aria-label="Chọn giao diện"
           >
-            <Paintbrush size={17} />
+            <Paintbrush size={16} aria-hidden="true" />
+            <span>Giao diện</span>
           </button>
         </div>
       </div>
@@ -907,6 +916,16 @@ export function CalendarPage() {
           transactions={transactions}
           onClose={() => setToolkitOpen(false)}
           onTransactionAdded={() => void reload()}
+        />
+      )}
+      {themePickerOpen && (
+        <HomeThemePicker
+          selected={homeTheme}
+          onSelect={theme => {
+            setHomeTheme(theme);
+            saveHomeTheme(theme);
+          }}
+          onClose={() => setThemePickerOpen(false)}
         />
       )}
     </div>
