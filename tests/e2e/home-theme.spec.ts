@@ -34,7 +34,11 @@ test('applies a home theme on mobile and remembers it after reload', async ({ pa
 
   await page.goto('/app/settings');
   await expect(page.locator('.cm-app-shell')).toHaveAttribute('data-app-theme', 'sleepy-cat');
+  await expect(page.locator('.settings-hero')).toHaveCSS('background-color', 'rgb(255, 250, 243)');
   await expect(page.locator('.settings-card').first()).toHaveCSS('background-color', 'rgb(255, 250, 243)');
+  await expect(page.locator('.settings-redesign .select-field input').first()).toHaveCSS('background-color', 'rgb(246, 225, 204)');
+  await expect(page.locator('.settings-redesign .settings-heading h2').first()).toHaveCSS('color', 'rgb(70, 44, 36)');
+  await expect(page.locator('.settings-redesign .settings-action').first()).toHaveCSS('background-color', 'rgb(149, 78, 50)');
   await page.goto('/app/dashboard');
   await expect(page.locator('.metric-card').first()).toHaveCSS('background-color', 'rgb(255, 250, 243)');
   await expect(page.locator('.cm-report').first()).toHaveCSS('background-color', 'rgb(255, 250, 243)');
