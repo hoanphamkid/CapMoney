@@ -143,6 +143,8 @@ export function CalendarPage() {
     return map;
   }, [filteredTransactions]);
 
+  const filteredDayKeys = useMemo(() => Object.keys(byDay).sort(), [byDay]);
+
   const totals = useMemo(() => {
     let income = 0;
     let expense = 0;
@@ -181,10 +183,17 @@ export function CalendarPage() {
     return toDateKey(dt);
   };
 
+  const getNavigableDayKey = (baseKey: string, offset: number) => {
+    if (!searchQuery.trim()) return getAdjacentDayKey(baseKey, offset);
+    const currentIndex = filteredDayKeys.indexOf(baseKey);
+    return filteredDayKeys[currentIndex + offset] ?? baseKey;
+  };
+
   const handlePrevDay = () => {
     if (!dayViewDate) return;
     setDaySlideAnim('prev');
-    const prev = getAdjacentDayKey(dayViewDate, -1);
+    const prev = getNavigableDayKey(dayViewDate, -1);
+    setSelectedDate(prev);
     setDayViewDate(prev);
     if (navigator.vibrate) navigator.vibrate(12);
   };
@@ -192,35 +201,16 @@ export function CalendarPage() {
   const handleNextDay = () => {
     if (!dayViewDate) return;
     setDaySlideAnim('next');
-    const next = getAdjacentDayKey(dayViewDate, 1);
+    const next = getNavigableDayKey(dayViewDate, 1);
+    setSelectedDate(next);
     setDayViewDate(next);
     if (navigator.vibrate) navigator.vibrate(12);
   };
 
   const dayViewEvents = useMemo(() => {
     if (!dayViewDate) return [];
-    if (byDay[dayViewDate]) return byDay[dayViewDate];
-    return transactions
-      .filter(tx => tx.dateKey === dayViewDate)
-      .map(tx => ({
-        id: tx.id,
-        kind: tx.type,
-        type: tx.type,
-        title: tx.note || (tx.type === 'income' ? 'Thu nhập' : 'Chi tiêu'),
-        amount: tx.amount,
-        amountMinor: tx.amountMinor,
-        dateKey: tx.dateKey,
-        note: tx.note,
-        categoryId: tx.categoryId,
-        walletId: tx.walletId,
-        imageUrl: tx.imageUrl,
-        status: tx.status,
-        source: (tx.source as any) || 'transaction',
-        transactionTime: tx.transactionTime,
-        time: tx.transactionTime,
-        createdAt: tx.createdAt,
-      }));
-  }, [dayViewDate, byDay, transactions]);
+    return byDay[dayViewDate] ?? [];
+  }, [dayViewDate, byDay]);
 
   const dayViewNet = useMemo(() => {
     let inc = 0;
@@ -233,6 +223,10 @@ export function CalendarPage() {
   }, [dayViewEvents]);
 
   const isCurrentMonth = cursor.getFullYear() === new Date().getFullYear() && cursor.getMonth() === new Date().getMonth();
+  const filteredDayIndex = dayViewDate ? filteredDayKeys.indexOf(dayViewDate) : -1;
+  const hasActiveDayFilter = Boolean(searchQuery.trim());
+  const canNavigatePrevDay = !hasActiveDayFilter || filteredDayIndex > 0;
+  const canNavigateNextDay = !hasActiveDayFilter || (filteredDayIndex >= 0 && filteredDayIndex < filteredDayKeys.length - 1);
 
   // Budget & Safe Daily Allowance calculations
   const budgetMetrics = useMemo(() => {
@@ -679,10 +673,10 @@ export function CalendarPage() {
           </header>
 
           <nav className="cm-day-navigation" aria-label="Chuyển ngày">
-            <button type="button" className="cm-day-nav-button" onClick={handlePrevDay}>
+            <button type="button" className="cm-day-nav-button" onClick={handlePrevDay} disabled={!canNavigatePrevDay}>
               <ChevronLeft size={18} aria-hidden="true" /> Ngày trước
             </button>
-            <button type="button" className="cm-day-nav-button" onClick={handleNextDay}>
+            <button type="button" className="cm-day-nav-button" onClick={handleNextDay} disabled={!canNavigateNextDay}>
               Ngày sau <ChevronRight size={18} aria-hidden="true" />
             </button>
           </nav>
