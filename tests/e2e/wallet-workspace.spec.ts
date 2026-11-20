@@ -78,6 +78,30 @@ test('creates a wallet with an opening balance without changing the existing wal
   expect(state.wallets.slice(0, 2).map(wallet => wallet.balance)).toEqual([100000, 1200000]);
 });
 
+test('filters the journal by wallet, date and flow and totals matching transactions', async ({ page }) => {
+  await openWorkspace(page);
+  const totals = page.locator('.money-filter-totals');
+  await expect(totals.locator('.income')).toHaveText('1.000.000 ₫');
+  await expect(totals.locator('.expense')).toHaveText('110.000 ₫');
+
+  await page.getByRole('button', { name: 'Chọn ví MB Bank' }).click();
+  await page.getByLabel('Khoảng thời gian').selectOption('custom');
+  await page.getByLabel('Từ ngày').fill('2026-11-14');
+  await expect(page.locator('.money-history-empty')).toContainText('Không có giao dịch phù hợp');
+
+  const request = page.waitForRequest(request => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/transactions' && url.searchParams.get('from') === '2026-11-13' && url.searchParams.get('walletId') === bankId;
+  });
+  await page.getByLabel('Từ ngày').fill('2026-11-13');
+  await request;
+  await page.getByRole('group', { name: 'Lọc nhanh dòng tiền' }).getByRole('button', { name: 'Tiền ra' }).click();
+  await expect(page.locator('.ledger-row')).toHaveCount(1);
+  await expect(page.locator('.ledger-row')).toContainText('Momo');
+  await expect(totals.locator('.income')).toHaveText('0 ₫');
+  await expect(totals.locator('.expense')).toHaveText('80.000 ₫');
+});
+
 test('opens income capture with the selected wallet already chosen', async ({ page }) => {
   await openWorkspace(page);
   await page.getByRole('button', { name: 'Chọn ví MB Bank', exact: true }).click();

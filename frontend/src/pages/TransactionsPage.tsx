@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Building2, Check, ChevronDown, ChevronRight, Eye, EyeOff, Filter, ImageOff, Pencil, Plus, RefreshCw, Search, Smartphone, Tag, WalletCards, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Building2, CalendarDays, Check, ChevronDown, ChevronRight, Eye, EyeOff, Filter, ImageOff, Pencil, Plus, RefreshCw, Search, Smartphone, Tag, WalletCards, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
@@ -9,12 +9,15 @@ import './money.css';
 
 type ReviewFilter = 'all' | 'no-photo' | 'uncategorized';
 type TypeFilter = 'all' | 'income' | 'expense' | 'transfer';
+type Period = 'all' | 'today' | 'week' | 'month' | 'custom';
+const transactionTypes = { all: 'Tất cả', income: 'Tiền vào', expense: 'Tiền ra', transfer: 'Chuyển ví' } as const;
+const emptyTransactions: Transaction[] = [];
 const labels: Record<string, string> = { food: 'Ăn uống', shopping: 'Mua sắm', transport: 'Di chuyển', bills: 'Hóa đơn', entertainment: 'Giải trí', health: 'Sức khỏe', other: 'Khác', salary: 'Lương', bonus: 'Thưởng', investment: 'Đầu tư', gift: 'Được tặng', transfer: 'Chuyển ví' };
 const walletLabels: Record<string, string> = { cash: 'Tiền mặt', bank: 'Ngân hàng', e_wallet: 'Ví điện tử', savings: 'Tiết kiệm', credit: 'Tín dụng', custom: 'Ví khác' };
 
 export function TransactionsPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [rows, setRows] = useState<Transaction[]>([]);
+  const [loadedRows, setLoadedRows] = useState<{ scope: string; transactions: Transaction[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -24,6 +27,9 @@ export function TransactionsPage() {
   const [review, setReview] = useState<ReviewFilter>('all');
   const [type, setType] = useState<TypeFilter>('all');
   const [category, setCategory] = useState('all');
+  const [period, setPeriod] = useState<Period>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [sort, setSort] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [captureType, setCaptureType] = useState<'expense' | 'income' | null>(null);
@@ -31,17 +37,28 @@ export function TransactionsPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [detail, setDetail] = useState<CalendarEvent | null>(null);
   const requestVersion = useRef(0);
+  const today = new Date();
+  const todayDate = dateKey(today);
+  const from = period === 'custom' ? customFrom : period === 'month' ? `${todayDate.slice(0, 7)}-01`
+    : period === 'week' ? dateKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6)) : period === 'today' ? todayDate : '';
+  const to = period === 'custom' ? customTo : period === 'all' ? '' : todayDate;
+  const invalidRange = Boolean(from && to && from > to);
+  const scope = JSON.stringify([walletId, from, to]);
+  const rows = loadedRows?.scope === scope ? loadedRows.transactions : emptyTransactions;
 
   const load = async (quiet = false) => {
     const version = ++requestVersion.current;
     if (quiet) setRefreshing(true); else setLoading(true);
-    const [walletResult, transactionResult] = await Promise.allSettled([api.wallets(), api.transactions()]);
+    const [walletResult, transactionResult] = await Promise.allSettled([
+      api.wallets(),
+      invalidRange ? Promise.resolve({ transactions: [] }) : api.transactions({ from, to, walletId: walletId === 'all' ? undefined : walletId }),
+    ]);
     if (version !== requestVersion.current) return;
     if (walletResult.status === 'fulfilled') {
       setWallets(walletResult.value.wallets);
       setWalletId(current => current === 'all' || walletResult.value.wallets.some(wallet => wallet.id === current) ? current : 'all');
     }
-    if (transactionResult.status === 'fulfilled') setRows(transactionResult.value.transactions);
+    if (transactionResult.status === 'fulfilled') setLoadedRows({ scope, transactions: transactionResult.value.transactions });
     setError(walletResult.status === 'rejected' && transactionResult.status === 'rejected'
       ? 'Không tải được dữ liệu. Hãy thử làm mới.'
       : walletResult.status === 'rejected' ? 'Không tải được danh sách ví.'
@@ -49,33 +66,14 @@ export function TransactionsPage() {
     setLoading(false); setRefreshing(false);
   };
   useAutoRefresh(() => load(true));
-  useEffect(() => { void load(); return () => { requestVersion.current++; }; }, []);
+  useEffect(() => { void load(); return () => { requestVersion.current++; }; }, [walletId, from, to, invalidRange]);
 
   const selectedWallet = wallets.find(wallet => wallet.id === walletId);
   const walletNames = useMemo(() => new Map(wallets.map(wallet => [wallet.id, wallet.name])), [wallets]);
-  const walletRows = useMemo(() => rows.filter(row => walletId === 'all' || row.walletId === walletId || row.toWalletId === walletId), [rows, walletId]);
-  const flowRows = useMemo(() => walletRows.filter(row => row.type === 'income' || row.type === 'expense'), [walletRows]);
-  const monthKey = todayKey().slice(0, 7);
-  const monthRows = useMemo(() => flowRows.filter(row => row.dateKey.startsWith(monthKey)), [flowRows, monthKey]);
-  const totalBalance = useMemo(() => (walletId === 'all' ? wallets : wallets.filter(wallet => wallet.id === walletId)).reduce((sum, wallet) => sum + wallet.balance, 0), [wallets, walletId]);
-  const monthIncome = useMemo(() => monthRows.filter(row => row.type === 'income').reduce((sum, row) => sum + row.amount, 0), [monthRows]);
-  const monthExpense = useMemo(() => monthRows.filter(row => row.type === 'expense').reduce((sum, row) => sum + row.amount, 0), [monthRows]);
-  const monthNet = monthIncome - monthExpense;
-  const elapsedDays = Math.max(1, new Date().getDate());
-  const remainingDays = Math.max(0, new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - elapsedDays);
-  const forecast = totalBalance + (monthNet / elapsedDays) * remainingDays;
-  const dailyFlow = useMemo(() => {
-    const today = new Date();
-    return Array.from({ length: 14 }, (_, index) => {
-      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (13 - index));
-      const key = dateKey(date);
-      const dayRows = flowRows.filter(row => row.dateKey === key);
-      const income = dayRows.filter(row => row.type === 'income').reduce((sum, row) => sum + row.amount, 0);
-      const expense = dayRows.filter(row => row.type === 'expense').reduce((sum, row) => sum + row.amount, 0);
-      return { key, label: `${date.getDate()}/${date.getMonth() + 1}`, net: income - expense };
-    });
-  }, [flowRows]);
-  const chartMax = Math.max(1, ...dailyFlow.map(day => Math.abs(day.net)));
+  const walletRows = useMemo(() => rows.filter(row => !invalidRange
+    && (!from || row.dateKey >= from) && (!to || row.dateKey <= to)
+    && (walletId === 'all' || row.walletId === walletId || row.toWalletId === walletId)), [rows, walletId, from, to, invalidRange]);
+  const totalBalance = selectedWallet?.balance ?? wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
   const reviewCounts = useMemo(() => ({
     noPhoto: walletRows.filter(row => row.type !== 'transfer' && !row.imageUrl).length,
     uncategorized: walletRows.filter(row => row.type !== 'transfer' && (!row.categoryId || row.categoryId === 'other')).length,
@@ -90,59 +88,222 @@ export function TransactionsPage() {
   [walletRows, review, type, category, query, sort, walletNames]);
   const groups = useMemo(() => {
     const result = new Map<string, Transaction[]>();
-    for (const row of visibleRows) result.set(row.dateKey, [...(result.get(row.dateKey) ?? []), row]);
+    for (const row of visibleRows) {
+      const group = result.get(row.dateKey);
+      if (group) group.push(row);
+      else result.set(row.dateKey, [row]);
+    }
     return result;
   }, [visibleRows]);
-  const categories = [...new Set(walletRows.map(row => row.categoryId).filter(Boolean))];
-  const hasFilters = Boolean(query || review !== 'all' || type !== 'all' || category !== 'all');
-  const resetFilters = () => { setQuery(''); setReview('all'); setType('all'); setCategory('all'); };
+  const totals = visibleRows.reduce((sum, row) => {
+    if (row.type === 'income' || row.type === 'expense') sum[row.type] += row.amount;
+    return sum;
+  }, { income: 0, expense: 0 });
+  const categories = [...new Set([
+    ...walletRows.filter(row => type === 'all' || row.type === type).map(row => row.categoryId).filter(Boolean),
+    ...(category === 'all' ? [] : [category]),
+  ])];
+  const hasFilters = Boolean(query.trim() || review !== 'all' || type !== 'all' || category !== 'all' || period !== 'all');
+  const resetFilters = () => { setQuery(''); setReview('all'); setType('all'); setCategory('all'); setPeriod('all'); };
+  const selectWallet = (id: string) => {
+    setWalletId(id);
+    setQuery('');
+    setReview('all');
+    setCategory('all');
+  };
+  const selectType = (value: TypeFilter) => {
+    if (type === value) return;
+    setType(value);
+    setCategory('all');
+  };
+  const toggleBalances = () => setHideBalances(value => !value);
+  const displayMoney = (value: number) => hideBalances ? '••••••' : money(value);
   const asEvent = (row: Transaction): CalendarEvent => ({ ...row, kind: row.type, title: row.note || labels[row.categoryId] || 'Giao dịch', source: row.source ?? 'manual' });
   const saved = () => { setCaptureType(null); setWalletForm(null); setTransferOpen(false); setDetail(null); void load(true); };
 
+  const amountOrder = sort === 'highest' || sort === 'lowest';
+  const renderRow = (row: Transaction) => {
+    const description = row.type === 'transfer'
+      ? (walletNames.get(row.walletId) ?? 'Ví nguồn') + ' → ' + (walletNames.get(row.toWalletId ?? '') ?? 'Ví nhận')
+      : (walletNames.get(row.walletId) ?? 'Ví') + ' · ' + (labels[row.categoryId] ?? 'Khác');
+    return (
+      <button type="button" className="ledger-row money-history-row" key={row.id} onClick={() => setDetail(asEvent(row))}>
+        <span className={'money-history-icon ' + row.type}>
+          {row.type === 'transfer' ? <ArrowLeftRight size={17} /> : row.imageUrl ? <img src={row.imageUrl} alt="" loading="lazy" />
+            : row.type === 'income' ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}
+        </span>
+        <span className="ledger-row-copy">
+          <strong>{row.note || labels[row.categoryId] || 'Giao dịch'}</strong>
+          <small>{description}{amountOrder && ' · ' + row.dateKey.split('-').reverse().join('/')}{row.transactionTime && ' · ' + row.transactionTime.slice(0, 5)}</small>
+        </span>
+        <span className={'ledger-row-amount ' + row.type}>
+          {hideBalances ? '••••••' : (row.type === 'income' ? '+' : row.type === 'expense' ? '−' : '') + money(row.amount)}
+        </span>
+        <ChevronRight size={14} />
+      </button>
+    );
+  };
+
   return (
-    <div className="money-page money-flow-page">
-      <header className="money-heading money-flow-heading">
-        <div><p className="eyebrow dark">DÒNG TIỀN CÁ NHÂN</p><h1>Tiền đang đi đâu?</h1><p>Nhìn nhanh dòng tiền vào, ra và số dư dự kiến đến cuối tháng.</p></div>
-        <button type="button" className="money-add-wallet" onClick={() => setWalletForm('new')}><Plus size={16} /> Thêm ví</button>
+    <div className="money-page">
+      <header className="money-heading">
+        <h1>Ví của tôi</h1>
+        <button type="button" className="money-add-wallet" onClick={() => setWalletForm('new')}><Plus size={17} /> Thêm ví</button>
       </header>
 
       {error && <div className="page-alert" role="alert">{error}<button type="button" onClick={() => void load(true)} aria-label="Thử tải lại"><RefreshCw size={15} /></button></div>}
 
-      <section className="money-flow-hero" aria-label="Tổng quan dòng tiền">
-        <div className="money-flow-balance"><div><span>Số dư hiện tại</span><button type="button" className="money-icon-button" onClick={() => setHideBalances(value => !value)} aria-label={hideBalances ? 'Hiện số dư tổng' : 'Ẩn số dư tổng'} aria-pressed={hideBalances}>{hideBalances ? <EyeOff size={16} /> : <Eye size={16} />}</button></div><strong>{hideBalances ? '••••••' : money(totalBalance)}</strong><small>{selectedWallet ? `Chỉ tính ${selectedWallet.name}` : `Tổng ${wallets.length || 0} ví`}</small></div>
-        <div className="money-flow-forecast"><span>Dự báo cuối tháng</span><strong className={forecast < 0 ? 'negative' : ''}>{hideBalances ? '••••••' : money(forecast)}</strong><small>{remainingDays ? `Theo nhịp ${money(Math.abs(monthNet))}/ngày` : 'Đã đến cuối tháng'}</small></div>
+      <section className="money-balance-panel" aria-label="Số dư ví">
+        <div className="money-balance-heading">
+          <div>
+            <span className="money-balance-context"><WalletCards size={16} /> {selectedWallet?.name ?? 'Tất cả ví'}</span>
+            <span className="money-balance-label">Số dư hiện tại</span>
+            <strong aria-live="polite">{loading && !wallets.length ? '—' : displayMoney(totalBalance)}</strong>
+          </div>
+          <button type="button" className="money-eye" onClick={toggleBalances} aria-label={hideBalances ? 'Hiện số dư' : 'Ẩn số dư'} aria-pressed={hideBalances}>
+            {hideBalances ? <EyeOff size={19} /> : <Eye size={19} />}
+          </button>
+        </div>
+        <div className="money-actions" aria-label="Thao tác nhanh">
+          <button type="button" className="money-action expense" onClick={() => setCaptureType('expense')}><ArrowUpRight size={18} /> Ghi chi</button>
+          <button type="button" className="money-action income" onClick={() => setCaptureType('income')}><ArrowDownLeft size={18} /> Ghi thu</button>
+          <button type="button" className="money-action transfer" onClick={() => setTransferOpen(true)} disabled={wallets.length < 2} aria-label="Chuyển ví Giữa hai ví" title={wallets.length < 2 ? 'Cần ít nhất hai ví để chuyển tiền' : undefined}><ArrowLeftRight size={18} /> Chuyển ví</button>
+        </div>
       </section>
 
-      <section className="money-flow-stats" aria-label="Tổng kết tháng này">
-        <article><span className="money-stat-icon income"><ArrowDownLeft size={16} /></span><div><small>Tiền vào tháng này</small><strong className="income-text">+{hideBalances ? '••••••' : money(monthIncome)}</strong></div></article>
-        <article><span className="money-stat-icon expense"><ArrowUpRight size={16} /></span><div><small>Tiền ra tháng này</small><strong className="expense-text">−{hideBalances ? '••••••' : money(monthExpense)}</strong></div></article>
-        <article><span className="money-stat-icon net"><ArrowLeftRight size={16} /></span><div><small>Chênh lệch</small><strong className={monthNet < 0 ? 'expense-text' : 'income-text'}>{monthNet >= 0 ? '+' : '−'}{hideBalances ? '••••••' : money(Math.abs(monthNet))}</strong></div></article>
+      <section className="money-wallet-section" aria-label="Chọn ví">
+        <div className="money-section-heading">
+          <h2>Chọn ví</h2>
+          {selectedWallet
+            ? <button type="button" className="money-quiet-button" onClick={() => setWalletForm(selectedWallet)}><Pencil size={15} /> Sửa ví</button>
+            : <span className="money-muted">{wallets.length} ví</span>}
+        </div>
+        {!!wallets.length && (
+          <>
+            <button type="button" className="money-all-wallets" aria-pressed={walletId === 'all'} onClick={() => selectWallet('all')}>
+              <WalletCards size={16} /> Tất cả ví {walletId === 'all' && <Check size={14} />}
+            </button>
+            <div className="money-wallet-grid">
+              {wallets.map(wallet => {
+                const Icon = wallet.type === 'bank' ? Building2 : wallet.type === 'cash' ? Banknote : wallet.type === 'e_wallet' ? Smartphone : WalletCards;
+                const selected = walletId === wallet.id;
+                return (
+                  <button type="button" key={wallet.id} className="money-wallet-card" aria-pressed={selected}
+                    aria-label={'Chọn ví ' + wallet.name} onClick={() => selectWallet(selected ? 'all' : wallet.id)}>
+                    <span className="money-wallet-icon" style={{ borderColor: wallet.color }}><Icon size={17} /></span>
+                    <span className="money-wallet-copy">
+                      <span className="money-wallet-name" title={wallet.name}>{wallet.name}</span>
+                      <small>{walletLabels[wallet.type] ?? 'Ví khác'}</small>
+                      <strong>{displayMoney(wallet.balance)}</strong>
+                    </span>
+                    {selected && <Check size={14} className="money-wallet-check" />}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+        {loading && !wallets.length && <p className="money-muted" role="status">Đang tải ví…</p>}
+        {!loading && !wallets.length && !error && <p className="money-muted">Thêm ví để theo dõi số dư riêng cho từng nguồn tiền.</p>}
       </section>
 
-      <section className="money-flow-chart" aria-label="Dòng tiền 14 ngày gần đây">
-        <div className="money-section-heading"><div><h2>Nhịp tiền 14 ngày qua</h2><p>Cột xanh là tiền vào, cột đỏ là tiền ra.</p></div><button type="button" className="money-quiet-button" disabled={refreshing} onClick={() => void load(true)} aria-label="Làm mới dòng tiền"><RefreshCw size={16} className={refreshing ? 'spin' : ''} /></button></div>
-        {loading ? <div className="money-chart-loading" role="status">Đang tính dòng tiền…</div> : <div className="money-bars" role="img" aria-label="Biểu đồ dòng tiền 14 ngày">{dailyFlow.map(day => <div className="money-bar-day" key={day.key} title={`${day.label}: ${day.net >= 0 ? '+' : '−'}${money(Math.abs(day.net))}`}><div className="money-bar-track"><span className={`money-bar ${day.net >= 0 ? 'positive' : 'negative'}`} style={{ height: `${day.net ? Math.max(10, Math.round(Math.abs(day.net) / chartMax * 100)) : 4}%` }} /></div><small>{day.label}</small></div>)}</div>}
-      </section>
+      <section className="money-activity" aria-labelledby="money-activity-title" aria-busy={loading}>
+        <div className="money-journal-tools">
+          <div className="money-section-heading money-activity-heading">
+            <h2 id="money-activity-title">Sổ giao dịch</h2>
+            <button type="button" className="money-quiet-button" disabled={loading || refreshing} onClick={() => void load(true)} aria-label="Làm mới giao dịch"><RefreshCw size={17} className={refreshing ? 'spin' : ''} /></button>
+          </div>
+          <div className="money-period-controls">
+            <label className="money-select">
+              <CalendarDays size={16} aria-hidden="true" />
+              <select aria-label="Khoảng thời gian" value={period} onChange={event => setPeriod(event.target.value as Period)}>
+                <option value="all">Mọi thời gian</option>
+                <option value="today">Hôm nay</option>
+                <option value="week">7 ngày qua</option>
+                <option value="month">Tháng này</option>
+                <option value="custom">Tùy chọn</option>
+              </select>
+              <ChevronDown size={14} aria-hidden="true" />
+            </label>
+            <button type="button" className="money-filter-button" aria-expanded={filtersOpen} aria-controls="money-filters" onClick={() => setFiltersOpen(value => !value)}>
+              <Filter size={15} /> Bộ lọc {category !== 'all' && <i aria-hidden="true" />}
+            </button>
+          </div>
+          {period === 'custom' && (
+            <div className="money-custom-period">
+              <label>Từ ngày<input type="date" value={customFrom} onChange={event => setCustomFrom(event.target.value)} /></label>
+              <label>Đến ngày<input type="date" value={customTo} onChange={event => setCustomTo(event.target.value)} /></label>
+              {invalidRange && <p role="alert">Ngày kết thúc phải từ ngày bắt đầu trở đi.</p>}
+            </div>
+          )}
 
-      <section className="money-actions" aria-label="Thao tác nhanh">
-        <button type="button" className="money-action expense" onClick={() => setCaptureType('expense')}><span><ArrowUpRight size={21} /></span><strong>Ghi chi</strong><small>Khoản vừa chi</small></button>
-        <button type="button" className="money-action income" onClick={() => setCaptureType('income')}><span><ArrowDownLeft size={21} /></span><strong>Ghi thu</strong><small>Tiền vừa nhận</small></button>
-        <button type="button" className="money-action transfer" onClick={() => setTransferOpen(true)} disabled={wallets.length < 2} title={wallets.length < 2 ? 'Cần ít nhất hai ví để chuyển tiền' : undefined}><span><ArrowLeftRight size={21} /></span><strong>Chuyển ví</strong><small>Giữa hai ví</small></button>
-      </section>
+          <div className="money-type-filters" role="group" aria-label="Lọc nhanh dòng tiền">
+            {(Object.keys(transactionTypes) as TypeFilter[]).map(value => (
+              <button type="button" key={value} aria-pressed={type === value} onClick={() => selectType(value)}>{transactionTypes[value]}</button>
+            ))}
+          </div>
 
-      <section className="money-wallet-section money-wallet-section-compact" aria-label="Theo dõi từng ví">
-        <div className="money-section-heading"><div><h2>Tiền nằm ở đâu?</h2><p>Chọn ví để xem dòng tiền riêng.</p></div><button type="button" className="money-quiet-button" onClick={() => setHideBalances(value => !value)} aria-label={hideBalances ? 'Hiện số dư' : 'Ẩn số dư'} aria-pressed={hideBalances}>{hideBalances ? <EyeOff size={15} /> : <Eye size={15} />}<span>{hideBalances ? 'Hiện số dư' : 'Ẩn số dư'}</span></button></div>
-        {loading ? <div className="money-wallet-loading" role="status">Đang tải ví…</div> : wallets.length ? <div className="money-wallet-grid">{wallets.map(wallet => { const Icon = wallet.type === 'bank' ? Building2 : wallet.type === 'cash' ? Banknote : wallet.type === 'e_wallet' ? Smartphone : WalletCards; const selected = walletId === wallet.id; return <button type="button" key={wallet.id} className={`money-wallet-card ${selected ? 'selected' : ''}`} aria-pressed={selected} aria-label={`Chọn ví ${wallet.name}`} onClick={() => { setWalletId(selected ? 'all' : wallet.id); resetFilters(); }}><span className="money-wallet-card-top"><span className="money-wallet-icon" style={{ backgroundColor: `${wallet.color}35`, color: wallet.color === '#163e36' ? '#83d7b3' : '#9fc8f5' }}><Icon size={19} /></span><span className="money-wallet-check">{selected ? <Check size={13} /> : <ChevronRight size={14} />}</span></span><span className="money-wallet-name">{wallet.name}</span><span className="money-wallet-type">{walletLabels[wallet.type] ?? 'Ví khác'}</span><strong className={wallet.balance < 0 ? 'negative' : ''} title={hideBalances ? undefined : money(wallet.balance)}>{hideBalances ? '••••••' : money(wallet.balance)}</strong></button>; })}</div> : <div className="money-wallet-empty"><WalletCards size={26} /><div><strong>Bắt đầu với một chiếc ví</strong><p>Tạo ví tiền mặt, tài khoản ngân hàng hoặc ví điện tử.</p></div><button type="button" onClick={() => setWalletForm('new')}>Tạo ví đầu tiên <Plus size={15} /></button></div>}
-        <div className="money-wallet-context"><button type="button" className={`money-all-wallets ${walletId === 'all' ? 'active' : ''}`} aria-pressed={walletId === 'all'} onClick={() => { setWalletId('all'); resetFilters(); }}><WalletCards size={14} /> Tất cả ví</button>{selectedWallet && <button type="button" className="money-quiet-button" onClick={() => setWalletForm(selectedWallet)}><Pencil size={13} /> Sửa ví {selectedWallet.name}</button>}</div>
-      </section>
+          {filtersOpen && (
+            <div id="money-filters" className="money-expanded-filters">
+              <label>Loại giao dịch
+                <select value={type} onChange={event => selectType(event.target.value as TypeFilter)}>
+                  <option value="all">Tất cả loại</option><option value="income">Thu nhập</option><option value="expense">Chi tiêu</option><option value="transfer">Chuyển ví</option>
+                </select>
+              </label>
+              <label>Danh mục
+                <select value={category} onChange={event => setCategory(event.target.value)}>
+                  <option value="all">Tất cả danh mục</option>
+                  {categories.map(id => <option key={id} value={id}>{labels[id] ?? id}</option>)}
+                </select>
+              </label>
+            </div>
+          )}
 
-      <section className="money-activity" aria-label="Dòng tiền gần đây">
-        <div className="money-section-heading money-activity-heading"><div><h2>Dòng tiền gần đây</h2><p>Chạm một khoản để xem ảnh hoặc sửa chi tiết.</p></div><span className="money-flow-period">{monthKey.replace('-', '/')}</span></div>
-        <div className="money-search"><Search size={17} /><input aria-label="Tìm giao dịch" placeholder="Tìm ghi chú, danh mục hoặc tên ví" value={query} onChange={event => setQuery(event.target.value)} />{query && <button type="button" aria-label="Xóa tìm kiếm" onClick={() => setQuery('')}><X size={15} /></button>}</div>
-        <div className="money-review-filters" aria-label="Kiểm tra nhanh"><button type="button" className={review === 'all' ? 'active' : ''} aria-pressed={review === 'all'} onClick={() => setReview('all')}>Tất cả</button><button type="button" className={review === 'no-photo' ? 'active' : ''} aria-pressed={review === 'no-photo'} onClick={() => setReview('no-photo')}><ImageOff size={13} /> Thiếu ảnh <b>{reviewCounts.noPhoto}</b></button><button type="button" className={review === 'uncategorized' ? 'active' : ''} aria-pressed={review === 'uncategorized'} onClick={() => setReview('uncategorized')}><Tag size={13} /> Chưa phân loại <b>{reviewCounts.uncategorized}</b></button></div>
-        <div className="money-list-controls"><span>{visibleRows.length} giao dịch</span><button type="button" aria-expanded={filtersOpen} aria-controls="money-filters" onClick={() => setFiltersOpen(value => !value)}><Filter size={14} /> Bộ lọc {(type !== 'all' || category !== 'all') && <i />}</button><label className="money-sort"><span className="visually-hidden">Sắp xếp giao dịch</span><select value={sort} onChange={event => setSort(event.target.value as typeof sort)}><option value="newest">Mới nhất</option><option value="oldest">Cũ nhất</option><option value="highest">Tiền cao nhất</option><option value="lowest">Tiền thấp nhất</option></select><ChevronDown size={13} /></label></div>
-        {filtersOpen && <div id="money-filters" className="money-expanded-filters"><label className="select-field"><span>Loại giao dịch</span><select value={type} onChange={event => setType(event.target.value as TypeFilter)}><option value="all">Tất cả loại</option><option value="expense">Chi tiêu</option><option value="income">Thu nhập</option><option value="transfer">Chuyển ví</option></select></label><label className="select-field"><span>Danh mục</span><select value={category} onChange={event => setCategory(event.target.value)}><option value="all">Tất cả danh mục</option>{categories.map(id => <option key={id} value={id}>{labels[id] ?? 'Khác'}</option>)}</select></label></div>}
-        {loading ? <div className="calendar-loading"><span className="loading-mark" /></div> : visibleRows.length ? <div className="money-history">{[...groups].map(([date, group]) => <div key={date} className="money-history-day"><div className="money-history-date">{dateLabel(date)}</div>{group.map(row => <button type="button" className="ledger-row money-history-row" key={row.id} onClick={() => setDetail(asEvent(row))}><span className={`money-history-icon ${row.type}`}>{row.type === 'transfer' ? <ArrowLeftRight size={17} /> : row.imageUrl ? <img src={row.imageUrl} alt="" /> : row.type === 'income' ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}</span><span className="ledger-row-copy"><strong>{row.note || labels[row.categoryId] || 'Giao dịch'}</strong><small>{row.type === 'transfer' ? `${walletNames.get(row.walletId) ?? 'Ví nguồn'} → ${walletNames.get(row.toWalletId ?? '') ?? 'Ví nhận'}` : `${walletNames.get(row.walletId) ?? 'Ví'} · ${labels[row.categoryId] ?? 'Khác'}`}{row.transactionTime ? ` · ${row.transactionTime.slice(0, 5)}` : ''}</small></span><span className={`ledger-row-amount ${row.type}`}>{row.type === 'income' ? '+' : row.type === 'expense' ? '−' : ''}{money(row.amount)}</span><ChevronRight size={14} /></button>)}</div>)}</div> : <div className="money-history-empty"><Search size={24} /><h3>{hasFilters ? 'Không có khoản phù hợp' : 'Chưa có dòng tiền'}</h3><p>{hasFilters ? 'Thử từ khóa khác hoặc bỏ bớt bộ lọc.' : 'Ghi khoản thu hoặc chi đầu tiên để thấy dòng tiền.'}</p><button type="button" onClick={hasFilters ? resetFilters : () => setCaptureType('expense')}>{hasFilters ? 'Xóa bộ lọc' : 'Ghi khoản đầu tiên'}</button></div>}
+          <div className="money-search">
+            <Search size={17} />
+            <input aria-label="Tìm giao dịch" placeholder="Tìm giao dịch" value={query} onChange={event => setQuery(event.target.value)} />
+            {query && <button type="button" aria-label="Xóa tìm kiếm" onClick={() => setQuery('')}><X size={16} /></button>}
+          </div>
+          <div className="money-review-filters" role="group" aria-label="Rà soát giao dịch">
+            <button type="button" aria-pressed={review === 'no-photo'} onClick={() => setReview(review === 'no-photo' ? 'all' : 'no-photo')}><ImageOff size={14} /> Thiếu ảnh <b>{reviewCounts.noPhoto}</b></button>
+            <button type="button" aria-pressed={review === 'uncategorized'} onClick={() => setReview(review === 'uncategorized' ? 'all' : 'uncategorized')}><Tag size={14} /> Chưa phân loại <b>{reviewCounts.uncategorized}</b></button>
+          </div>
+          {!loading && !invalidRange && (
+            <dl className="money-filter-totals" aria-label="Tổng tiền theo bộ lọc">
+              <div><dt><ArrowDownLeft size={15} /> Tổng thu</dt><dd className="income">{displayMoney(totals.income)}</dd></div>
+              <div><dt><ArrowUpRight size={15} /> Tổng chi</dt><dd className="expense">{displayMoney(totals.expense)}</dd></div>
+            </dl>
+          )}
+        </div>
+
+        <div className="money-list-controls">
+          <span aria-live="polite">{loading ? 'Đang tải…' : visibleRows.length + ' giao dịch'}</span>
+          {hasFilters && <button type="button" className="money-reset-button" onClick={resetFilters}>Xóa lọc</button>}
+          <label className="money-select money-sort">
+            <select aria-label="Sắp xếp giao dịch" value={sort} onChange={event => setSort(event.target.value as typeof sort)}>
+              <option value="newest">Mới nhất</option><option value="oldest">Cũ nhất</option><option value="highest">Tiền cao nhất</option><option value="lowest">Tiền thấp nhất</option>
+            </select>
+            <ChevronDown size={13} aria-hidden="true" />
+          </label>
+        </div>
+        {!loading && rows.length === 500 && <p className="money-limit-note">Đang xem 500 giao dịch đã tải. Chọn khoảng ngày hẹp hơn để tra cứu các giao dịch cũ.</p>}
+        {loading && <div className="money-history-empty"><span className="loading-mark" /></div>}
+        {!loading && !invalidRange && (visibleRows.length ? (
+          <div className="money-history">
+            {amountOrder ? visibleRows.map(renderRow) : [...groups].map(([date, group]) => (
+              <div key={date} className="money-history-day">
+                <div className="money-history-date">{dateLabel(date)}</div>
+                {group.map(renderRow)}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="money-history-empty">
+            <Search size={23} />
+            <h3>{hasFilters ? 'Không có giao dịch phù hợp' : 'Chưa có giao dịch'}</h3>
+            <button type="button" onClick={hasFilters ? resetFilters : () => setCaptureType('expense')}>{hasFilters ? 'Xóa bộ lọc' : 'Ghi khoản đầu tiên'}</button>
+          </div>
+        ))}
       </section>
 
       {captureType && <ExpenseCapture selectedDate={todayKey()} initialType={captureType} defaultWalletId={walletId === 'all' ? undefined : walletId} onClose={() => setCaptureType(null)} onSaved={saved} />}

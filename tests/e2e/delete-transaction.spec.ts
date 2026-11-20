@@ -6,7 +6,11 @@ const transaction = {
   dateKey: '2026-11-13', transactionTime: '09:27:00', source: 'manual', status: 'posted', imageUrl: null,
 };
 
-async function openTransaction(page: Page, mode: 'success' | 'error' | 'expired' | 'logged-out' = 'success') {
+async function openTransaction(
+  page: Page,
+  mode: 'success' | 'error' | 'expired' | 'logged-out' = 'success',
+  path = '/app/transactions',
+) {
   let deletes = 0;
   let refreshes = 0;
   let deleted = false;
@@ -38,10 +42,30 @@ async function openTransaction(page: Page, mode: 'success' | 'error' | 'expired'
       await route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } });
     }
   });
-  await page.goto('/app/transactions');
+  await page.goto(path);
   await page.getByRole('button', { name: /Khoản chi cần xóa/ }).click();
   return { deletes: () => deletes, refreshes: () => refreshes };
 }
+
+test('opens recent transaction details on the statistics tab and refreshes after deletion', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const calls = await openTransaction(page, 'success', '/app/dashboard');
+  const detail = page.locator('.expense-detail');
+  await expect(page).toHaveURL(/\/app\/dashboard$/);
+  await expect(detail.locator('.detail-note')).toHaveText(transaction.note);
+  await expect(detail.locator('h2')).toContainText('3.000');
+
+  await detail.getByRole('button', { name: 'Đóng', exact: true }).click();
+  await expect(detail).toHaveCount(0);
+  await expect(page.locator('.cm-recent-row')).toHaveCount(1);
+  await page.locator('.cm-recent-row').click();
+  await detail.getByRole('button', { name: 'Xóa', exact: true }).click();
+  await detail.getByRole('button', { name: 'Xác nhận xóa' }).click();
+  await expect(detail).toHaveCount(0);
+  await expect(page.locator('.cm-recent-row')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/app\/dashboard$/);
+  expect(calls.deletes()).toBe(1);
+});
 
 test('deletes only after in-app confirmation when browser dialogs are blocked', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

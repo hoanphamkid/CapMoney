@@ -2,10 +2,11 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, BarChart3, ChevronsUpDown,
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
-import { CATEGORY_LABELS, MonthlyReport } from '../components/MonthlyReport';
+import { ExpenseDetail } from '../components/ExpenseDetail';
+import { CATEGORY_LABELS, INCOME_CATEGORY_LABELS, MonthlyReport, type ReportFlowType } from '../components/MonthlyReport';
 import { useAuth } from '../contexts/AuthContext';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
-import { api, type Transaction, type Wallet } from '../services/api';
+import { api, type CalendarEvent, type Transaction, type Wallet } from '../services/api';
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -14,16 +15,35 @@ export function DashboardPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [detail, setDetail] = useState<CalendarEvent | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedFlowType, setSelectedFlowType] = useState<ReportFlowType>('all');
+  const [selectedIncomeCategory, setSelectedIncomeCategory] = useState('all');
   const recentListRef = useRef<HTMLDivElement>(null);
   const requestVersion = useRef(0);
   const [scrollEdges, setScrollEdges] = useState({ above: false, below: false });
   useAutoRefresh(() => load());
 
   const recentTransactions = useMemo(() => transactions
-    .filter(tx => selectedCategory === 'all' || (tx.type === 'expense' && tx.categoryId === selectedCategory))
+    .filter(tx => {
+      if (selectedFlowType === 'income') return tx.type === 'income' && (selectedIncomeCategory === 'all' || tx.categoryId === selectedIncomeCategory);
+      if (selectedFlowType === 'expense') return tx.type === 'expense' && (selectedCategory === 'all' || tx.categoryId === selectedCategory);
+      return selectedCategory === 'all' || (tx.type === 'expense' && tx.categoryId === selectedCategory);
+    })
     .sort((a, b) => b.dateKey.localeCompare(a.dateKey) || (b.transactionTime ?? '').localeCompare(a.transactionTime ?? '') || (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
-  [transactions, selectedCategory]);
+  [transactions, selectedCategory, selectedFlowType, selectedIncomeCategory]);
+
+  const recentFilterLabel = selectedFlowType === 'income'
+    ? `Tiền vào${selectedIncomeCategory === 'all' ? '' : ` · ${INCOME_CATEGORY_LABELS[selectedIncomeCategory] ?? 'Thu khác'}`}`
+    : selectedFlowType === 'expense'
+      ? `Tiền ra${selectedCategory === 'all' ? '' : ` · ${CATEGORY_LABELS[selectedCategory] ?? 'Khác'}`}`
+      : selectedCategory === 'all' ? '' : `Chi · ${CATEGORY_LABELS[selectedCategory] ?? 'Khác'}`;
+
+  const clearRecentFilter = () => {
+    setSelectedCategory('all');
+    setSelectedFlowType('all');
+    setSelectedIncomeCategory('all');
+  };
 
   useEffect(() => {
     const list = recentListRef.current;
@@ -81,6 +101,15 @@ export function DashboardPage() {
     return { totalBalance, income, expense, net: income - expense };
   }, [wallets, transactions]);
 
+  const openDetail = (row: Transaction) => {
+    setDetail({
+      ...row,
+      kind: row.type,
+      title: transactionTitle(row),
+      source: row.source ?? 'manual',
+    });
+  };
+
   return (
     <div className="dashboard-page">
       <div className="page-heading">
@@ -127,20 +156,30 @@ export function DashboardPage() {
         />
       </div>
 
-      <MonthlyReport transactions={transactions} selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />
+      <MonthlyReport
+        transactions={transactions}
+        selectedCategory={selectedCategory}
+        flowType={selectedFlowType}
+        incomeCategory={selectedIncomeCategory}
+        onCategoryChange={setSelectedCategory}
+        onFilterChange={({ flowType, categoryId }) => {
+          setSelectedFlowType(flowType);
+          setSelectedIncomeCategory(flowType === 'income' ? categoryId : 'all');
+        }}
+      />
 
       <section className="panel recent-panel" style={{ marginTop: 16 }}>
         <div className="panel-head">
           <div>
             <h2>Giao dịch gần đây</h2>
-            <p aria-live="polite">{selectedCategory === 'all' ? `${recentTransactions.length} hoạt động đã ghi nhận` : `${recentTransactions.length} khoản chi · ${CATEGORY_LABELS[selectedCategory] ?? 'Khác'}`}</p>
+            <p aria-live="polite">{recentFilterLabel ? `${recentTransactions.length} giao dịch · ${recentFilterLabel}` : `${recentTransactions.length} hoạt động đã ghi nhận`}</p>
           </div>
           <button className="text-button" onClick={() => navigate('/app/transactions')}>
             Xem tất cả
           </button>
         </div>
-        {selectedCategory !== 'all' && (
-          <div className="cm-recent-active-filter"><span>Danh mục: {CATEGORY_LABELS[selectedCategory] ?? 'Khác'}</span><button type="button" onClick={() => setSelectedCategory('all')}>Xem tất cả danh mục</button></div>
+        {recentFilterLabel && (
+          <div className="cm-recent-active-filter"><span>Bộ lọc: {recentFilterLabel}</span><button type="button" onClick={clearRecentFilter}>Xem tất cả giao dịch</button></div>
         )}
         {recentTransactions.length ? (
           <>
@@ -152,7 +191,7 @@ export function DashboardPage() {
             tabIndex={0}
           >
             {recentTransactions.map(row => (
-              <button type="button" className="transaction-row cm-recent-row" key={row.id} onClick={() => navigate('/app/transactions')}>
+              <button type="button" className="transaction-row cm-recent-row" key={row.id} onClick={() => openDetail(row)}>
                 <span className={`transaction-image ${row.imageUrl ? 'has-image' : row.type}`}>
                   {row.imageUrl ? (
                     <img src={row.imageUrl} alt="" />
@@ -165,8 +204,8 @@ export function DashboardPage() {
                   )}
                 </span>
                 <span className="transaction-main">
-                  <strong>{row.note || (row.type === 'income' ? 'Thu nhập' : row.type === 'expense' ? 'Chi tiêu' : 'Chuyển tiền')}</strong>
-                  <small>{row.type === 'income' ? 'Thu nhập' : row.type === 'transfer' ? 'Chuyển tiền' : CATEGORY_LABELS[row.categoryId] ?? 'Khác'} · {row.dateKey}{row.transactionTime ? ` · ${row.transactionTime.slice(0, 5)}` : ''}</small>
+                  <strong>{transactionTitle(row)}</strong>
+                  <small>{row.type === 'income' ? INCOME_CATEGORY_LABELS[row.categoryId] ?? 'Thu nhập' : row.type === 'transfer' ? 'Chuyển tiền' : CATEGORY_LABELS[row.categoryId] ?? 'Khác'} · {row.dateKey}{row.transactionTime ? ` · ${row.transactionTime.slice(0, 5)}` : ''}</small>
                 </span>
                 <span className={`transaction-amount ${row.type}`}>
                   {row.type === 'income' ? '+' : row.type === 'expense' ? '−' : ''}
@@ -183,8 +222,8 @@ export function DashboardPage() {
               <WalletCards size={22} />
             </div>
             <div>
-              <strong>{selectedCategory === 'all' ? 'Chưa có giao dịch nào' : `Chưa có khoản chi ${CATEGORY_LABELS[selectedCategory] ?? 'Khác'}`}</strong>
-              <p>{selectedCategory === 'all' ? 'Mọi khoản thu chi của bạn sẽ xuất hiện ở đây.' : 'Chọn danh mục khác hoặc thêm khoản chi mới.'}</p>
+              <strong>{recentFilterLabel ? `Chưa có giao dịch ${recentFilterLabel.toLowerCase()}` : 'Chưa có giao dịch nào'}</strong>
+              <p>{recentFilterLabel ? 'Chọn bộ lọc khác hoặc thêm giao dịch mới.' : 'Mọi khoản thu chi của bạn sẽ xuất hiện ở đây.'}</p>
             </div>
             <button className="outline-button small" onClick={() => setCaptureOpen(true)}>
               Thêm giao dịch
@@ -192,6 +231,18 @@ export function DashboardPage() {
           </div>
         )}
       </section>
+
+      {detail && (
+        <ExpenseDetail
+          event={detail}
+          wallets={wallets}
+          onClose={() => setDetail(null)}
+          onChanged={() => {
+            setDetail(null);
+            void load();
+          }}
+        />
+      )}
 
       {captureOpen && (
         <ExpenseCapture
@@ -206,6 +257,10 @@ export function DashboardPage() {
       )}
     </div>
   );
+}
+
+function transactionTitle(row: Transaction) {
+  return row.note || (row.type === 'income' ? 'Thu nhập' : row.type === 'expense' ? 'Chi tiêu' : 'Chuyển tiền');
 }
 
 function Metric({ label, value, icon, tone, note }: { label: string; value: string; icon: ReactNode; tone: string; note: string }) {
