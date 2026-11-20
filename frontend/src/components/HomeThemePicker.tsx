@@ -70,8 +70,8 @@ export function HomeThemePicker({
       <div className="cm-home-theme-dialog-body">
         <header className="cm-home-theme-dialog-head">
           <div>
-            <h2 id="cm-home-theme-title">Giao diện trang chủ</h2>
-            <p>Chạm vào một mẫu để áp dụng ngay.</p>
+            <h2 id="cm-home-theme-title">Giao diện toàn ứng dụng</h2>
+            <p>Chạm vào một mẫu để áp dụng cho mọi màn hình.</p>
           </div>
           <button type="button" aria-label="Đóng bộ chọn giao diện" onClick={closePicker}>
             <X size={20} />

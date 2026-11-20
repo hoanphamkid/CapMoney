@@ -1,6 +1,8 @@
 import { HandCoins, Home, PieChart, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
+import { readHomeTheme, saveHomeTheme, type HomeTheme } from './HomeThemePicker';
+import { ThemeContext } from '../contexts/ThemeContext';
 import { useBankRealtime, type BankEvent } from '../hooks/useBankRealtime';
 
 const dockItems = [
@@ -14,8 +16,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const activeIndex = dockItems.findIndex(item => item.matchPaths.includes(location.pathname));
   const [bankEvent, setBankEvent] = useState<BankEvent | null>(null);
+  const [theme, setThemeState] = useState<HomeTheme>(readHomeTheme);
   const onTransaction = useCallback((event: BankEvent) => setBankEvent(event), []);
   useBankRealtime(onTransaction);
+  const setTheme = useCallback((nextTheme: HomeTheme) => {
+    setThemeState(nextTheme);
+    saveHomeTheme(nextTheme);
+  }, []);
   useEffect(() => {
     if (!bankEvent) return;
     const timer = setTimeout(() => setBankEvent(null), 8000);
@@ -23,7 +30,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [bankEvent]);
 
   return (
-    <div className="cm-app-shell">
+    <ThemeContext.Provider value={{ theme, setTheme }}>
+      <div className="cm-app-shell" data-app-theme={theme}>
       <main className="cm-app-content">{children}</main>
       {bankEvent && <div className="bank-notification-toast" role="status" aria-live="polite">
         <Link to="/app/transactions" onClick={() => setBankEvent(null)}>
@@ -56,6 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           );
         })}
       </nav>
-    </div>
+      </div>
+    </ThemeContext.Provider>
   );
 }

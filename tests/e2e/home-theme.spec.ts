@@ -14,7 +14,7 @@ test('applies a home theme on mobile and remembers it after reload', async ({ pa
   await page.goto('/app');
   const home = page.locator('.cm-home-screen');
   const launcher = page.getByRole('button', { name: 'Chọn giao diện' });
-  const dialog = page.getByRole('dialog', { name: 'Giao diện trang chủ' });
+  const dialog = page.getByRole('dialog', { name: 'Giao diện toàn ứng dụng' });
   const cat = page.getByRole('button', { name: /Mèo Ngủ/ });
   const classic = page.getByRole('button', { name: /Mặc định/ });
 
@@ -31,6 +31,11 @@ test('applies a home theme on mobile and remembers it after reload', async ({ pa
   await expect.poll(() => home.locator('.cm-home-theme-cat').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
   await expect(page.locator('.cm-toolbar-row')).toBeInViewport({ ratio: 1 });
   await expect(launcher).toBeInViewport({ ratio: 1 });
+
+  await page.goto('/app/settings');
+  await expect(page.locator('.cm-app-shell')).toHaveAttribute('data-app-theme', 'sleepy-cat');
+  await expect(page.locator('.settings-card').first()).toHaveCSS('background-color', 'rgb(255, 250, 243)');
+  await page.goto('/app');
 
   await page.reload();
   await expect(home).toHaveAttribute('data-home-theme', 'sleepy-cat');

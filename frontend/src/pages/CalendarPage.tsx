@@ -26,11 +26,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
-import { HomeThemePicker, readHomeTheme, saveHomeTheme, SLEEPY_CAT_IMAGE } from '../components/HomeThemePicker';
+import { HomeThemePicker, SLEEPY_CAT_IMAGE } from '../components/HomeThemePicker';
 import { LookbackModal } from '../components/LookbackModal';
 import { SmartToolkitModal } from '../components/SmartToolkitModal';
 import { loadBudget, SpendingLimitModal, type BudgetConfig } from '../components/SpendingLimitModal';
 import { useAuth } from '../contexts/AuthContext';
+import { useAppTheme } from '../contexts/ThemeContext';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { api, type CalendarEvent, type Transaction } from '../services/api';
 
@@ -53,6 +54,7 @@ const categoryNames: Record<string, string> = {
 
 export function CalendarPage() {
   const { user } = useAuth();
+  const { theme: homeTheme, setTheme: setHomeTheme } = useAppTheme();
   const navigate = useNavigate();
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(todayKey());
@@ -75,7 +77,6 @@ export function CalendarPage() {
   const [lookbackPeriod, setLookbackPeriod] = useState<1 | 3 | 7 | null>(null);
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [toolkitOpen, setToolkitOpen] = useState(false);
-  const [homeTheme, setHomeTheme] = useState(readHomeTheme);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [budget, setBudget] = useState<BudgetConfig>(() => loadBudget());
 
@@ -915,10 +916,7 @@ export function CalendarPage() {
       {themePickerOpen && (
         <HomeThemePicker
           selected={homeTheme}
-          onSelect={theme => {
-            setHomeTheme(theme);
-            saveHomeTheme(theme);
-          }}
+          onSelect={setHomeTheme}
           onClose={() => setThemePickerOpen(false)}
         />
       )}

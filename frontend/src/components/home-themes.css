@@ -149,15 +149,22 @@
   font-weight: 700;
 }
 
+.cm-app-shell[data-app-theme='classic'],
 [data-theme-sample='classic'] {
   --home-bg: #12141b;
   --home-glow: #2a3549;
   --home-panel: #17181d;
   --home-tint: #30415a;
   --home-line: #485b76;
+  --home-ink: #f4f5f8;
+  --home-muted: #9ba5bc;
   --home-accent: #91bbff;
+  --home-on-accent: #13223a;
+  --home-danger: #ff8e85;
+  --home-success: #7de89a;
 }
 
+.cm-app-shell[data-app-theme='sleepy-cat'],
 .cm-app-shell:has(> .cm-app-content > [data-home-theme='sleepy-cat']),
 [data-theme-sample='sleepy-cat'] {
   --home-bg: #fff5e7;
@@ -171,6 +178,7 @@
   --home-on-accent: #fff9f2;
 }
 
+.cm-app-shell[data-app-theme='strawberry'],
 .cm-app-shell:has(> .cm-app-content > [data-home-theme='strawberry']),
 [data-theme-sample='strawberry'] {
   --home-bg: #fff1f5;
@@ -184,6 +192,7 @@
   --home-on-accent: #fff8fa;
 }
 
+.cm-app-shell[data-app-theme='matcha'],
 .cm-app-shell:has(> .cm-app-content > [data-home-theme='matcha']),
 [data-theme-sample='matcha'] {
   --home-bg: #f3f6e7;
@@ -197,6 +206,7 @@
   --home-on-accent: #fcfff5;
 }
 
+.cm-app-shell[data-app-theme='lavender'],
 .cm-app-shell:has(> .cm-app-content > [data-home-theme='lavender']),
 [data-theme-sample='lavender'] {
   --home-bg: #f5f1ff;
@@ -210,6 +220,7 @@
   --home-on-accent: #fff9ff;
 }
 
+.cm-app-shell[data-app-theme='moonlight'],
 .cm-app-shell:has(> .cm-app-content > [data-home-theme='moonlight']),
 [data-theme-sample='moonlight'] {
   --home-bg: #15132a;
@@ -225,6 +236,7 @@
   --home-success: #8ce6ad;
 }
 
+.cm-app-shell[data-app-theme]:not([data-app-theme='classic']),
 .cm-app-shell:has(> .cm-app-content > [data-home-theme]:not([data-home-theme='classic'])) {
   background: radial-gradient(ellipse 660px 480px at 50% 0, var(--home-glow), transparent), var(--home-bg);
   color: var(--home-ink);
@@ -314,6 +326,108 @@
   .cm-toolkit-launch-copy small { color: var(--home-muted); }
   .cm-toolkit-launch { animation: none; box-shadow: 0 8px 22px #23132112; }
   .cm-toolkit-launch::after { display: none; }
+}
+
+.cm-app-shell[data-app-theme] {
+  background: var(--home-bg);
+  color: var(--home-ink);
+}
+
+.cm-app-shell[data-app-theme] .cm-app-content {
+  color: var(--home-ink);
+}
+
+.cm-app-shell[data-app-theme] :is(.page-heading h1, .section-heading h2, .section-heading h3,
+  .panel-head h2, .transaction-list-head h2, .wallet-detail-head h2, .settings-heading h2,
+  .money-section-heading h2, .money-balance-amount, .cm-sync-section-head h2) {
+  color: var(--home-ink) !important;
+}
+
+.cm-app-shell[data-app-theme] :is(.panel, .metric-card, .wallet-stat, .wallet-card,
+  .wallet-add-card, .transaction-row, .transaction-summary > div, .settings-card,
+  .money-balance-panel, .money-wallet-section, .money-activity, .cm-sync-intro,
+  .cm-sync-create, .cm-sync-history, .cm-sync-restore, .cm-sync-activity) {
+  color: var(--home-ink);
+  background: var(--home-panel) !important;
+  border-color: var(--home-line) !important;
+}
+
+.cm-app-shell[data-app-theme] :is(input, textarea, select) {
+  color: var(--home-ink) !important;
+  background: var(--home-tint) !important;
+  border-color: var(--home-line) !important;
+}
+
+.cm-app-shell[data-app-theme] :is(input, textarea, select)::placeholder {
+  color: var(--home-muted);
+}
+
+.cm-app-shell[data-app-theme] :is(.outline-button, .settings-action, .settings-save,
+  .money-add-wallet, .money-quiet-button, .money-all-wallets, .money-filter-button,
+  .money-reset-button, .cm-sync-primary, .cm-sync-version, .loans-secondary,
+  .loans-wallet-link, .loans-danger, .loans-due, .cm-report-flow-filter button,
+  .cm-report-period-grid > button, .cm-report-period-clear) {
+  border-color: var(--home-line) !important;
+  background: var(--home-tint) !important;
+  color: var(--home-accent) !important;
+}
+
+.cm-app-shell[data-app-theme] :is(.outline-button, .settings-action, .settings-save,
+  .money-add-wallet, .cm-sync-primary, .loans-primary, .cm-fab-add) {
+  border-color: var(--home-accent) !important;
+  background: var(--home-accent) !important;
+  color: var(--home-on-accent) !important;
+}
+
+.cm-app-shell[data-app-theme] :is(.outline-button, .settings-action, .settings-save,
+  .money-add-wallet, .money-quiet-button, .money-all-wallets, .money-filter-button,
+  .money-reset-button, .cm-sync-primary, .cm-sync-version, .loans-primary,
+  .loans-secondary, .loans-wallet-link, .loans-danger, .cm-fab-add):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--home-accent) 18%, var(--home-tint)) !important;
+  border-color: var(--home-accent) !important;
+}
+
+.cm-app-shell[data-app-theme] :is(.settings-save, .cm-sync-primary, .loans-primary, .cm-fab-add):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--home-accent) 82%, white) !important;
+}
+
+.cm-app-shell[data-app-theme] :is(.cm-sync-version.selected, .money-all-wallets[aria-pressed='true'],
+  .cm-report-flow-filter button[aria-pressed='true'], .cm-report-period-grid > button[aria-pressed='true']) {
+  border-color: var(--home-accent) !important;
+  background: var(--home-accent) !important;
+  color: var(--home-on-accent) !important;
+}
+
+.cm-app-shell[data-app-theme] .loans-page {
+  --loan-text: var(--home-ink);
+  --loan-muted: var(--home-muted);
+  --loan-surface: var(--home-panel);
+  --loan-inset: var(--home-tint);
+  --loan-line: var(--home-line);
+  --loan-accent: var(--home-accent);
+  --loan-borrow: var(--home-danger);
+  --loan-lend: var(--home-success);
+}
+
+.cm-app-shell[data-app-theme] .loans-overview {
+  border-color: var(--home-line);
+  background: linear-gradient(132deg, var(--home-tint), var(--home-panel) 72%);
+}
+
+.cm-app-shell[data-app-theme] .loans-total,
+.cm-app-shell[data-app-theme] .loans-filters,
+.cm-app-shell[data-app-theme] .loans-search,
+.cm-app-shell[data-app-theme] .loans-status select {
+  background: var(--home-tint);
+}
+
+.cm-app-shell[data-app-theme] .loans-filters button[aria-pressed='true'] {
+  background: var(--home-accent);
+  color: var(--home-on-accent);
+}
+
+.cm-app-shell[data-app-theme] .loans-dialog {
+  color-scheme: light;
 }
 
 .cm-home-theme-cat { flex: 0 0 auto; margin: -4px; object-fit: contain; }
