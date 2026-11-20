@@ -3023,6 +3023,7 @@ html:not(.dark-theme) .cm-app-shell {
   width: 100%;
   max-width: 390px;
   min-height: 560px;
+  max-height: calc(100vh - 28px);
   border-radius: 28px;
   background: radial-gradient(circle at top right, #2b2248 0%, #171923 55%, #12131a 100%);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -3032,6 +3033,7 @@ html:not(.dark-theme) .cm-app-shell {
   justify-content: space-between;
   gap: 12px;
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.85);
+  overflow-y: auto;
 }
 
 .cm-story-bars {
@@ -4798,6 +4800,239 @@ html:not(.dark-theme) .cm-app-shell {
 /* =========================================================
    PHOTOBOOTH LIFE4CUTS, MOOD STAMPS, LIFE INDEX & TAROT
    ========================================================= */
+.cm-photobooth-controls {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(8, 10, 16, 0.42);
+}
+
+.cm-photobooth-control-heading,
+.cm-photobooth-picker-head,
+.cm-photobooth-layout-controls,
+.cm-photobooth-choice-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cm-photobooth-control-heading,
+.cm-photobooth-picker-head {
+  justify-content: space-between;
+}
+
+.cm-photobooth-control-heading > div,
+.cm-photobooth-layout-controls > div {
+  display: grid;
+  gap: 3px;
+}
+
+.cm-photobooth-control-heading strong,
+.cm-photobooth-layout-controls > div > span {
+  color: #f5f7fc;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cm-photobooth-control-heading small,
+.cm-photobooth-picker-head > span,
+.cm-photobooth-layout-controls small {
+  color: #aeb7ca;
+  font-size: 10px;
+}
+
+.cm-photobooth-selection-count {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(168, 85, 247, 0.18);
+  color: #e9d5ff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.cm-photobooth-period-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.cm-photobooth-period-tabs button,
+.cm-photobooth-picker-head button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #aeb7ca;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.cm-photobooth-period-tabs button.active,
+.cm-photobooth-picker-head button:hover:not(:disabled) {
+  background: rgba(155, 107, 255, 0.32);
+  color: #ffffff;
+}
+
+.cm-photobooth-picker-head {
+  align-items: flex-start;
+}
+
+.cm-photobooth-picker-head > span {
+  line-height: 1.4;
+}
+
+.cm-photobooth-picker-head > div {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.cm-photobooth-picker-head button {
+  min-height: 24px;
+  padding: 2px 6px;
+  border-color: rgba(255, 255, 255, 0.13);
+}
+
+.cm-photobooth-picker-head button:disabled,
+.cm-photobooth-dl-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.cm-photobooth-photo-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 142px;
+  overflow-y: auto;
+  padding: 2px;
+  scrollbar-width: thin;
+}
+
+.cm-photobooth-photo-option {
+  position: relative;
+  min-width: 0;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #ffffff;
+  text-align: left;
+}
+
+.cm-photobooth-photo-option:hover:not(:disabled),
+.cm-photobooth-photo-option.selected {
+  border-color: rgba(192, 132, 252, 0.9);
+  background: rgba(168, 85, 247, 0.2);
+}
+
+.cm-photobooth-photo-option:disabled:not(.selected) {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.cm-photobooth-photo-thumb {
+  position: relative;
+  display: block;
+  height: 46px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #0d1018;
+}
+
+.cm-photobooth-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cm-photobooth-photo-option strong,
+.cm-photobooth-photo-option small {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cm-photobooth-photo-option strong {
+  color: #f3f4f8;
+  font-size: 9px;
+}
+
+.cm-photobooth-photo-option small {
+  color: #aeb7ca;
+  font-size: 8px;
+}
+
+.cm-photobooth-photo-order {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border-radius: 999px;
+  background: #a855f7;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.cm-photobooth-no-photos {
+  grid-column: 1 / -1;
+  padding: 14px 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  color: #aeb7ca;
+  font-size: 10px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.cm-photobooth-layout-controls {
+  align-items: stretch;
+}
+
+.cm-photobooth-layout-controls > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.cm-photobooth-choice-row {
+  align-items: stretch;
+}
+
+.cm-photobooth-choice-row button {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dbe2f1;
+  text-align: left;
+}
+
+.cm-photobooth-choice-row button.active {
+  border-color: rgba(192, 132, 252, 0.9);
+  background: rgba(168, 85, 247, 0.22);
+}
+
+.cm-photobooth-choice-row b {
+  font-size: 10px;
+}
+
 .cm-photobooth-frame {
   border-radius: 18px;
   padding: 12px;
@@ -4836,7 +5071,7 @@ html:not(.dark-theme) .cm-app-shell {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.04em;
 }
@@ -4847,9 +5082,21 @@ html:not(.dark-theme) .cm-app-shell {
   gap: 8px;
 }
 
+.cm-photobooth-frame.layout-8x8.orientation-landscape .cm-photobooth-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cm-photobooth-frame.orientation-portrait .cm-photobooth-cell {
+  aspect-ratio: 1 / 1.18;
+}
+
+.cm-photobooth-frame.orientation-landscape .cm-photobooth-cell {
+  aspect-ratio: 1.18 / 1;
+}
+
 .cm-photobooth-cell {
   position: relative;
-  height: 112px;
+  height: auto;
   border-radius: 12px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.25);
@@ -4858,7 +5105,8 @@ html:not(.dark-theme) .cm-app-shell {
 .cm-photobooth-cell img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .cm-photobooth-empty {
@@ -4906,6 +5154,17 @@ html:not(.dark-theme) .cm-app-shell {
   align-items: center;
   justify-content: center;
   gap: 6px;
+}
+
+.cm-photobooth-dl-btn:disabled {
+  filter: grayscale(0.45);
+}
+
+.cm-photobooth-ratio-note {
+  margin: -3px 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 9px;
+  text-align: center;
 }
 
 .cm-photobooth-export-note {
