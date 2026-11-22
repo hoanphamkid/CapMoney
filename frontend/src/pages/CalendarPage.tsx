@@ -34,6 +34,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAppTheme } from '../contexts/ThemeContext';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { api, type CalendarEvent, type Transaction } from '../services/api';
+import { ALL_CATEGORY_LABELS } from '../constants/categories';
 
 const weekdayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
@@ -51,6 +52,7 @@ const categoryNames: Record<string, string> = {
   transfer: 'Chuyển tiền',
   other: 'Khác',
 };
+Object.assign(categoryNames, ALL_CATEGORY_LABELS);
 
 export function CalendarPage() {
   const { user } = useAuth();
@@ -269,10 +271,6 @@ export function CalendarPage() {
           </p>
           <h1 className="cm-user-title">{displayName}</h1>
           <div className="cm-status-badges">
-            <span className="cm-badge-green">
-              <Leaf size={12} />
-              {todayExpense === 0 ? 'Hôm nay chưa chi tiêu' : `Hôm nay chi ${todayExpense.toLocaleString('vi-VN')}đ`}
-            </span>
             <button
               type="button"
               className="cm-badge-blue clickable"
@@ -329,6 +327,10 @@ export function CalendarPage() {
           <span className="cm-toolkit-launch-copy">
             <strong>Hũ & Chia bill</strong>
             <small>Tiết kiệm • Chia tiền nhóm</small>
+            <span className="cm-toolkit-launch-today">
+              <Leaf size={14} />
+              <b>{todayExpense === 0 ? 'Hôm nay chưa chi tiêu' : `Hôm nay chi ${todayExpense.toLocaleString('vi-VN')}đ`}</b>
+            </span>
           </span>
           <Sparkles className="cm-toolkit-launch-sparkle" size={22} aria-hidden="true" />
         </button>

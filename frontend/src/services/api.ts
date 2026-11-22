@@ -1,4 +1,5 @@
 import type { MeResponse, Profile, User } from '../types/auth';
+import { normalizeCategoryId } from '../constants/categories';
 export type { MeResponse } from '../types/auth';
 
 const API_ROOT = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || '/api';
@@ -195,7 +196,7 @@ function txToCalendarEvent(row: StoredTransaction): CalendarEvent {
     amountMinor: row.amountMinor,
     dateKey: row.dateKey,
     note: row.note,
-    categoryId: row.categoryId,
+    categoryId: normalizeCategoryId(row.categoryId),
     walletId: row.walletId,
     imageUrl: row.imageUrl,
     status: row.status,
@@ -204,6 +205,14 @@ function txToCalendarEvent(row: StoredTransaction): CalendarEvent {
     time: row.transactionTime,
     createdAt: row.createdAt,
   };
+}
+
+function normalizeTransaction(row: Transaction): Transaction {
+  return { ...row, categoryId: normalizeCategoryId(row.categoryId) };
+}
+
+function normalizeCalendarEvent(row: CalendarEvent): CalendarEvent {
+  return { ...row, categoryId: row.categoryId ? normalizeCategoryId(row.categoryId) : row.categoryId };
 }
 
 class BackendUnavailableError extends Error {}
@@ -286,10 +295,11 @@ export function readLocalBackup(email: string) {
     wallets: db.wallets.filter(w => w.userId === user.id).map(w => ({ id: w.id, name: w.name, type: w.type, balanceMinor: w.balanceMinor, currency: w.currency, color: w.color, active: w.active })),
     transactions: db.transactions.filter(tx => tx.userId === user.id).map(tx => ({
       id: tx.id, walletId: tx.walletId || undefined, toWalletId: tx.toWalletId || undefined,
-      categoryId: tx.categoryId, type: tx.type, amountMinor: tx.amountMinor, note: tx.note, dateKey: tx.dateKey,
+      categoryId: normalizeCategoryId(tx.categoryId), type: tx.type, amountMinor: tx.amountMinor, note: tx.note, dateKey: tx.dateKey,
       transactionTime: tx.transactionTime || undefined, source: tx.source ?? 'manual',
       status: tx.status === 'completed' ? 'posted' : tx.status,
       createdAt: tx.createdAt, imageUrl: tx.imageUrl,
+      externalImageUrl: tx.imageUrl && /^https?:\/\//i.test(tx.imageUrl) ? tx.imageUrl : undefined,
     })),
     reminders: db.reminders.filter(r => r.userId === user.id).map(r => ({ id: r.id, title: r.title, note: r.note ?? '', dateKey: r.dateKey, time: r.time || undefined, kind: r.kind, status: r.status === 'scheduled' ? 'pending' : r.status, repeat: r.repeat, channels: r.channels })),
   };
@@ -576,6 +586,7 @@ export const api = {
     transactionTime?: string;
     source?: 'manual' | 'camera' | 'webhook_mbbank';
     image?: File | null;
+    imageUrl?: string;
     idempotencyKey?: string;
   }) =>
     withFallback(
@@ -590,6 +601,7 @@ export const api = {
         form.set('transactionDate', input.transactionDate);
         if (input.transactionTime) form.set('transactionTime', input.transactionTime);
         if (input.source) form.set('source', input.source);
+        if (input.imageUrl) form.set('imageUrl', input.imageUrl);
         form.set('idempotencyKey', input.idempotencyKey ?? crypto.randomUUID());
         if (input.image) form.set('image', input.image);
         return upload<{ transaction: { id: string; dateKey: string; imageUrl: string | null } }>('/transactions', form);
@@ -610,7 +622,7 @@ export const api = {
             throw new ApiError(400, 'INSUFFICIENT_BALANCE', 'Số dư ví nguồn không đủ');
           }
         }
-        const imageUrl = input.image ? await fileToDataUrl(input.image) : null;
+        const imageUrl = input.image ? await fileToDataUrl(input.image) : input.imageUrl || null;
         const nowTime = input.transactionTime || new Date().toTimeString().slice(0, 8);
         const created: StoredTransaction = {
           id: crypto.randomUUID(),
@@ -660,6 +672,7 @@ export const api = {
       transactionTime?: string;
       source?: 'manual' | 'camera' | 'webhook_mbbank';
       image?: File | null;
+      imageUrl?: string;
     },
   ) =>
     withFallback(
@@ -673,6 +686,7 @@ export const api = {
         form.set('transactionDate', input.transactionDate);
         if (input.transactionTime) form.set('transactionTime', input.transactionTime);
         if (input.source) form.set('source', input.source);
+        if (input.imageUrl) form.set('imageUrl', input.imageUrl);
         if (input.image) form.set('image', input.image);
         return upload<{ transaction: { id: string; dateKey: string; imageUrl: string | null } }>(`/transactions/${id}`, form, 'PUT');
       },
@@ -703,6 +717,7 @@ export const api = {
         if (input.source) existing.source = input.source;
         else if (input.image) existing.source = 'camera';
         if (input.image) existing.imageUrl = await fileToDataUrl(input.image);
+        else if (input.imageUrl) existing.imageUrl = input.imageUrl;
         saveDb(db);
         return { transaction: { id: existing.id, dateKey: existing.dateKey, imageUrl: existing.imageUrl } };
       },
@@ -740,7 +755,7 @@ export const api = {
     withFallback(
       () => {
         const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value) as Array<[string, string]>);
-        return request<{ transactions: Transaction[] }>('/transactions' + (query.size ? `?${query}` : ''));
+        return request<{ transactions: Transaction[] }>('/transactions' + (query.size ? `?${query}` : '')).then(result => ({ ...result, transactions: result.transactions.map(normalizeTransaction) }));
       },
       async () => {
         const db = loadDb();
@@ -794,7 +809,7 @@ export const api = {
 
   calendarEvents: (from: string, to: string, selectedFilters: string[]) =>
     withFallback(
-      () => request<{ events: CalendarEvent[]; byDay: Record<string, CalendarEvent[]>; summary: CalendarSummary }>(`/calendar/events?from=${from}&to=${to}${selectedFilters.length ? `&filters=${selectedFilters.join(',')}` : ''}`),
+      () => request<{ events: CalendarEvent[]; byDay: Record<string, CalendarEvent[]>; summary: CalendarSummary }>(`/calendar/events?from=${from}&to=${to}${selectedFilters.length ? `&filters=${selectedFilters.join(',')}` : ''}`).then(result => ({ ...result, events: result.events.map(normalizeCalendarEvent), byDay: Object.fromEntries(Object.entries(result.byDay).map(([key, rows]) => [key, rows.map(normalizeCalendarEvent)])) })),
       () => {
         const db = loadDb();
         const user = requireLocalUser(db);
@@ -832,7 +847,7 @@ export const api = {
 
   calendarDay: (dateKey: string) =>
     withFallback(
-      () => request<{ dateKey: string; summary: { income: number; expense: number; net: number; transactionCount: number }; transactions: CalendarEvent[]; reminders: CalendarEvent[] }>(`/calendar/day/${dateKey}`),
+      () => request<{ dateKey: string; summary: { income: number; expense: number; net: number; transactionCount: number }; transactions: CalendarEvent[]; reminders: CalendarEvent[] }>(`/calendar/day/${dateKey}`).then(result => ({ ...result, transactions: result.transactions.map(normalizeCalendarEvent) })),
       () => {
         const db = loadDb();
         const user = requireLocalUser(db);

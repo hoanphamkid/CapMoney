@@ -2,6 +2,11 @@
   "id": "/", "name": "CapMoney", "short_name": "CapMoney", "lang": "vi",
   "start_url": "/app", "scope": "/", "display": "standalone",
   "background_color": "#163e36", "theme_color": "#163e36",
+  "shortcuts": [
+    { "name": "Mở CapMoney", "short_name": "Mở app", "url": "/app", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Xem giao dịch", "short_name": "Giao dịch", "url": "/app/transactions", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Xem thống kê", "short_name": "Thống kê", "url": "/app/dashboard", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ],
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }

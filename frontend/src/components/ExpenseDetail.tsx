@@ -9,6 +9,7 @@ import {
   Edit3,
   ImageOff,
   ImagePlus,
+  Link2,
   LoaderCircle,
   Sparkles,
   Trash2,
@@ -17,7 +18,12 @@ import {
 import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import type { CalendarEvent, Wallet } from '../services/api';
 import { ApiError, api } from '../services/api';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, ALL_CATEGORY_LABELS } from '../constants/categories';
 import { ImageCropModal } from './ImageCropModal';
+
+const categoryLabel = (value?: string) => ALL_CATEGORY_LABELS[value ?? 'other'] ?? 'Khác';
+const isExternalImageUrl = (value?: string | null) => Boolean(value && /^https?:\/\//i.test(value));
+void legacyCategoryLabel;
 
 export function ExpenseDetail({ event, wallets = [], onClose, onChanged }: { event: CalendarEvent; wallets?: Wallet[]; onClose: () => void; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
@@ -276,6 +282,7 @@ function EditTransaction({
   const [type, setType] = useState<'expense' | 'income'>(event.kind === 'income' ? 'income' : 'expense');
   const [timeStr, setTimeStr] = useState(event.transactionTime || event.time || new Date().toTimeString().slice(0, 5));
   const [image, setImage] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState(() => isExternalImageUrl(event.imageUrl) ? event.imageUrl ?? '' : '');
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -313,7 +320,7 @@ function EditTransaction({
     input.target.value = '';
   };
 
-  const previewUrl = useMemo(() => (image ? URL.createObjectURL(image) : event.imageUrl ?? ''), [image, event.imageUrl]);
+  const previewUrl = useMemo(() => (image ? URL.createObjectURL(image) : imageUrl || event.imageUrl || ''), [image, imageUrl, event.imageUrl]);
   useEffect(() => () => {
     if (image && previewUrl) URL.revokeObjectURL(previewUrl);
   }, [image, previewUrl]);
@@ -334,6 +341,7 @@ function EditTransaction({
         transactionTime: timeStr ? (timeStr.length === 5 ? `${timeStr}:00` : timeStr) : undefined,
         source: image ? 'camera' : event.source === 'camera' || event.source === 'webhook_mbbank' ? event.source : 'manual',
         image,
+        imageUrl: image ? undefined : imageUrl.trim() || undefined,
       });
       onSaved();
     } catch (caught) {
@@ -351,6 +359,7 @@ function EditTransaction({
         onConfirm={cropped => {
           setPendingCropFile(null);
           setImage(cropped);
+          setImageUrl('');
         }}
       />
     );
@@ -401,7 +410,7 @@ function EditTransaction({
           <label className="select-field">
             <span>Danh mục</span>
             <select value={category} onChange={input => setCategory(input.target.value)}>
-              {categories.map(item => (
+              {(type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(item => (
                 <option key={item.id} value={item.id}>
                   {item.label}
                 </option>
@@ -459,6 +468,20 @@ function EditTransaction({
               onChange={choosePhoto}
             />
           </label>
+          <label className="replace-image image-url-field">
+            <Link2 size={15} /> Dùng link ảnh
+            <input
+              type="url"
+              inputMode="url"
+              value={imageUrl}
+              placeholder="https://..."
+              disabled={saving}
+              onChange={input => {
+                setImageUrl(input.target.value);
+                if (input.target.value.trim()) setImage(null);
+              }}
+            />
+          </label>
           {image && (
             <button
               type="button"
@@ -502,6 +525,6 @@ function formatDate(value: string) {
   );
 }
 
-function categoryLabel(value?: string) {
+function legacyCategoryLabel(value?: string) {
   return categories.reduce<Record<string, string>>((map, item) => ({ ...map, [item.id]: item.label }), {})[value ?? 'other'] ?? 'Khác';
 }

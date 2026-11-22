@@ -16,6 +16,8 @@ const defaultBudget: BudgetConfig = {
   categoryLimits: {
     food: 2_000_000,
     shopping: 1_000_000,
+    beauty: 750_000,
+    household: 600_000,
     transport: 500_000,
     bills: 1_000_000,
     entertainment: 500_000,
@@ -50,11 +52,13 @@ const categoryLabels: Record<string, string> = {
   bills: '🧾 Hóa đơn',
   entertainment: '🎬 Giải trí',
 };
+categoryLabels.beauty = 'Làm đẹp';
+categoryLabels.household = 'Gia vị & đồ dùng nhà';
 
 const monthlyPresets = [1_000_000, 2_000_000, 3_000_000, 5_000_000, 8_000_000, 10_000_000, 15_000_000];
 const dailyPresets = [50_000, 100_000, 150_000, 200_000, 300_000, 500_000];
 const categoryPresets = [100_000, 200_000, 500_000, 1_000_000, 2_000_000, 3_000_000];
-const categoryShares: Record<string, number> = { food: 0.4, shopping: 0.2, transport: 0.1, bills: 0.2, entertainment: 0.1 };
+const categoryShares: Record<string, number> = { food: 0.3, shopping: 0.15, beauty: 0.15, household: 0.1, transport: 0.1, bills: 0.1, entertainment: 0.1 };
 
 function presetLabel(amount: number) {
   return amount >= 1_000_000 ? `${(amount / 1_000_000).toLocaleString('vi-VN')} triệu` : `${(amount / 1000).toLocaleString('vi-VN')} nghìn`;

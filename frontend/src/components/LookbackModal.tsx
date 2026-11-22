@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Transaction } from '../services/api';
+import { ALL_CATEGORY_LABELS } from '../constants/categories';
 
 type LookbackPeriod = 1 | 3 | 7;
 type BoothPeriod = 1 | 7 | 30;
@@ -46,6 +47,7 @@ const categoryNames: Record<string, string> = {
 };
 
 export function LookbackModal({ initialPeriod = 3, transactions, onClose }: LookbackModalProps) {
+  Object.assign(categoryNames, ALL_CATEGORY_LABELS);
   const [period, setPeriod] = useState<LookbackPeriod>(initialPeriod);
   const [slideIndex, setSlideIndex] = useState(0); // 0: Photo Reel, 1: Daily Rhythm, 2: Insights
   const [photoIdx, setPhotoIdx] = useState(0);

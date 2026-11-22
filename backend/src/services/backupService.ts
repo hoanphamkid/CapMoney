@@ -42,6 +42,7 @@ export const backupPayloadSchema = z.object({
     source: z.enum(['manual', 'camera', 'webhook_mbbank']).default('manual'),
     status: z.enum(['posted', 'planned', 'cancelled']).default('posted'),
     image: z.string().regex(/^data:image\/(?:jpeg|png|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/).max(12_000_000).optional(),
+    externalImageUrl: z.string().url().max(2000).refine(value => /^https?:\/\//i.test(value), 'Ảnh phải là đường dẫn http(s).').optional(),
     createdAt: timestamp,
   })).max(50000),
   reminders: z.array(z.object({
@@ -96,6 +97,7 @@ export async function captureAccount(userId: string, preferences: Record<string,
       categoryId: tx.categoryId ?? 'other', type: tx.type, amountMinor: tx.amountMinor, currency: tx.currency,
       note: tx.note ?? '', dateKey: tx.dateKey, transactionTime: tx.transactionTime || undefined,
       source: tx.source, status: tx.status, image, createdAt: tx.createdAt?.toISOString(),
+      externalImageUrl: tx.externalImageUrl ?? undefined,
     });
   }
   return backupPayloadSchema.parse({

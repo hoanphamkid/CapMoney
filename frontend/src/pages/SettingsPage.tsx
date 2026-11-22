@@ -1,4 +1,4 @@
-import { Bell, Check, CloudUpload, Download, FileText, Globe2, KeyRound, LoaderCircle, LogOut, Save, ShieldCheck, Sun, UserRound } from 'lucide-react';
+import { Bell, Check, CloudUpload, Download, FileText, Globe2, KeyRound, LoaderCircle, LogOut, Save, ShieldCheck, Smartphone, Sun, UserRound } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, authenticatedRequest, type MeResponse } from '../services/api';
@@ -283,6 +283,23 @@ export function SettingsPage() {
         </div>
 
         <aside className="settings-side">
+          <section className="settings-card panel settings-install-card">
+            <SettingsHeading
+              icon={<Smartphone size={17} />}
+              title="Đưa CapMoney ra màn hình chính"
+              description={isHomeScreenApp() ? 'CapMoney đã được cài như một ứng dụng trên thiết bị này.' : 'Mở nhanh CapMoney như một ứng dụng riêng, không cần tìm lại trong Safari.'}
+            />
+            {isHomeScreenApp() ? (
+              <p className="settings-install-ready">✓ CapMoney đang chạy từ màn hình chính.</p>
+            ) : (
+              <ol className="settings-install-steps">
+                <li>Mở CapMoney bằng Safari trên địa chỉ HTTPS.</li>
+                <li>Nhấn <strong>Chia sẻ</strong> rồi chọn <strong>Thêm vào Màn hình chính</strong>.</li>
+                <li>Nhấn <strong>Thêm</strong>, sau đó mở CapMoney từ biểu tượng mới.</li>
+              </ol>
+            )}
+          </section>
+
           <section className="settings-card panel">
             <SettingsHeading
               icon={<Bell size={17} />}

@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Download, ListFilter, TrendingDown, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Transaction } from '../services/api';
+import { CATEGORY_LABELS as SHARED_CATEGORY_LABELS, INCOME_CATEGORY_LABELS as SHARED_INCOME_CATEGORY_LABELS } from '../constants/categories';
 import { loadBudget } from './SpendingLimitModal';
 import { isInReportRange, offsetReportDay, REPORT_PERIODS, reportRange, reportRangeLabel, type ReportPeriod, type ReportRange } from './reportPeriod';
 
@@ -15,7 +16,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  food: '#e06d64', shopping: '#f0a35e', transport: '#4aa8d8', bills: '#5fc278',
+  food: '#e06d64', shopping: '#f0a35e', beauty: '#ed8eb7', household: '#d4a86a', skincare: '#e7a6c2', makeup: '#c995e8',
+  haircare: '#b68a67', bodycare: '#78c8ba', fragrance: '#a994e8', nails: '#f18c9a', transport: '#4aa8d8', bills: '#5fc278',
   entertainment: '#9b7bff', health: '#d977b8', other: '#e7cf5b',
 };
 
@@ -28,6 +30,8 @@ const INCOME_CATEGORY_LABELS: Record<string, string> = {
 };
 
 export { INCOME_CATEGORY_LABELS };
+Object.assign(CATEGORY_LABELS, SHARED_CATEGORY_LABELS);
+Object.assign(INCOME_CATEGORY_LABELS, SHARED_INCOME_CATEGORY_LABELS);
 export type ReportFlowType = 'all' | 'expense' | 'income';
 
 const INCOME_CATEGORY_COLORS: Record<string, string> = {

@@ -25,6 +25,7 @@ const transactionSchema = z.object({
   source: z.enum(['manual', 'camera', 'webhook_mbbank']).default('manual'),
   currency: z.string().length(3).default('VND'),
   idempotencyKey: z.string().max(120).optional(),
+  imageUrl: z.string().trim().url().max(2000).refine(value => /^https?:\/\//i.test(value), 'Ảnh phải là đường dẫn http(s).').optional().or(z.literal('')),
 });
 
 function id(value: string | undefined) { return value && mongoose.isValidObjectId(value) ? new mongoose.Types.ObjectId(value) : undefined; }
@@ -44,7 +45,7 @@ function toPublic(row: any) {
     transactionTime: timeStr,
     source: row.source ?? 'manual',
     status: row.status,
-    imageUrl: row.imageKey ? `/api/transactions/${String(row._id)}/image` : null,
+    imageUrl: row.imageKey ? `/api/transactions/${String(row._id)}/image` : row.externalImageUrl ?? null,
     imageMimeType: row.imageMimeType ?? null,
     createdAt: row.createdAt,
   };
@@ -89,6 +90,7 @@ export const createTransaction: RequestHandler = async (request, response) => {
         transactionTime: timePart,
         source: finalSource,
         imageKey,
+        externalImageUrl: file ? undefined : input.imageUrl || undefined,
         imageMimeType: file?.mimetype,
         imageSize: file?.size,
         idempotencyKey: input.idempotencyKey,
@@ -111,6 +113,7 @@ export const updateTransaction: RequestHandler = async (request, response) => {
   const oldWallet = existing.walletId; const oldTo = existing.toWalletId; const oldAmount = existing.amountMinor; const oldType = existing.type; const walletId = id(input.walletId); const toWalletId = id(input.toWalletId); const amountMinor = Math.round(input.amount * 100); const userId = new mongoose.Types.ObjectId(request.user!.id);
   if (input.type !== 'transfer' && !walletId) throw new AppError(400, 'Vui lòng chọn ví cho giao dịch', 'WALLET_REQUIRED'); if (input.type === 'transfer' && (!walletId || !toWalletId || String(walletId) === String(toWalletId))) throw new AppError(400, 'Chuyển tiền cần hai ví khác nhau', 'TRANSFER_WALLETS_REQUIRED'); await ensureWallets(userId, walletId, toWalletId);
   const replacementKey = request.file ? await savePrivateImage(request.file) : undefined; const oldImageKey = existing.imageKey; const session = await mongoose.startSession();
+  const externalImageUpdate = typeof input.imageUrl === 'string' && input.imageUrl.length > 0;
   const timePart = input.transactionTime ? (input.transactionTime.length === 5 ? `${input.transactionTime}:00` : input.transactionTime) : (existing.transactionTime || new Date().toTimeString().slice(0, 8));
   const txDateTime = new Date(`${input.transactionDate}T${timePart}.000Z`);
   try {
@@ -129,14 +132,15 @@ export const updateTransaction: RequestHandler = async (request, response) => {
         dateKey: input.transactionDate,
         transactionTime: timePart,
         ...(input.source ? { source: input.source } : replacementKey ? { source: 'camera' } : {}),
-        ...(replacementKey ? { imageKey: replacementKey, imageMimeType: request.file?.mimetype, imageSize: request.file?.size } : {})
+        ...(replacementKey ? { imageKey: replacementKey, externalImageUrl: undefined, imageMimeType: request.file?.mimetype, imageSize: request.file?.size } : {}),
+        ...(externalImageUpdate ? { imageKey: undefined, externalImageUrl: input.imageUrl, imageMimeType: undefined, imageSize: undefined } : {})
       });
       await existing.save({ session });
       if (input.type !== 'transfer' && walletId) await WalletModel.updateOne({ _id: walletId }, { $inc: { balanceMinor: delta(input.type, amountMinor) } }, { session });
       if (input.type === 'transfer') { await WalletModel.updateOne({ _id: walletId }, { $inc: { balanceMinor: -amountMinor } }, { session }); await WalletModel.updateOne({ _id: toWalletId }, { $inc: { balanceMinor: amountMinor } }, { session }); }
     });
   } catch (error) { await deletePrivateImage(replacementKey); session.endSession(); throw error; }
-  session.endSession(); if (replacementKey) await deletePrivateImage(oldImageKey); response.json({ transaction: toPublic(existing) });
+  session.endSession(); if (replacementKey || externalImageUpdate) await deletePrivateImage(oldImageKey); response.json({ transaction: toPublic(existing) });
 };
 
 export const deleteTransaction: RequestHandler = async (request, response) => { const row = await TransactionModel.findOne({ _id: request.params.id, userId: request.user!.id }); if (!row) throw new AppError(404, 'Không tìm thấy giao dịch', 'TRANSACTION_NOT_FOUND'); const session = await mongoose.startSession(); await session.withTransaction(async () => { if (row.type !== 'transfer' && row.walletId) await WalletModel.updateOne({ _id: row.walletId }, { $inc: { balanceMinor: -delta(row.type, row.amountMinor) } }, { session }); if (row.type === 'transfer') { await WalletModel.updateOne({ _id: row.walletId }, { $inc: { balanceMinor: row.amountMinor } }, { session }); await WalletModel.updateOne({ _id: row.toWalletId }, { $inc: { balanceMinor: -row.amountMinor } }, { session }); } await TransactionModel.deleteOne({ _id: row._id }, { session }); }); session.endSession(); await deletePrivateImage(row.imageKey); response.status(204).send(); };

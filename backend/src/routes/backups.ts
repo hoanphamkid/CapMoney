@@ -85,7 +85,7 @@ backupsRouter.post('/:id/restore', async (req, res) => {
           toWalletId: toWalletId ? walletIds.get(toWalletId) : undefined,
           transactionDate: new Date(`${tx.dateKey}T${tx.transactionTime?.length === 5 ? `${tx.transactionTime}:00` : tx.transactionTime ?? '00:00:00'}.000Z`),
           ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
-          ...(photo ? { imageKey: photo.key, imageMimeType: photo.mimetype, imageSize: photo.size } : {}),
+          ...(photo ? { imageKey: photo.key, externalImageUrl: undefined, imageMimeType: photo.mimetype, imageSize: photo.size } : {}),
         };
       }), { session });
       if (payload.reminders.length) await CalendarReminderModel.insertMany(payload.reminders.map(({ id: _id, ...r }) => ({ ...r, userId })), { session });

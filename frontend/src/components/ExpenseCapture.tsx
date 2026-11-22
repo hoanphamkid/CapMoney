@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api, type Wallet } from '../services/api';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../constants/categories';
 import { scanReceiptImage } from '../utils/receiptOcr';
 import { CameraView } from './CameraView';
 import { ImageCropModal } from './ImageCropModal';
@@ -43,6 +44,9 @@ const incomeCategories = [
   { id: 'gift', label: 'Được tặng' },
   { id: 'other', label: 'Thu khác' },
 ];
+
+void expenseCategories;
+void incomeCategories;
 
 type ExpenseCaptureProps = {
   selectedDate: string;
@@ -165,14 +169,14 @@ export function ExpenseCapture({
 
   const switchType = (nextType: 'expense' | 'income') => {
     setType(nextType);
-    if (nextType === 'income' && !incomeCategories.some(item => item.id === category)) {
+    if (nextType === 'income' && !INCOME_CATEGORIES.some(item => item.id === category)) {
       setCategory('salary');
-    } else if (nextType === 'expense' && !expenseCategories.some(item => item.id === category)) {
+    } else if (nextType === 'expense' && !EXPENSE_CATEGORIES.some(item => item.id === category)) {
       setCategory('food');
     }
   };
 
-  const categories = type === 'income' ? incomeCategories : expenseCategories;
+  const categories = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
   const evaluateExpression = (raw: string): number => {
     const cleaned = raw.replace(/[^0-9+\-*/.]/g, '');

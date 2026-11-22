@@ -5,6 +5,7 @@ import { ExpenseDetail } from '../components/ExpenseDetail';
 import { TransferForm, WalletForm } from '../components/WalletForms';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { api, type CalendarEvent, type Transaction, type Wallet } from '../services/api';
+import { ALL_CATEGORY_LABELS } from '../constants/categories';
 import './money.css';
 
 type ReviewFilter = 'all' | 'no-photo' | 'uncategorized';
@@ -12,10 +13,12 @@ type TypeFilter = 'all' | 'income' | 'expense' | 'transfer';
 type Period = 'all' | 'today' | 'week' | 'month' | 'custom';
 const transactionTypes = { all: 'Tất cả', income: 'Tiền vào', expense: 'Tiền ra', transfer: 'Chuyển ví' } as const;
 const emptyTransactions: Transaction[] = [];
+// Keep older category labels while adding the newer beauty/skincare labels.
 const labels: Record<string, string> = { food: 'Ăn uống', shopping: 'Mua sắm', transport: 'Di chuyển', bills: 'Hóa đơn', entertainment: 'Giải trí', health: 'Sức khỏe', other: 'Khác', salary: 'Lương', bonus: 'Thưởng', investment: 'Đầu tư', gift: 'Được tặng', transfer: 'Chuyển ví' };
 const walletLabels: Record<string, string> = { cash: 'Tiền mặt', bank: 'Ngân hàng', e_wallet: 'Ví điện tử', savings: 'Tiết kiệm', credit: 'Tín dụng', custom: 'Ví khác' };
 
 export function TransactionsPage() {
+  Object.assign(labels, ALL_CATEGORY_LABELS);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loadedRows, setLoadedRows] = useState<{ scope: string; transactions: Transaction[] } | null>(null);
   const [loading, setLoading] = useState(true);

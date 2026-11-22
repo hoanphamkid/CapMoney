@@ -71,7 +71,7 @@ export async function createBackup(email: string, label: string, source: 'server
     const local = readLocalBackup(email);
     if (!local) throw new Error('Không có dữ liệu của tài khoản này trên thiết bị.');
     const transactions = [];
-    for (const { imageUrl, ...tx } of local.transactions) transactions.push({ ...tx, image: await imageForBackup(imageUrl) });
+    for (const { imageUrl, externalImageUrl, ...tx } of local.transactions) transactions.push({ ...tx, externalImageUrl, image: await imageForBackup(imageUrl) });
     localData = { ...local, transactions, preferences: preferences() };
   }
   return authenticatedRequest<{ backup: AccountBackup }>('/backups', { method: 'POST', body: JSON.stringify({ ...getSyncDevice(), label, preferences: preferences(), localData }) });

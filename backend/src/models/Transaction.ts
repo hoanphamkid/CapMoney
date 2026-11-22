@@ -10,6 +10,7 @@ const TransactionSchema = new Schema({
   currency: { type: String, default: 'VND', uppercase: true, maxlength: 3 },
   note: { type: String, trim: true, maxlength: 500 },
   imageKey: { type: String, maxlength: 180 },
+  externalImageUrl: { type: String, maxlength: 2000 },
   imageMimeType: { type: String, maxlength: 80 },
   imageSize: { type: Number, max: 10 * 1024 * 1024 },
   transactionDate: { type: Date, required: true },
