@@ -96,6 +96,7 @@ test('provides a bank push toggle and explains missing server configuration', as
   });
   await page.route('**/api/notifications/config', route => route.fulfill({ json: { enabled: false, publicKey: null } }));
   await page.goto('/app/settings');
+  await page.getByRole('link', { name: /Thông báo/ }).click();
   const toggle = page.getByRole('switch', { name: 'Thông báo tiền vào và tiền ra MB Bank' });
   await expect(toggle).toBeEnabled();
   await toggle.click();

@@ -1,14 +1,37 @@
-import { Bell, Check, CloudUpload, Download, FileText, Globe2, KeyRound, LoaderCircle, LogOut, Save, ShieldCheck, Smartphone, Sun, UserRound } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Bell, Check, ChevronRight, CloudUpload, Download, Globe2, KeyRound, LoaderCircle, LogOut, Monitor, Pencil, ShieldCheck, Smartphone } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, authenticatedRequest, type MeResponse } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { bankPushEnabled, disableBankPush, enableBankPush, getBankPushConfig, isHomeScreenApp, supportsBankPush, type BankPushConfig } from '../services/bankNotifications';
+import { useAppTheme } from '../contexts/ThemeContext';
+import { HOME_THEMES, HomeThemePicker } from '../components/HomeThemePicker';
+import { bankPushEnabled, disableBankPush, enableBankPush, getBankPushConfig, isHomeScreenApp, type BankPushConfig } from '../services/bankNotifications';
+import { ALL_CATEGORY_LABELS } from '../constants/categories';
+import './settings-page.css';
+
+const settingsSections = {
+  profile: 'Hồ sơ cá nhân',
+  appearance: 'Giao diện và khu vực',
+  notifications: 'Thông báo',
+  install: 'Thêm vào màn hình chính',
+  password: 'Đổi mật khẩu',
+  sessions: 'Thiết bị đăng nhập',
+  data: 'Xuất dữ liệu',
+} as const;
+
+type SettingsSection = keyof typeof settingsSections;
 
 export function SettingsPage() {
   const { user, logout, refreshUser } = useAuth();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<MeResponse['profile']>(null);
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const section = (Object.keys(settingsSections) as SettingsSection[]).find(key => key === searchParams.get('section'));
+  const heading = useRef<HTMLHeadingElement>(null);
+  const { theme, setTheme } = useAppTheme();
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [savedSettings, setSavedSettings] = useState<MeResponse | null>(null);
+  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
   const [currency, setCurrency] = useState('VND');
@@ -27,6 +50,18 @@ export function SettingsPage() {
   const [bankPushBusy, setBankPushBusy] = useState(true);
   const [bankPushConfig, setBankPushConfig] = useState<BankPushConfig | null>(null);
   const [bankPushTestBusy, setBankPushTestBusy] = useState(false);
+  const [sessionsBusy, setSessionsBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    heading.current?.focus();
+    setNotice('');
+    setError('');
+    if (section !== 'password') {
+      setCurrentPassword('');
+      setNewPassword('');
+    }
+  }, [section]);
 
   useEffect(() => {
     let disposed = false;
@@ -68,16 +103,18 @@ export function SettingsPage() {
   };
 
   useEffect(() => {
-    void Promise.all([api.me(), api.sessions()])
-      .then(([me, sessionResult]) => {
-        setProfile(me.profile);
+    void api.me()
+      .then(me => {
+        setSavedSettings(me);
         setName(me.user.name);
-        setPhone(me.user.phone);
+        setPhone(me.user.phone ?? '');
         setCurrency(me.profile?.currency ?? 'VND');
         setTimezone(me.profile?.timezone ?? 'Asia/Ho_Chi_Minh');
-        setSessions(sessionResult.sessions);
       })
-      .catch(() => setError('Không tải được cài đặt tài khoản.'));
+      .catch(() => setProfileLoadFailed(true));
+    void api.sessions()
+      .then(result => setSessions(result.sessions))
+      .catch(() => setSessions([]));
   }, []);
 
   useEffect(() => {
@@ -85,36 +122,37 @@ export function SettingsPage() {
     localStorage.setItem('capmoney-theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
-  const saveProfile = async () => {
+  const saveProfile = async (fields: 'profile' | 'appearance') => {
+    if (!savedSettings || saving) return;
     setSaving(true);
     setError('');
     setNotice('');
     try {
       const result = await api.updateMe({
-        name,
-        phone,
-        locale: profile?.locale ?? 'vi-VN',
-        currency,
-        timezone,
+        name: fields === 'profile' ? name : savedSettings.user.name,
+        phone: fields === 'profile' ? phone : savedSettings.user.phone ?? '',
+        locale: savedSettings.profile?.locale ?? 'vi-VN',
+        currency: fields === 'appearance' ? currency : savedSettings.profile?.currency ?? 'VND',
+        timezone: fields === 'appearance' ? timezone : savedSettings.profile?.timezone ?? 'Asia/Ho_Chi_Minh',
       });
-      setProfile(result.profile);
+      setSavedSettings(result);
       await refreshUser();
-      setNotice('Đã cập nhật thông tin cá nhân.');
+      setNotice(fields === 'profile' ? 'Đã lưu hồ sơ.' : 'Đã lưu tiền tệ và múi giờ.');
     } catch {
-      setError('Không thể lưu thông tin cá nhân.');
+      setError('Không thể lưu thay đổi.');
     } finally {
       setSaving(false);
     }
   };
 
   const savePassword = async () => {
+    setNotice('');
     if (newPassword.length < 8) {
       setError('Mật khẩu mới cần ít nhất 8 ký tự.');
       return;
     }
     setPasswordSaving(true);
     setError('');
-    setNotice('');
     try {
       await api.changePassword({ currentPassword, newPassword });
       setCurrentPassword('');
@@ -128,12 +166,15 @@ export function SettingsPage() {
   };
 
   const exportData = async () => {
+    setExporting(true);
+    setError('');
+    setNotice('');
     try {
       const result = await api.transactions();
       const csv = [
         'Ngày,Loại,Số tiền,Danh mục,Ghi chú',
         ...result.transactions.map(row =>
-          [row.dateKey, row.type, row.amount, categoryLabel(row.categoryId), JSON.stringify(row.note)].join(','),
+          [row.dateKey, row.type, row.amount, ALL_CATEGORY_LABELS[row.categoryId] ?? 'Khác', JSON.stringify(row.note)].join(','),
         ),
       ].join('\n');
       const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }));
@@ -145,299 +186,269 @@ export function SettingsPage() {
       setNotice('Đã xuất file CSV lịch sử giao dịch.');
     } catch {
       setError('Không thể xuất dữ liệu.');
+    } finally {
+      setExporting(false);
     }
   };
 
+  const logoutOtherDevices = async () => {
+    setSessionsBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await api.logoutOthers();
+      setSessions(items => items.filter(session => session.current));
+      setNotice('Đã đăng xuất các thiết bị khác.');
+    } catch {
+      setError('Không thể đăng xuất các thiết bị khác.');
+    } finally {
+      setSessionsBusy(false);
+    }
+  };
+
+  const installed = isHomeScreenApp();
+  const themeLabel = HOME_THEMES.find(item => item.id === theme)?.label;
+  const displayName = user?.name || 'Người dùng CapMoney';
+
   return (
-    <div className="feature-page settings-page settings-redesign">
-      <div className="page-heading settings-hero">
-        <div className="settings-hero-copy">
-          <p className="eyebrow dark">KHÔNG GIAN CỦA BẠN</p>
-          <h1>Cài đặt của bạn</h1>
-          <p className="page-subtitle">Một vài lựa chọn nhỏ để CapMoney vừa vặn với cách bạn quản lý tiền.</p>
-          <div className="settings-hero-status"><span /><strong>Dữ liệu riêng tư</strong><small>Đồng bộ an toàn trên các thiết bị</small></div>
-        </div>
-        <div className="settings-hero-profile">
-          <span className="settings-hero-avatar">{(name || 'C').charAt(0).toUpperCase()}</span>
-          <div><strong>{name || 'Người dùng CapMoney'}</strong><small>{user?.email || 'Tài khoản CapMoney'}</small></div>
-        </div>
+    <div className="cm-settings">
+      <header className="cm-settings-header">
+        {section && (
+          <button
+            type="button"
+            className="cm-settings-back"
+            aria-label="Quay lại danh sách cài đặt"
+            onClick={() => {
+              if (location.state?.fromSettings) navigate(-1);
+              else navigate('/app/settings', { replace: true });
+            }}
+          >
+            <ArrowLeft size={22} aria-hidden="true" />
+          </button>
+        )}
+        <h1 ref={heading} tabIndex={-1}>{section ? settingsSections[section] : 'Cài đặt'}</h1>
+      </header>
+
+      <div className="cm-settings-messages">
+        {(error || (profileLoadFailed && (section === 'profile' || section === 'appearance'))) && (
+          <p className="cm-settings-message is-error" role="alert">{error || 'Không tải được cài đặt tài khoản. Hãy tải lại trang để thử lại.'}</p>
+        )}
+        {notice && <p className="cm-settings-message" role="status"><Check size={18} aria-hidden="true" />{notice}</p>}
       </div>
 
-      {notice && (
-        <div className="page-alert success">
-          <Check size={15} /> {notice}
-        </div>
-      )}
-      {error && <div className="page-alert">{error}</div>}
+      {!section && (
+        <>
+          <Link className="cm-settings-identity" to="?section=profile" state={{ fromSettings: true }} aria-label={`Chỉnh sửa hồ sơ của ${displayName}`}>
+            <span className="cm-settings-avatar" aria-hidden="true">{displayName.charAt(0).toUpperCase()}</span>
+            <span className="cm-settings-copy">
+              <strong>{displayName}</strong>
+              <small>{user?.email}</small>
+            </span>
+            <Pencil size={18} aria-hidden="true" />
+          </Link>
 
-      <div className="settings-layout">
-        <div className="settings-main">
-          <section className="settings-card panel">
-            <SettingsHeading icon={<CloudUpload size={17} />} title="Đồng bộ & bản sao" description="Chuyển dữ liệu giữa điện thoại và laptop, xem ngày giờ cập nhật và chọn phiên bản muốn khôi phục." />
-            <button className="settings-action" onClick={() => navigate('/app/sync')}><CloudUpload size={16} /> Mở lịch sử bản sao</button>
-          </section>
-          <section className="settings-card panel">
-            <SettingsHeading
-              icon={<UserRound size={17} />}
-              title="Tài khoản cá nhân"
-              description="Thông tin này dùng để hiển thị lời chào và nhận diện không gian của bạn."
-            />
-            <div className="settings-profile">
-              <span className="large-avatar">{name.charAt(0).toUpperCase() || 'C'}</span>
-              <div>
-                <strong>{name || 'Người dùng CapMoney'}</strong>
-                <small>{user?.email}</small>
-              </div>
-            </div>
-            <div className="settings-fields">
-              <label className="select-field">
-                <span>Họ tên</span>
-                <input value={name} onChange={event => setName(event.target.value)} placeholder="Nhập họ tên" />
-              </label>
-              <label className="select-field">
-                <span>Số điện thoại</span>
-                <input value={phone} onChange={event => setPhone(event.target.value)} placeholder="Chưa cập nhật" />
-              </label>
-            </div>
-            <button className="settings-save" disabled={saving} onClick={() => void saveProfile()}>
-              {saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />} Lưu thông tin
-            </button>
-          </section>
-
-          <section className="settings-card panel">
-            <SettingsHeading
-              icon={<Globe2 size={17} />}
-              title="Hiển thị và tiền tệ"
-              description="Cách ngày giờ và số tiền được hiển thị trong ứng dụng."
-            />
-            <div className="settings-fields">
-              <label className="select-field">
-                <span>Đơn vị tiền tệ</span>
-                <select value={currency} onChange={event => setCurrency(event.target.value)}>
-                  <option value="VND">VND — Việt Nam đồng</option>
-                  <option value="USD">USD — Đô la Mỹ</option>
-                </select>
-              </label>
-              <label className="select-field">
-                <span>Múi giờ</span>
-                <select value={timezone} onChange={event => setTimezone(event.target.value)}>
-                  <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
-                  <option value="Asia/Bangkok">Asia/Bangkok (GMT+7)</option>
-                  <option value="UTC">UTC</option>
-                </select>
-              </label>
-            </div>
-            <div className="appearance-row">
-              <span className="settings-row-icon">
-                <Sun size={16} />
-              </span>
-              <span>
-                <strong>Giao diện tối</strong>
-                <small>Tối ưu hiển thị dịu mắt theo phong cách CapMoney.</small>
-              </span>
-              <button
-                type="button"
-                className={`toggle ${darkMode ? 'on' : ''}`}
-                aria-label="Bật hoặc tắt giao diện tối"
-                onClick={() => setDarkMode(value => !value)}
-              >
-                <i />
-              </button>
-            </div>
-          </section>
-
-          <section className="settings-card panel">
-            <SettingsHeading
-              icon={<KeyRound size={17} />}
-              title="Bảo mật"
-              description="Đổi mật khẩu định kỳ để bảo vệ dữ liệu tài chính."
-            />
-            <div className="settings-fields">
-              <label className="select-field">
-                <span>Mật khẩu hiện tại</span>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={event => setCurrentPassword(event.target.value)}
-                  placeholder="Nhập mật khẩu hiện tại"
-                />
-              </label>
-              <label className="select-field">
-                <span>Mật khẩu mới</span>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={event => setNewPassword(event.target.value)}
-                  placeholder="Ít nhất 8 ký tự"
-                />
-              </label>
-            </div>
-            <button
-              className="settings-save"
-              disabled={passwordSaving || !currentPassword || !newPassword}
-              onClick={() => void savePassword()}
-            >
-              {passwordSaving ? <LoaderCircle size={16} className="spin" /> : <ShieldCheck size={16} />} Đổi mật khẩu
-            </button>
-          </section>
-        </div>
-
-        <aside className="settings-side">
-          <section className="settings-card panel settings-install-card">
-            <SettingsHeading
-              icon={<Smartphone size={17} />}
-              title="Đưa CapMoney ra màn hình chính"
-              description={isHomeScreenApp() ? 'CapMoney đã được cài như một ứng dụng trên thiết bị này.' : 'Mở nhanh CapMoney như một ứng dụng riêng, không cần tìm lại trong Safari.'}
-            />
-            {isHomeScreenApp() ? (
-              <p className="settings-install-ready">✓ CapMoney đang chạy từ màn hình chính.</p>
-            ) : (
-              <ol className="settings-install-steps">
-                <li>Mở CapMoney bằng Safari trên địa chỉ HTTPS.</li>
-                <li>Nhấn <strong>Chia sẻ</strong> rồi chọn <strong>Thêm vào Màn hình chính</strong>.</li>
-                <li>Nhấn <strong>Thêm</strong>, sau đó mở CapMoney từ biểu tượng mới.</li>
-              </ol>
-            )}
-          </section>
-
-          <section className="settings-card panel">
-            <SettingsHeading
-              icon={<Bell size={17} />}
-              title="Thông báo"
-              description="Bật hoặc tắt các nhắc nhở thông minh trong ứng dụng."
-            />
-            <button type="button" className="settings-check-btn" role="switch" aria-checked={bankPush} aria-busy={bankPushBusy}
-              aria-label="Thông báo tiền vào và tiền ra MB Bank" onClick={() => void toggleBankPush()}>
-              <span className={`check-box ${bankPush ? 'checked' : ''}`}>
-                {bankPushBusy ? <LoaderCircle size={13} className="spin" /> : bankPush && <Check size={13} />}
-              </span>
-              <span>Thông báo tiền vào và tiền ra MB Bank</span>
-            </button>
-            <button type="button" className="settings-action" disabled={!bankPush || bankPushTestBusy} onClick={() => void sendBankPushTest()}>
-              {bankPushTestBusy ? <LoaderCircle size={15} className="spin" /> : <Bell size={15} />} Gửi thử thông báo trên thiết bị này
-            </button>
-            <p className={`settings-push-status ${bankPushConfig?.enabled ? 'ready' : 'blocked'}`} role="status">
-              {bankPushConfig === null
-                ? 'Đang kiểm tra kết nối thông báo…'
-                : bankPushConfig.enabled
-                  ? 'Máy chủ đã sẵn sàng gửi thông báo.'
-                  : 'Máy chủ chưa có cấu hình VAPID. Hãy thêm VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY và VAPID_SUBJECT trên Vercel.'}
-            </p>
-            <p className="page-subtitle">Nhận thông báo trên thiết bị này kể cả khi đóng trang. Với iPhone/iPad, hãy dùng Safari trên HTTPS, chọn Chia sẻ → Thêm vào Màn hình chính, rồi mở CapMoney từ biểu tượng ứng dụng{supportsBankPush() && !isHomeScreenApp() ? ' (hiện tại chưa mở ở chế độ ứng dụng)' : ''}.</p>
-            <button
-              type="button"
-              className="settings-check-btn"
-              onClick={() => {
-                const next = !remindRecord;
-                setRemindRecord(next);
-                localStorage.setItem('capmoney-remind-record', String(next));
-                setNotice('Đã lưu tùy chọn thông báo.');
-              }}
-            >
-              <span className={`check-box ${remindRecord ? 'checked' : ''}`}>
-                {remindRecord && <Check size={13} />}
-              </span>
-              <span>Nhắc ghi chép giao dịch hàng ngày</span>
-            </button>
-            <button
-              type="button"
-              className="settings-check-btn"
-              onClick={() => {
-                const next = !remindBill;
-                setRemindBill(next);
-                localStorage.setItem('capmoney-remind-bill', String(next));
-                setNotice('Đã lưu tùy chọn thông báo.');
-              }}
-            >
-              <span className={`check-box ${remindBill ? 'checked' : ''}`}>
-                {remindBill && <Check size={13} />}
-              </span>
-              <span>Nhắc lịch thanh toán hóa đơn</span>
-            </button>
-          </section>
-
-          <section className="settings-card panel">
-            <SettingsHeading
-              icon={<FileText size={17} />}
-              title="Dữ liệu cá nhân"
-              description="Tải xuống bản sao toàn bộ lịch sử giao dịch của bạn."
-            />
-            <button className="settings-action" onClick={() => void exportData()}>
-              <Download size={15} /> Xuất CSV giao dịch
-            </button>
-          </section>
-
-          <section className="settings-card panel">
-            <SettingsHeading
-              icon={<ShieldCheck size={17} />}
-              title="Phiên đăng nhập"
-              description={`${sessions.length} thiết bị đang hoạt động.`}
-            />
-            {sessions.slice(0, 3).map(session => (
-              <div className="session-row" key={session.id}>
-                <span className="session-dot" />
-                <span>
-                  <strong>{session.deviceName || 'Trình duyệt'}</strong>
-                  <small>{session.current ? 'Thiết bị hiện tại' : new Date(session.lastActiveAt).toLocaleDateString('vi-VN')}</small>
-                </span>
-              </div>
-            ))}
-            <button
-              className="settings-action muted"
-              onClick={async () => {
-                await api.logoutOthers();
-                setNotice('Đã đăng xuất các thiết bị khác.');
-                const result = await api.sessions();
-                setSessions(result.sessions);
-              }}
-            >
-              <LogOut size={15} /> Đăng xuất thiết bị khác
-            </button>
-          </section>
-
+          <SettingsGroup title="Tùy chọn">
+            <SettingsLink section="appearance" icon={<Globe2 size={19} />} detail={themeLabel} />
+            <SettingsLink section="notifications" icon={<Bell size={19} />} detail="MB Bank và nhắc nhở" />
+            <SettingsLink section="install" icon={<Smartphone size={19} />} detail={installed ? 'Đã cài đặt' : undefined} />
+          </SettingsGroup>
+          <SettingsGroup title="Tài khoản và bảo mật">
+            <SettingsLink section="password" icon={<KeyRound size={19} />} />
+            <SettingsLink section="sessions" icon={<ShieldCheck size={19} />} />
+          </SettingsGroup>
+          <SettingsGroup title="Dữ liệu">
+            <SettingsLink to="/app/sync" title="Đồng bộ và bản sao" icon={<CloudUpload size={19} />} />
+            <SettingsLink section="data" icon={<Download size={19} />} detail="Lịch sử giao dịch CSV" />
+          </SettingsGroup>
           <button
-            className="logout-settings"
+            type="button"
+            className="cm-settings-button is-danger"
             onClick={async () => {
               await logout();
               navigate('/login');
             }}
           >
-            <LogOut size={15} /> Đăng xuất tài khoản
+            <LogOut size={18} aria-hidden="true" /> Đăng xuất
           </button>
-        </aside>
-      </div>
+        </>
+      )}
+
+      {section === 'profile' && (
+        <form className="cm-settings-detail" onSubmit={event => { event.preventDefault(); void saveProfile('profile'); }}>
+          <label className="cm-settings-field">
+            Họ tên
+            <input value={name} disabled={!savedSettings || saving} onChange={event => setName(event.target.value)} autoComplete="name" required />
+          </label>
+          <label className="cm-settings-field">
+            Số điện thoại
+            <input type="tel" value={phone} disabled={!savedSettings || saving} onChange={event => setPhone(event.target.value)} autoComplete="tel" placeholder="Chưa cập nhật" />
+          </label>
+          <button className="cm-settings-button is-primary" disabled={!savedSettings || saving}>
+            {saving ? 'Đang lưu…' : 'Lưu hồ sơ'}
+          </button>
+        </form>
+      )}
+
+      {section === 'appearance' && (
+        <>
+          <div className="cm-settings-list">
+            <button
+              type="button"
+              className="cm-settings-row"
+              aria-haspopup="dialog"
+              aria-expanded={themePickerOpen}
+              onClick={() => setThemePickerOpen(true)}
+            >
+              <span className="cm-settings-copy"><strong>Chủ đề màu</strong><small>{themeLabel}</small></span>
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>
+            <SettingsSwitch label="Giao diện tối" checked={darkMode} onClick={() => setDarkMode(value => !value)} />
+          </div>
+          <form className="cm-settings-detail" onSubmit={event => { event.preventDefault(); void saveProfile('appearance'); }}>
+            <label className="cm-settings-field">
+              Đơn vị tiền tệ
+              <select value={currency} disabled={!savedSettings || saving} onChange={event => setCurrency(event.target.value)}>
+                <option value="VND">VND — Việt Nam đồng</option>
+                <option value="USD">USD — Đô la Mỹ</option>
+              </select>
+            </label>
+            <label className="cm-settings-field">
+              Múi giờ
+              <select value={timezone} disabled={!savedSettings || saving} onChange={event => setTimezone(event.target.value)}>
+                <option value="Asia/Ho_Chi_Minh">Việt Nam (GMT+7)</option>
+                <option value="Asia/Bangkok">Bangkok (GMT+7)</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </label>
+            <button className="cm-settings-button is-primary" disabled={!savedSettings || saving}>
+              {saving ? 'Đang lưu…' : 'Lưu khu vực'}
+            </button>
+          </form>
+          {themePickerOpen && <HomeThemePicker selected={theme} onSelect={setTheme} onClose={() => setThemePickerOpen(false)} />}
+        </>
+      )}
+
+      {section === 'notifications' && (
+        <>
+          <SettingsGroup title="MB Bank">
+            <SettingsSwitch label="Thông báo tiền vào và tiền ra MB Bank" checked={bankPush} busy={bankPushBusy} onClick={() => void toggleBankPush()} />
+          </SettingsGroup>
+          <div className="cm-settings-detail">
+            <p role="status">
+              {bankPushBusy ? 'Đang kiểm tra thông báo…' : bankPushConfig?.enabled
+                ? 'Máy chủ đã sẵn sàng gửi thông báo.'
+                : 'Chưa xác nhận máy chủ có thể gửi thông báo.'}
+            </p>
+            {!installed && <p>Trên iPhone hoặc iPad, hãy mở CapMoney từ biểu tượng đã thêm vào màn hình chính để bật thông báo.</p>}
+            <button type="button" className="cm-settings-button" disabled={!bankPush || bankPushBusy || bankPushTestBusy} onClick={() => void sendBankPushTest()}>
+              <Bell size={17} aria-hidden="true" /> {bankPushTestBusy ? 'Đang gửi…' : 'Gửi thông báo thử'}
+            </button>
+          </div>
+          <SettingsGroup title="Nhắc nhở">
+            <SettingsSwitch label="Ghi chép giao dịch hằng ngày" checked={remindRecord} onClick={() => {
+              setRemindRecord(!remindRecord);
+              localStorage.setItem('capmoney-remind-record', String(!remindRecord));
+            }} />
+            <SettingsSwitch label="Lịch thanh toán hóa đơn" checked={remindBill} onClick={() => {
+              setRemindBill(!remindBill);
+              localStorage.setItem('capmoney-remind-bill', String(!remindBill));
+            }} />
+          </SettingsGroup>
+        </>
+      )}
+
+      {section === 'install' && (
+        <div className="cm-settings-detail">
+          {installed ? <p>CapMoney đang chạy từ màn hình chính.</p> : (
+            <ol className="cm-settings-steps">
+              <li>Mở CapMoney trong Safari trên iPhone hoặc iPad.</li>
+              <li>Nhấn <strong>Chia sẻ</strong>, rồi chọn <strong>Thêm vào Màn hình chính</strong>.</li>
+              <li>Nhấn <strong>Thêm</strong> và mở CapMoney từ biểu tượng mới.</li>
+            </ol>
+          )}
+        </div>
+      )}
+
+      {section === 'password' && (
+        <form className="cm-settings-detail" onSubmit={event => { event.preventDefault(); void savePassword(); }}>
+          <label className="cm-settings-field">
+            Mật khẩu hiện tại
+            <input type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} required />
+          </label>
+          <label className="cm-settings-field">
+            Mật khẩu mới
+            <input type="password" autoComplete="new-password" value={newPassword} onChange={event => setNewPassword(event.target.value)} minLength={8} placeholder="Ít nhất 8 ký tự" required />
+          </label>
+          <button className="cm-settings-button is-primary" disabled={passwordSaving || !currentPassword || !newPassword}>
+            {passwordSaving ? 'Đang lưu…' : 'Đổi mật khẩu'}
+          </button>
+        </form>
+      )}
+
+      {section === 'sessions' && (
+        <>
+          <div className="cm-settings-list">
+            {sessions.length ? sessions.map(session => (
+              <div className="cm-settings-row" key={session.id}>
+                <span className="cm-settings-icon"><Monitor size={19} aria-hidden="true" /></span>
+                <span className="cm-settings-copy">
+                  <strong>{session.deviceName || 'Trình duyệt'}</strong>
+                  <small>{session.current ? 'Thiết bị hiện tại' : new Date(session.lastActiveAt).toLocaleDateString('vi-VN')}</small>
+                </span>
+              </div>
+            )) : <p className="cm-settings-empty">Không có thiết bị để hiển thị.</p>}
+          </div>
+          <button className="cm-settings-button" type="button" disabled={sessionsBusy || !sessions.some(session => !session.current)} onClick={() => void logoutOtherDevices()}>
+            <LogOut size={18} aria-hidden="true" /> {sessionsBusy ? 'Đang đăng xuất…' : 'Đăng xuất thiết bị khác'}
+          </button>
+        </>
+      )}
+
+      {section === 'data' && (
+        <div className="cm-settings-detail">
+          <p>Tải lịch sử giao dịch của bạn dưới dạng CSV.</p>
+          <button className="cm-settings-button is-primary" type="button" disabled={exporting} onClick={() => void exportData()}>
+            <Download size={18} aria-hidden="true" /> {exporting ? 'Đang xuất…' : 'Tải file CSV'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function SettingsHeading({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="settings-heading">
-      <span>{icon}</span>
-      <div>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
-    </div>
+    <section className="cm-settings-group">
+      <h2>{title}</h2>
+      <div className="cm-settings-list">{children}</div>
+    </section>
   );
 }
 
-function categoryLabel(value: string) {
+type SettingsLinkProps = { icon: ReactNode; detail?: string } & (
+  { section: SettingsSection; to?: never; title?: never } |
+  { section?: never; to: string; title: string }
+);
+
+function SettingsLink({ section, to, title, icon, detail }: SettingsLinkProps) {
   return (
-    ({
-      food: 'Ăn uống',
-      shopping: 'Mua sắm',
-      transport: 'Di chuyển',
-      entertainment: 'Giải trí',
-      bills: 'Hóa đơn',
-      health: 'Sức khỏe',
-      salary: 'Lương',
-      bonus: 'Thưởng',
-      investment: 'Đầu tư',
-      gift: 'Được tặng',
-      other: 'Khác',
-      transfer: 'Chuyển tiền',
-    } as Record<string, string>)[value] ?? 'Khác'
+    <Link className="cm-settings-row" to={to ?? `?section=${section}`} state={section ? { fromSettings: true } : undefined}>
+      <span className="cm-settings-icon" aria-hidden="true">{icon}</span>
+      <span className="cm-settings-copy">
+        <strong>{section ? settingsSections[section] : title}</strong>
+        {detail && <small>{detail}</small>}
+      </span>
+      <ChevronRight size={18} aria-hidden="true" />
+    </Link>
+  );
+}
+
+function SettingsSwitch({ label, checked, busy, onClick }: { label: string; checked: boolean; busy?: boolean; onClick: () => void }) {
+  return (
+    <button className="cm-settings-row" type="button" role="switch" aria-checked={checked} aria-busy={busy} disabled={busy} onClick={onClick}>
+      <span className="cm-settings-copy"><strong>{label}</strong></span>
+      {busy ? <LoaderCircle size={20} className="spin" aria-hidden="true" /> : <span className="cm-settings-switch" aria-hidden="true" />}
+    </button>
   );
 }
 

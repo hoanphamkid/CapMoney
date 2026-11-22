@@ -34,11 +34,23 @@ test('applies a home theme on mobile and remembers it after reload', async ({ pa
 
   await page.goto('/app/settings');
   await expect(page.locator('.cm-app-shell')).toHaveAttribute('data-app-theme', 'sleepy-cat');
-  await expect(page.locator('.settings-hero')).toHaveCSS('background-color', 'rgb(255, 250, 243)');
-  await expect(page.locator('.settings-card').first()).toHaveCSS('background-color', 'rgb(255, 250, 243)');
-  await expect(page.locator('.settings-redesign .select-field input').first()).toHaveCSS('background-color', 'rgb(246, 225, 204)');
-  await expect(page.locator('.settings-redesign .settings-heading h2').first()).toHaveCSS('color', 'rgb(70, 44, 36)');
-  await expect(page.locator('.settings-redesign .settings-action').first()).toHaveCSS('background-color', 'rgb(149, 78, 50)');
+  const profileLink = page.getByRole('link', { name: /Chỉnh sửa hồ sơ/ });
+  await expect(profileLink).toHaveCSS('background-color', 'rgb(149, 78, 50)');
+  await expect(page.locator('.cm-settings-list').first()).toHaveCSS('background-color', 'rgb(255, 250, 243)');
+  await expect(page.getByLabel('Họ tên')).toHaveCount(0);
+  await expect(page.getByLabel('Mật khẩu mới')).toHaveCount(0);
+  await profileLink.click();
+  await expect(page.getByRole('heading', { name: 'Hồ sơ cá nhân' })).toBeFocused();
+  await expect(page.getByLabel('Họ tên')).toHaveCSS('background-color', 'rgb(246, 225, 204)');
+  await expect(page.getByRole('button', { name: 'Lưu hồ sơ' })).toHaveCSS('background-color', 'rgb(149, 78, 50)');
+  await page.getByRole('button', { name: 'Quay lại danh sách cài đặt' }).click();
+  await expect(profileLink).toBeVisible();
+  await expect(page.getByLabel('Họ tên')).toHaveCount(0);
+  const settingsFit = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(await settingsFit()).toBe(true);
+  await page.setViewportSize({ width: 1024, height: 820 });
+  expect(await settingsFit()).toBe(true);
+  await page.setViewportSize({ width: 320, height: 650 });
   await page.goto('/app/dashboard');
   await expect(page.locator('.metric-card').first()).toHaveCSS('background-color', 'rgb(255, 250, 243)');
   await expect(page.locator('.cm-report').first()).toHaveCSS('background-color', 'rgb(255, 250, 243)');
