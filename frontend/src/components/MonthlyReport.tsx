@@ -169,6 +169,8 @@ export function MonthlyReport({
   const flowTotal = flowType === 'income' ? report.income : report.expense;
   const visibleBreakdown = flowType === 'income' ? report.incomeCategories : visibleCategories;
   const visibleTotal = flowType === 'income' ? report.income : visibleExpense;
+  const activeCategory = flowType === 'income' ? incomeCategory : selectedCategory;
+  const categoryLabels = flowType === 'income' ? INCOME_CATEGORY_LABELS : CATEGORY_LABELS;
   const activeIncomeCategoryName = incomeCategory === 'all' ? 'Tất cả tiền vào' : INCOME_CATEGORY_LABELS[incomeCategory] ?? 'Thu khác';
   const largestTransaction = report.reportTxs.reduce((largest, tx) => tx.amount > (largest?.amount ?? 0) ? tx : largest, null as Transaction | null);
   const daysInView = selectedPeriod?.days ?? new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
@@ -204,6 +206,11 @@ export function MonthlyReport({
   const maxTrend = Math.max(1, ...trend.map(t => Math.max(showIncomeTrend ? t.income : 0, showExpenseTrend ? t.expense : 0)));
   const budgetPct = budget.monthlyLimit > 0 ? Math.min(100, (report.expense / budget.monthlyLimit) * 100) : 0;
   const budgetState = budgetPct >= 100 ? 'over' : budgetPct >= 80 ? 'warn' : 'ok';
+
+  const changeCategory = (categoryId: string) => {
+    if (flowType === 'income') onFilterChange?.({ flowType, categoryId });
+    else onCategoryChange(categoryId);
+  };
 
   const exportCsv = () => {
     const header = 'Ngày,Loại,Danh mục,Ghi chú,Số tiền';
@@ -283,15 +290,11 @@ export function MonthlyReport({
         <label htmlFor="cm-report-category">{flowType === 'income' ? 'Loại tiền vào' : 'Danh mục chi'}</label>
         <select
           id="cm-report-category"
-          value={flowType === 'income' ? incomeCategory : selectedCategory}
-          onChange={event => {
-            const categoryId = event.target.value;
-            if (flowType === 'income') onFilterChange?.({ flowType: 'income', categoryId });
-            else onCategoryChange(categoryId);
-          }}
+          value={activeCategory}
+          onChange={event => changeCategory(event.target.value)}
         >
           <option value="all">{flowType === 'income' ? 'Tất cả loại thu' : 'Tất cả danh mục'}</option>
-          {Object.entries(flowType === 'income' ? INCOME_CATEGORY_LABELS : CATEGORY_LABELS).map(([id, label]) => (
+          {Object.entries(categoryLabels).map(([id, label]) => (
             <option key={id} value={id}>{label}</option>
           ))}
         </select>
@@ -380,19 +383,29 @@ export function MonthlyReport({
           {visibleBreakdown.length === 0 && <li className="cm-report-category-empty">
             Chưa có {flowType === 'income' ? (incomeCategory === 'all' ? 'tiền vào' : activeIncomeCategoryName.toLowerCase()) : (selectedCategory === 'all' ? 'khoản chi' : `khoản chi ${categoryName}`)} {dateRange ? 'trong khoảng đã chọn.' : 'trong tháng này.'}
           </li>}
-          {visibleBreakdown.map(c => (
-            <li key={c.id}>
-              <button type="button" className="cm-report-category-row" onClick={() => flowType === 'income' ? onFilterChange?.({ flowType: 'income', categoryId: c.id }) : onCategoryChange(c.id)} aria-label={`Lọc ${flowType === 'income' ? 'loại tiền vào' : 'danh mục'} ${flowType === 'income' ? INCOME_CATEGORY_LABELS[c.id] ?? 'Thu khác' : CATEGORY_LABELS[c.id] ?? 'Khác'}`}>
-                <i style={{ background: c.color }} />
-                <span>{flowType === 'income' ? INCOME_CATEGORY_LABELS[c.id] ?? 'Thu khác' : CATEGORY_LABELS[c.id] ?? 'Khác'}</span>
-                <b>{Math.round(c.pct)}%</b>
-                <small className={c.limit > 0 && c.amount > c.limit ? 'over' : ''}>
-                  {money(c.amount)}
-                  {c.limit > 0 && c.amount > c.limit ? ' ⚠' : ''}
-                </small>
-              </button>
-            </li>
-          ))}
+          {visibleBreakdown.map(c => {
+            const label = categoryLabels[c.id] ?? (flowType === 'income' ? 'Thu khác' : 'Khác');
+            const selected = activeCategory === c.id;
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  className="cm-report-category-row"
+                  aria-label={`Lọc ${flowType === 'income' ? 'loại tiền vào' : 'danh mục'} ${label}`}
+                  aria-pressed={selected}
+                  onClick={() => changeCategory(selected ? 'all' : c.id)}
+                >
+                  <i style={{ background: c.color }} />
+                  <span>{label}</span>
+                  <b>{Math.round(c.pct)}%</b>
+                  <small className={c.limit > 0 && c.amount > c.limit ? 'over' : ''}>
+                    {money(c.amount)}
+                    {c.limit > 0 && c.amount > c.limit ? ' ⚠' : ''}
+                  </small>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </div>
 

@@ -52,6 +52,14 @@ test('filters income and expenses by time across month boundaries and restores t
   expect(csv).not.toContain('Lương quá 30 ngày');
   expect(csv).not.toContain('Thưởng hôm nay');
 
+  const salary = page.getByRole('button', { name: 'Lọc loại tiền vào Lương', exact: true });
+  await expect(salary).toHaveAttribute('aria-pressed', 'true');
+  await salary.click();
+  await expect(page.getByRole('combobox', { name: 'Loại tiền vào' })).toHaveValue('all');
+  await expect(recent).toContainText('Thưởng hôm nay');
+  await expect(periods.getByRole('button', { name: /^1 tháng/ })).toHaveAttribute('aria-pressed', 'true');
+  await salary.click();
+
   await page.getByRole('button', { name: 'Bỏ lọc thời gian' }).click();
   await expect(page.getByRole('heading', { name: 'Báo cáo tháng' })).toBeVisible();
   await expect(recent.getByRole('button')).toHaveCount(4);
@@ -65,6 +73,18 @@ test('filters income and expenses by time across month boundaries and restores t
   await week.click();
   await expect(week).toHaveAttribute('aria-pressed', 'false');
   await expect(summary).toContainText('130.000');
+  const food = page.getByRole('button', { name: 'Lọc danh mục Ăn uống', exact: true });
+  await expect(food).toHaveAttribute('aria-pressed', 'true');
+  await food.click();
+  await expect(page.getByRole('combobox', { name: 'Danh mục chi' })).toHaveValue('all');
+  await expect(page.getByText('Xu hướng 6 tháng', { exact: true })).toBeVisible();
+  await expect(recent).toContainText('Mua áo hôm nay');
+  await food.click();
+  await expect(page.getByText('Xu hướng chi Ăn uống · 6 tháng', { exact: true })).toBeVisible();
+  await expect(recent).not.toContainText('Mua áo hôm nay');
+  await food.click();
+  await expect(food).toHaveAttribute('aria-pressed', 'false');
+  await expect(recent).toContainText('Mua áo hôm nay');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 

@@ -5246,7 +5246,7 @@ html:not(.dark-theme) .cm-app-shell {
   transition: background 0.18s ease;
 }
 
-.cm-report-category-row:hover {
+.cm-report-category-row:is(:hover, [aria-pressed="true"]) {
   background: rgba(110, 162, 220, 0.1);
 }
 

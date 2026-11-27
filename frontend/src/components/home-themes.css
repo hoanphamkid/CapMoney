@@ -781,7 +781,7 @@
   color: var(--home-muted) !important;
 }
 
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-category-row:hover {
+.cm-app-shell[data-app-theme] .dashboard-page .cm-report-category-row:is(:hover, [aria-pressed="true"]) {
   background: color-mix(in srgb, var(--home-accent) 8%, var(--home-panel)) !important;
 }
 
