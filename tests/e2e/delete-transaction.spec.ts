@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 const transaction = {
   id: '507f1f77bcf86cd799439011', type: 'expense', amount: 3000, amountMinor: 300000,

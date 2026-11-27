@@ -8,6 +8,7 @@ import { WalletModel } from '../models/Wallet.js';
 import { deletePrivateImage, saveBufferImage } from '../services/storageService.js';
 import { BankWebhookError, bankCategory, bankWalletId, parseBankTransactions, verifyBankWebhook } from '../utils/bankWebhook.js';
 import { sendBankNotifications } from '../services/bankNotificationService.js';
+import { settleProFromBankDelivery } from '../services/proPaymentSettlement.js';
 
 function formatVND(amount: number): string {
   return amount.toLocaleString('vi-VN');
@@ -206,6 +207,7 @@ export const handleMbBankWebhook: RequestHandler = async (request, response) => 
       await Promise.all(imageKeys.filter(key => !keep.has(key)).map(key => deletePrivateImage(key)));
     }
     await sendBankNotifications(mongoose.connection.db!, String(userId), results);
+    await settleProFromBankDelivery(UserModel.collection, request.body);
     response.status(200).json({ success: true, message: 'Đã ghi nhận giao dịch MB Bank.', transaction: results[0], transactions: results });
   } catch (error) {
     if (error instanceof BankWebhookError) throw new AppError(error.status, error.message, error.code);

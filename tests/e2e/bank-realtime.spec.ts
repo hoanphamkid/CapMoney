@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 const user = { id: 'bank-owner', email: 'bank@example.test', name: 'Bank Owner', role: 'user' };
 type BankTransaction = { id: string; type: string; amount: number; amountMinor: number; note: string; categoryId: string; walletId: string; dateKey: string; transactionTime: string; source: string; status: string; imageUrl: null };
@@ -73,7 +73,7 @@ test('catches up after reconnecting without notifying about old transactions', a
 test('refreshes statistics when a bank event arrives', async ({ page }) => {
   const state = await fixture(page);
   await page.goto('/app/dashboard');
-  await expect(page.getByRole('heading', { name: /Bank Owner|Owner/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thống kê', exact: true })).toBeVisible();
   await emit(page, 'bank-transaction', state.add('income', 45000));
   await expect(page.locator('.cm-recent-row')).toContainText('MB Bank income');
 });

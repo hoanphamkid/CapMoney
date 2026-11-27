@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { changePassword, login, logout, logoutOtherSessions, me, refresh, register, sessions, updateMe } from '../controllers/authController.js';
+import { createProOrder, getProCheckout } from '../controllers/proPayments.js';
 import { requireAuth } from '../middleware/auth.js';
 
 export const authRouter = Router();
@@ -9,6 +10,8 @@ authRouter.post('/refresh', refresh);
 authRouter.post('/logout', logout);
 authRouter.get('/me', requireAuth, me);
 authRouter.patch('/me', requireAuth, updateMe);
+authRouter.get('/pro', requireAuth, getProCheckout);
+authRouter.post('/pro', requireAuth, createProOrder);
 authRouter.post('/password', requireAuth, changePassword);
 authRouter.get('/sessions', requireAuth, sessions);
 authRouter.delete('/sessions/others', requireAuth, logoutOtherSessions);

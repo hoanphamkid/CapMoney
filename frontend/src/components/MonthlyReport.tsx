@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Download, ListFilter, TrendingDown, TrendingUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, TrendingDown, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Transaction } from '../services/api';
 import { CATEGORY_LABELS as SHARED_CATEGORY_LABELS, INCOME_CATEGORY_LABELS as SHARED_INCOME_CATEGORY_LABELS } from '../constants/categories';
@@ -232,12 +232,9 @@ export function MonthlyReport({
   };
 
   return (
-    <section className="panel cm-report" style={{ marginTop: 16 }}>
+    <section className="panel cm-report" aria-labelledby="cm-report-title">
       <div className="panel-head">
-        <div>
-          <h2>{dateRange ? 'Báo cáo theo thời gian' : 'Báo cáo chi tiêu tháng'}</h2>
-          <p>{dateRange ? 'Tổng hợp dòng tiền theo khoảng đã chọn' : 'Phân tích theo danh mục, so sánh và dự báo'}</p>
-        </div>
+        <h2 id="cm-report-title">{dateRange ? 'Báo cáo theo thời gian' : 'Báo cáo tháng'}</h2>
         <button type="button" className="outline-button small" onClick={exportCsv} aria-label={dateRange ? 'Xuất CSV theo thời gian đã chọn' : selectedCategory === 'all' ? 'Xuất CSV tháng này' : `Xuất CSV ${categoryName}`}>
           <Download size={14} /> CSV
         </button>
@@ -249,7 +246,7 @@ export function MonthlyReport({
         <button type="button" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} aria-label="Tháng trước">
           <ChevronLeft size={16} />
         </button>
-        <strong>
+        <strong aria-live="polite">
           Tháng {cursor.getMonth() + 1}/{cursor.getFullYear()}
         </strong>
         <button type="button" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} aria-label="Tháng sau">
@@ -259,21 +256,20 @@ export function MonthlyReport({
 
       <div className="cm-report-summary">
         <div>
-          <small>Tổng chi</small>
-          <strong className="expense-text">−{money(report.expense)}</strong>
-        </div>
-        <div>
           <small>Tổng thu</small>
           <strong className="income-text">+{money(report.income)}</strong>
         </div>
         <div>
-          <small>Tiết kiệm được</small>
+          <small>Tổng chi</small>
+          <strong className="expense-text">−{money(report.expense)}</strong>
+        </div>
+        <div>
+          <small>Chênh lệch</small>
           <strong>{money(report.income - report.expense)}</strong>
         </div>
       </div>
 
       <div className="cm-report-flow-filter" role="group" aria-label="Lọc dòng tiền">
-        <span>Lọc dòng tiền</span>
         <div>
           {(['all', 'expense', 'income'] as const).map(value => (
             <button key={value} type="button" aria-pressed={flowType === value} onClick={() => { onCategoryChange('all'); onFilterChange?.({ flowType: value, categoryId: 'all' }); }}>
@@ -283,23 +279,23 @@ export function MonthlyReport({
         </div>
       </div>
 
-      {flowType === 'income' && (
-        <div className="cm-report-income-filter">
-          <div className="cm-report-filter-heading">
-            <strong><ListFilter size={16} /> Lọc riêng tiền vào</strong>
-            {incomeCategory !== 'all' && <button type="button" onClick={() => onFilterChange?.({ flowType: 'income', categoryId: 'all' })}>Bỏ lọc</button>}
-          </div>
-          <div className="cm-report-category-chips" role="group" aria-label="Lọc báo cáo theo loại tiền vào">
-            <button type="button" aria-pressed={incomeCategory === 'all'} onClick={() => onFilterChange?.({ flowType: 'income', categoryId: 'all' })}>Tất cả</button>
-            {Object.entries(INCOME_CATEGORY_LABELS).map(([id, label]) => (
-              <button type="button" key={id} aria-pressed={incomeCategory === id} onClick={() => onFilterChange?.({ flowType: 'income', categoryId: id })}>
-                <i style={{ background: INCOME_CATEGORY_COLORS[id] }} aria-hidden="true" />{label}
-              </button>
-            ))}
-          </div>
-          <p>Chọn loại tiền vào để lọc tổng tiền, biểu đồ và giao dịch.</p>
-        </div>
-      )}
+      <div className="cm-report-category-picker">
+        <label htmlFor="cm-report-category">{flowType === 'income' ? 'Loại tiền vào' : 'Danh mục chi'}</label>
+        <select
+          id="cm-report-category"
+          value={flowType === 'income' ? incomeCategory : selectedCategory}
+          onChange={event => {
+            const categoryId = event.target.value;
+            if (flowType === 'income') onFilterChange?.({ flowType: 'income', categoryId });
+            else onCategoryChange(categoryId);
+          }}
+        >
+          <option value="all">{flowType === 'income' ? 'Tất cả loại thu' : 'Tất cả danh mục'}</option>
+          {Object.entries(flowType === 'income' ? INCOME_CATEGORY_LABELS : CATEGORY_LABELS).map(([id, label]) => (
+            <option key={id} value={id}>{label}</option>
+          ))}
+        </select>
+      </div>
 
       <div className="cm-report-insights">
         <div><small>Số giao dịch</small><strong>{report.reportTxs.length}</strong></div>
@@ -333,7 +329,7 @@ export function MonthlyReport({
         </div>
       </div>
 
-      {!dateRange && (
+      {!dateRange && flowType !== 'income' && (
         <>
           <div className={`cm-report-compare ${diff > 0 ? 'up' : 'down'}`}>
             {diff > 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
@@ -363,30 +359,15 @@ export function MonthlyReport({
         </>
       )}
 
-      {flowType !== 'income' && <div className="cm-report-category-filter">
-        <div className="cm-report-filter-heading">
-          <strong><ListFilter size={16} /> Lọc theo danh mục</strong>
-          {selectedCategory !== 'all' && <button type="button" onClick={() => onCategoryChange('all')}>Bỏ lọc</button>}
-        </div>
-        <div className="cm-report-category-chips" role="group" aria-label="Lọc báo cáo theo danh mục">
-          <button type="button" aria-pressed={selectedCategory === 'all'} onClick={() => onCategoryChange('all')}>Tất cả</button>
-          {Object.entries(CATEGORY_LABELS).map(([id, label]) => (
-            <button type="button" key={id} aria-pressed={selectedCategory === id} onClick={() => onCategoryChange(id)}>
-              <i style={{ background: CATEGORY_COLORS[id] }} aria-hidden="true" />{label}
-            </button>
-          ))}
-        </div>
-        <p>Áp dụng cho biểu đồ, xu hướng và giao dịch gần đây.</p>
-        {selectedCategory !== 'all' && (
-          <div className="cm-report-category-total" aria-live="polite">
-            <div><span>Chi cho {categoryName}</span><strong>−{money(visibleExpense)}</strong></div>
-            <div>
-              <span>{categoryTransactions.length} khoản chi {dateRange ? 'trong khoảng đã chọn' : 'trong tháng'}</span>
-              {!dateRange && <small>{report.expense > 0 ? Math.round((visibleExpense / report.expense) * 100) : 0}% tổng chi tháng này</small>}
-            </div>
+      {flowType !== 'income' && selectedCategory !== 'all' && (
+        <div className="cm-report-category-total" aria-live="polite">
+          <div><span>Chi cho {categoryName}</span><strong>−{money(visibleExpense)}</strong></div>
+          <div>
+            <span>{categoryTransactions.length} khoản chi {dateRange ? 'trong khoảng đã chọn' : 'trong tháng'}</span>
+            {!dateRange && <small>{report.expense > 0 ? Math.round((visibleExpense / report.expense) * 100) : 0}% tổng chi tháng này</small>}
           </div>
-        )}
-      </div>}
+        </div>
+      )}
 
       <div className="cm-report-donut-row">
         <div className="cm-report-donut" style={{ background: donut }}>

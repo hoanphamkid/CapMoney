@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 const cashId = '507f1f77bcf86cd799439012';
 const bankId = '507f1f77bcf86cd799439013';

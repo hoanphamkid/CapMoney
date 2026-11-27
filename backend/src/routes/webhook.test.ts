@@ -131,6 +131,29 @@ for (const [name, post] of [
       const unrelated = await WalletModel.findOne({ userId: owner, name: 'Vietcombank' }).lean();
       expect(unrelated!.balanceMinor).toBe(900000);
     });
+    it('confirms a Pro order through the linked MB Bank webhook', async () => {
+      const original = env.PRO_PAYMENT_USE_MBBANK_SYNC;
+      env.PRO_PAYMENT_USE_MBBANK_SYNC = 'true';
+      try {
+        const buyer = await UserModel.create({ email: `pro-${name.toLowerCase()}@example.test`, name: 'Pro buyer', passwordHash: 'test-only' });
+        const cookie = `capmoney_access=${signAccessToken({ sub: String(buyer._id), role: 'user' })}`;
+        const order = await request(app).post('/api/auth/pro').set('Cookie', cookie).send({});
+        expect(order.body).toMatchObject({ status: 'pending', order: { bankName: 'MB Bank', accountNumber: account, amount: 5000 } });
+
+        const receive = { ...payload(`${name}-pro`, 'in', 5000), content: order.body.order.code, id: 50_000 + ['Express', 'Vercel', 'VercelFrontend'].indexOf(name) };
+        const status = () => request(app).get('/api/auth/pro').set('Cookie', cookie);
+        expect((await post(receive, false)).status).toBe(401);
+        expect((await post({ ...receive, referenceCode: `${name}-pro-short`, transferAmount: 4999 })).status).toBe(200);
+        expect((await status()).body.status).toBe('pending');
+
+        expect((await post(receive)).status).toBe(200);
+        expect((await post(receive)).status).toBe(200);
+        expect((await status()).body).toEqual({ status: 'paid' });
+        expect(await TransactionModel.countDocuments({ userId: owner, amountMinor: 500000, note: receive.content })).toBe(1);
+      } finally {
+        env.PRO_PAYMENT_USE_MBBANK_SYNC = original;
+      }
+    });
     it('pushes committed income and expense once, only to the linked user devices', async () => {
       const keys = webPush.generateVAPIDKeys();
       Object.assign(process.env, { VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey, VAPID_SUBJECT: 'mailto:push@example.test' });

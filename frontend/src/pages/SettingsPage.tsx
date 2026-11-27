@@ -1,16 +1,21 @@
-import { ArrowLeft, Bell, Check, ChevronRight, CloudUpload, Download, Globe2, KeyRound, LoaderCircle, LogOut, Monitor, Pencil, ShieldCheck, Smartphone } from 'lucide-react';
+import { ArrowLeft, Bell, Camera, Check, ChevronRight, CloudUpload, Crown, Download, Globe2, KeyRound, LoaderCircle, LogOut, Monitor, Pencil, ShieldCheck, Smartphone } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { api, authenticatedRequest, type MeResponse } from '../services/api';
+import { api, authenticatedRequest } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppTheme } from '../contexts/ThemeContext';
 import { HOME_THEMES, HomeThemePicker } from '../components/HomeThemePicker';
+import { AccountAvatar } from '../components/AccountAvatar';
+import { ProCheckout } from '../components/ProCheckout';
 import { bankPushEnabled, disableBankPush, enableBankPush, getBankPushConfig, isHomeScreenApp, type BankPushConfig } from '../services/bankNotifications';
 import { ALL_CATEGORY_LABELS } from '../constants/categories';
+import { PRO_SETTINGS_PATH } from '../constants/pro';
+import { encodeAvatar } from '../services/avatarImage';
 import './settings-page.css';
 
 const settingsSections = {
   profile: 'Hồ sơ cá nhân',
+  pro: 'CapMoney Pro',
   appearance: 'Giao diện và khu vực',
   notifications: 'Thông báo',
   install: 'Thêm vào màn hình chính',
@@ -22,7 +27,7 @@ const settingsSections = {
 type SettingsSection = keyof typeof settingsSections;
 
 export function SettingsPage() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, profile, logout, updateProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -30,12 +35,13 @@ export function SettingsPage() {
   const heading = useRef<HTMLHeadingElement>(null);
   const { theme, setTheme } = useAppTheme();
   const [themePickerOpen, setThemePickerOpen] = useState(false);
-  const [savedSettings, setSavedSettings] = useState<MeResponse | null>(null);
-  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
-  const [currency, setCurrency] = useState('VND');
-  const [timezone, setTimezone] = useState('Asia/Ho_Chi_Minh');
+  const [currency, setCurrency] = useState(profile?.currency ?? 'VND');
+  const [timezone, setTimezone] = useState(profile?.timezone ?? 'Asia/Ho_Chi_Minh');
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const [avatarDraft, setAvatarDraft] = useState<string | null>();
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('capmoney-theme') !== 'light');
   const [remindRecord, setRemindRecord] = useState(() => localStorage.getItem('capmoney-remind-record') !== 'false');
   const [remindBill, setRemindBill] = useState(() => localStorage.getItem('capmoney-remind-bill') !== 'false');
@@ -103,15 +109,6 @@ export function SettingsPage() {
   };
 
   useEffect(() => {
-    void api.me()
-      .then(me => {
-        setSavedSettings(me);
-        setName(me.user.name);
-        setPhone(me.user.phone ?? '');
-        setCurrency(me.profile?.currency ?? 'VND');
-        setTimezone(me.profile?.timezone ?? 'Asia/Ho_Chi_Minh');
-      })
-      .catch(() => setProfileLoadFailed(true));
     void api.sessions()
       .then(result => setSessions(result.sessions))
       .catch(() => setSessions([]));
@@ -123,25 +120,38 @@ export function SettingsPage() {
   }, [darkMode]);
 
   const saveProfile = async (fields: 'profile' | 'appearance') => {
-    if (!savedSettings || saving) return;
+    if (!user || saving || avatarBusy) return;
     setSaving(true);
     setError('');
     setNotice('');
     try {
-      const result = await api.updateMe({
-        name: fields === 'profile' ? name : savedSettings.user.name,
-        phone: fields === 'profile' ? phone : savedSettings.user.phone ?? '',
-        locale: savedSettings.profile?.locale ?? 'vi-VN',
-        currency: fields === 'appearance' ? currency : savedSettings.profile?.currency ?? 'VND',
-        timezone: fields === 'appearance' ? timezone : savedSettings.profile?.timezone ?? 'Asia/Ho_Chi_Minh',
+      await updateProfile({
+        name: fields === 'profile' ? name : user.name,
+        phone: fields === 'profile' ? phone : user.phone ?? '',
+        locale: profile?.locale ?? 'vi-VN',
+        currency: fields === 'appearance' ? currency : profile?.currency ?? 'VND',
+        timezone: fields === 'appearance' ? timezone : profile?.timezone ?? 'Asia/Ho_Chi_Minh',
+        avatarUrl: fields === 'profile' ? avatarDraft : undefined,
       });
-      setSavedSettings(result);
-      await refreshUser();
+      if (fields === 'profile') setAvatarDraft(undefined);
       setNotice(fields === 'profile' ? 'Đã lưu hồ sơ.' : 'Đã lưu tiền tệ và múi giờ.');
     } catch {
       setError('Không thể lưu thay đổi.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const selectAvatar = async (file: File) => {
+    setAvatarBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      setAvatarDraft(await encodeAvatar(file));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Không thể xử lý ảnh đại diện.');
+    } finally {
+      setAvatarBusy(false);
     }
   };
 
@@ -209,6 +219,8 @@ export function SettingsPage() {
   const installed = isHomeScreenApp();
   const themeLabel = HOME_THEMES.find(item => item.id === theme)?.label;
   const displayName = user?.name || 'Người dùng CapMoney';
+  const avatarPreview = avatarDraft === undefined ? profile?.avatarUrl : avatarDraft;
+  const hasPro = user?.proEnabled === true;
 
   return (
     <div className="cm-settings">
@@ -230,22 +242,21 @@ export function SettingsPage() {
       </header>
 
       <div className="cm-settings-messages">
-        {(error || (profileLoadFailed && (section === 'profile' || section === 'appearance'))) && (
-          <p className="cm-settings-message is-error" role="alert">{error || 'Không tải được cài đặt tài khoản. Hãy tải lại trang để thử lại.'}</p>
-        )}
+        {error && <p className="cm-settings-message is-error" role="alert">{error}</p>}
         {notice && <p className="cm-settings-message" role="status"><Check size={18} aria-hidden="true" />{notice}</p>}
       </div>
 
       {!section && (
         <>
           <Link className="cm-settings-identity" to="?section=profile" state={{ fromSettings: true }} aria-label={`Chỉnh sửa hồ sơ của ${displayName}`}>
-            <span className="cm-settings-avatar" aria-hidden="true">{displayName.charAt(0).toUpperCase()}</span>
+            <AccountAvatar className="cm-settings-avatar" name={displayName} src={profile?.avatarUrl} />
             <span className="cm-settings-copy">
               <strong>{displayName}</strong>
               <small>{user?.email}</small>
             </span>
             <Pencil size={18} aria-hidden="true" />
           </Link>
+          <ProLink active={hasPro} />
 
           <SettingsGroup title="Tùy chọn">
             <SettingsLink section="appearance" icon={<Globe2 size={19} />} detail={themeLabel} />
@@ -274,20 +285,49 @@ export function SettingsPage() {
       )}
 
       {section === 'profile' && (
+        <>
         <form className="cm-settings-detail" onSubmit={event => { event.preventDefault(); void saveProfile('profile'); }}>
+          <div className="cm-profile-photo">
+            <AccountAvatar className="cm-settings-avatar cm-profile-avatar" name={name} src={avatarPreview} />
+            <div>
+              <strong>Ảnh đại diện</strong>
+              <input
+                type="file"
+                accept="image/*"
+                aria-label="Tệp ảnh đại diện"
+                ref={avatarInput}
+                hidden
+                onChange={event => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (file) void selectAvatar(file);
+                }}
+              />
+              <div className="cm-profile-photo-actions">
+                <button type="button" className="cm-settings-button" disabled={saving || avatarBusy} onClick={() => avatarInput.current?.click()}>
+                  <Camera size={16} aria-hidden="true" /> {avatarBusy ? 'Đang xử lý…' : avatarPreview ? 'Đổi ảnh' : 'Chọn ảnh'}
+                </button>
+                {avatarPreview && <button type="button" className="cm-settings-button is-danger" disabled={saving || avatarBusy} onClick={() => setAvatarDraft(profile?.avatarUrl ? null : undefined)}>Gỡ ảnh</button>}
+              </div>
+            </div>
+          </div>
           <label className="cm-settings-field">
             Họ tên
-            <input value={name} disabled={!savedSettings || saving} onChange={event => setName(event.target.value)} autoComplete="name" required />
+            <input value={name} disabled={saving} onChange={event => setName(event.target.value)} autoComplete="name" required />
           </label>
           <label className="cm-settings-field">
             Số điện thoại
-            <input type="tel" value={phone} disabled={!savedSettings || saving} onChange={event => setPhone(event.target.value)} autoComplete="tel" placeholder="Chưa cập nhật" />
+            <input type="tel" value={phone} disabled={saving} onChange={event => setPhone(event.target.value)} autoComplete="tel" placeholder="Chưa cập nhật" />
           </label>
-          <button className="cm-settings-button is-primary" disabled={!savedSettings || saving}>
+          <button className="cm-settings-button is-primary" disabled={!user || saving || avatarBusy}>
             {saving ? 'Đang lưu…' : 'Lưu hồ sơ'}
           </button>
         </form>
+        <ProLink active={hasPro} />
+        </>
       )}
+
+      {section === 'pro' && <ProCheckout />}
 
       {section === 'appearance' && (
         <>
@@ -307,20 +347,20 @@ export function SettingsPage() {
           <form className="cm-settings-detail" onSubmit={event => { event.preventDefault(); void saveProfile('appearance'); }}>
             <label className="cm-settings-field">
               Đơn vị tiền tệ
-              <select value={currency} disabled={!savedSettings || saving} onChange={event => setCurrency(event.target.value)}>
+              <select value={currency} disabled={saving} onChange={event => setCurrency(event.target.value)}>
                 <option value="VND">VND — Việt Nam đồng</option>
                 <option value="USD">USD — Đô la Mỹ</option>
               </select>
             </label>
             <label className="cm-settings-field">
               Múi giờ
-              <select value={timezone} disabled={!savedSettings || saving} onChange={event => setTimezone(event.target.value)}>
+              <select value={timezone} disabled={saving} onChange={event => setTimezone(event.target.value)}>
                 <option value="Asia/Ho_Chi_Minh">Việt Nam (GMT+7)</option>
                 <option value="Asia/Bangkok">Bangkok (GMT+7)</option>
                 <option value="UTC">UTC</option>
               </select>
             </label>
-            <button className="cm-settings-button is-primary" disabled={!savedSettings || saving}>
+            <button className="cm-settings-button is-primary" disabled={!user || saving || avatarBusy}>
               {saving ? 'Đang lưu…' : 'Lưu khu vực'}
             </button>
           </form>
@@ -413,6 +453,19 @@ export function SettingsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function ProLink({ active }: { active: boolean }) {
+  return (
+    <Link className="cm-settings-pro-link" to={PRO_SETTINGS_PATH} state={{ fromSettings: true }}>
+      <span className="cm-pro-icon"><Crown size={21} aria-hidden="true" /></span>
+      <span className="cm-settings-copy">
+        <strong>{active ? 'CapMoney Pro' : 'Mở khóa Pro'}</strong>
+        <small>{active ? 'Đã kích hoạt' : 'Trải nghiệm tất cả tiện ích'}</small>
+      </span>
+      <ChevronRight size={18} aria-hidden="true" />
+    </Link>
   );
 }
 

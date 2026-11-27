@@ -1,5 +1,50 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import type { Loan } from '../../frontend/src/services/loansApi';
+
+test('shows days until repayment and days overdue on a recorded loan', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.clock.setFixedTime(new Date('2026-11-26T17:05:00Z'));
+  const loans: Loan[] = [];
+  await page.route('**/api/**', async route => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === '/api/auth/me') return route.fulfill({ json: { user: { id: 'owner', name: 'An', email: 'owner@example.test' }, profile: {} } });
+    if (path === '/api/loans' && request.method() === 'POST') {
+      const loan = { ...request.postDataJSON(), payments: [] } as Loan;
+      loans.push(loan);
+      return route.fulfill({ status: 201, json: { loan } });
+    }
+    if (path === '/api/loans') return route.fulfill({ json: { loans } });
+    return route.fulfill({ status: 404, json: {} });
+  });
+
+  await page.goto('/app/loans');
+  await page.getByRole('button', { name: 'Ghi cho mượn' }).click();
+  const form = page.getByRole('dialog', { name: 'Cho mượn' });
+  await form.getByLabel('Cho ai mượn?').fill('Bạn Lan');
+  await form.getByLabel('Số tiền gốc').fill('150000');
+  await expect(form.getByLabel('Ngày phát sinh')).toHaveValue('2026-11-27');
+  await form.getByLabel('Hạn trả (tùy chọn)').fill('2026-11-28');
+  await form.getByRole('button', { name: 'Lưu khoản mới' }).click();
+
+  const details = page.getByRole('dialog', { name: 'Bạn Lan' });
+  const row = page.getByRole('button', { name: /Bạn Lan/ });
+  const countdown = 'Còn 1 ngày đến hạn (28/11/2026)';
+  await expect(details).toContainText(countdown);
+  await details.getByRole('button', { name: 'Đóng' }).click();
+  await expect(row).toContainText(countdown);
+
+  await page.clock.setFixedTime(new Date('2026-11-27T17:05:00Z'));
+  await page.reload();
+  await expect(row).toContainText('Đến hạn hôm nay');
+
+  await page.clock.setFixedTime(new Date('2026-11-30T17:05:00Z'));
+  await page.reload();
+  const overdue = 'Quá hạn 3 ngày (28/11/2026)';
+  await expect(row).toContainText(overdue);
+  await row.click();
+  await expect(details).toContainText(overdue);
+});
 
 test('opens the loan journal from the dock and records partial and full payments', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 });

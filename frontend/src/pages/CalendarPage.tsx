@@ -19,7 +19,6 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
-  UserRound,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -29,6 +28,7 @@ import { ExpenseDetail } from '../components/ExpenseDetail';
 import { HomeThemePicker, SLEEPY_CAT_IMAGE } from '../components/HomeThemePicker';
 import { LookbackModal } from '../components/LookbackModal';
 import { SmartToolkitModal } from '../components/SmartToolkitModal';
+import { AccountAvatar } from '../components/AccountAvatar';
 import { loadBudget, SpendingLimitModal, type BudgetConfig } from '../components/SpendingLimitModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppTheme } from '../contexts/ThemeContext';
@@ -55,7 +55,7 @@ const categoryNames: Record<string, string> = {
 Object.assign(categoryNames, ALL_CATEGORY_LABELS);
 
 export function CalendarPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { theme: homeTheme, setTheme: setHomeTheme } = useAppTheme();
   const navigate = useNavigate();
   const [cursor, setCursor] = useState(() => new Date());
@@ -304,7 +304,7 @@ export function CalendarPage() {
           onClick={() => navigate('/app/settings')}
           aria-label="Tài khoản và cài đặt"
         >
-          <UserRound size={26} />
+          <AccountAvatar className="cm-home-avatar" src={profile?.avatarUrl} />
         </button>
       </header>
 

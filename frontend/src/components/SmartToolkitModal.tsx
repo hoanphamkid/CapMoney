@@ -6,7 +6,9 @@ import {
   ClipboardCheck,
   Coins,
   Copy,
+  Crown,
   Flame,
+  LockKeyhole,
   Pencil,
   PiggyBank,
   Plus,
@@ -18,8 +20,11 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState, type CSSProperties } from 'react';
+import { Link } from 'react-router-dom';
 import type { Transaction } from '../services/api';
 import { ALL_CATEGORY_LABELS } from '../constants/categories';
+import { PRO_FEATURES, PRO_SETTINGS_PATH } from '../constants/pro';
+import { useAuth } from '../contexts/AuthContext';
 import { loadBudget } from './SpendingLimitModal';
 
 const SAVINGS_KEY = 'capmoney_savings_jar_v1';
@@ -84,7 +89,11 @@ type SmartToolkitModalProps = {
 };
 
 export function SmartToolkitModal({ transactions, onClose }: SmartToolkitModalProps) {
+  const { user } = useAuth();
+  const hasPro = user?.proEnabled === true;
   const [tab, setTab] = useState<ToolkitTab>('challenge');
+  const lockedFeature = !hasPro && (tab === 'week' || tab === 'split') ? PRO_FEATURES[tab] : null;
+  const AccessIcon = hasPro ? ChevronRight : LockKeyhole;
   const [challengeDays, setChallengeDays] = useState<number[]>(loadChallenge);
   const [goal, setGoal] = useState<SavingsJarState>(loadSavingsJar);
   const [goalEditing, setGoalEditing] = useState(false);
@@ -187,11 +196,15 @@ export function SmartToolkitModal({ transactions, onClose }: SmartToolkitModalPr
         </header>
 
         <div className="cm-toolkit-new-nav" role="tablist" aria-label="Tiện ích tài chính">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
-              <Icon size={14} /> {label}
-            </button>
-          ))}
+          {tabs.map(({ id, label, icon: Icon }) => {
+            const locked = !hasPro && (id === 'week' || id === 'split');
+            return (
+              <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'active' : ''} aria-label={locked ? `${label} (Pro)` : undefined} onClick={() => setTab(id)}>
+                <Icon size={14} aria-hidden="true" /> {label}
+                {locked && <LockKeyhole size={12} className="cm-toolkit-lock" aria-hidden="true" />}
+              </button>
+            );
+          })}
         </div>
 
         {tab === 'overview' && (
@@ -210,8 +223,8 @@ export function SmartToolkitModal({ transactions, onClose }: SmartToolkitModalPr
             <div className="cm-toolkit-action-grid">
               <button type="button" onClick={() => setTab('challenge')}><Flame size={17} /><span>Thử thách 30 ngày</span><ChevronRight size={15} /></button>
               <button type="button" onClick={() => setTab('goal')}><PiggyBank size={17} /><span>Đặt mục tiêu tiết kiệm</span><ChevronRight size={15} /></button>
-              <button type="button" onClick={() => setTab('week')}><CalendarDays size={17} /><span>Lập kế hoạch tuần</span><ChevronRight size={15} /></button>
-              <button type="button" onClick={() => setTab('split')}><Users size={17} /><span>Chia bill nhóm</span><ChevronRight size={15} /></button>
+              <button type="button" onClick={() => setTab('week')}><CalendarDays size={17} /><span>Lập kế hoạch tuần</span><AccessIcon size={15} /></button>
+              <button type="button" onClick={() => setTab('split')}><Users size={17} /><span>Chia bill nhóm</span><AccessIcon size={15} /></button>
             </div>
           </div>
         )}
@@ -251,7 +264,20 @@ export function SmartToolkitModal({ transactions, onClose }: SmartToolkitModalPr
           </div>
         )}
 
-        {tab === 'week' && (
+        {lockedFeature && (
+          <div className="cm-toolkit-body cm-toolkit-new-body">
+            <section className="cm-toolkit-pro-lock">
+              <LockKeyhole size={22} aria-hidden="true" />
+              <h3>{lockedFeature.title}</h3>
+              <p>{lockedFeature.detail}</p>
+              <Link className="cm-toolkit-primary-btn" to={PRO_SETTINGS_PATH}>
+                <Crown size={16} aria-hidden="true" /> Mở khóa Pro
+              </Link>
+            </section>
+          </div>
+        )}
+
+        {tab === 'week' && !lockedFeature && (
           <div className="cm-toolkit-body cm-toolkit-new-body fade-in">
             <div className="cm-week-hero"><div><span>Kế hoạch tuần</span><strong>Giữ nhịp chi tiêu nhẹ nhàng.</strong><small>Bắt đầu từ {weekStats.from}</small></div><CalendarDays size={30} /></div>
             <div className="cm-toolkit-stat-grid cm-week-stat-grid"><div><small>Đã chi tuần này</small><strong>{weekStats.spent.toLocaleString('vi-VN')}đ</strong></div><div><small>Mục tiêu tuần</small><strong>{weekStats.target.toLocaleString('vi-VN')}đ</strong></div><div><small>Còn lại</small><strong className="income">{weekStats.remaining.toLocaleString('vi-VN')}đ</strong></div><div><small>Nên chi mỗi ngày</small><strong>{weekStats.safeDaily.toLocaleString('vi-VN')}đ</strong></div></div>
@@ -260,7 +286,7 @@ export function SmartToolkitModal({ transactions, onClose }: SmartToolkitModalPr
           </div>
         )}
 
-        {tab === 'split' && (
+        {tab === 'split' && !lockedFeature && (
           <div className="cm-toolkit-body cm-toolkit-new-body fade-in">
             <div className="cm-split-result-box cm-split-result-new"><small>Mỗi người cần đóng</small><strong>{perPerson.toLocaleString('vi-VN')}đ</strong><span>Đã làm tròn đến hàng nghìn · {people} người</span></div>
             <label className="cm-toolkit-field"><span>Tổng hóa đơn</span><div><input inputMode="numeric" value={numericBill ? numericBill.toLocaleString('vi-VN') : ''} onChange={event => setBillTotal(event.target.value.replace(/[^0-9]/g, ''))} placeholder="450.000" /><b>đ</b></div></label>

@@ -9,6 +9,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import mongoose from 'mongoose';
 import { BankWebhookError, bankCategory, bankWalletId, parseBankTransactions, verifyBankWebhook } from '../utils/bankWebhook.js';
 import { sendBankNotifications } from '../../backend/src/services/bankNotificationService.js';
+import { settleProFromBankDelivery } from '../../backend/src/services/proPaymentSettlement.js';
 
 // ─── Mongoose models (inline to keep this file self-contained) ─────────────
 const TransactionSchema = new mongoose.Schema(
@@ -139,6 +140,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     } finally { await session.endSession(); }
     await sendBankNotifications(mongoose.connection.db!, String(userId), results);
+    await settleProFromBankDelivery(User.collection, req.body);
     return res.status(200).json({ success: true, transaction: results[0], transactions: results });
   } catch (error) {
     if (error instanceof BankWebhookError) return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });

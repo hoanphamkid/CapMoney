@@ -1,4 +1,5 @@
-import type { MeResponse, Profile, User } from '../types/auth';
+import type { MeResponse, Profile, ProfileUpdate, User } from '../types/auth';
+import type { ProCheckout } from '../constants/pro';
 import { normalizeCategoryId } from '../constants/categories';
 export type { MeResponse } from '../types/auth';
 
@@ -50,7 +51,8 @@ export type Transaction = {
   createdAt?: string;
 };
 
-type StoredUser = User & { password: string };
+type StoredUser = Omit<User, 'proEnabled'> & { password: string };
+type SignInResponse = { user: User; profile?: Profile | null };
 type StoredWallet = Wallet & { userId: string; active: boolean };
 type StoredTransaction = Transaction & { userId: string; idempotencyKey?: string };
 type StoredReminder = CalendarEvent & { userId: string };
@@ -356,7 +358,7 @@ async function withFallback<T>(remoteCall: () => Promise<T>, localCall: () => T 
 export const api = {
   register: (input: { name: string; email: string; password: string; phone?: string }) =>
     withFallback(
-      () => request<{ user: User; message: string }>('/auth/register', { method: 'POST', body: JSON.stringify(input) }),
+      () => request<SignInResponse & { message: string }>('/auth/register', { method: 'POST', body: JSON.stringify(input) }),
       async () => {
         const email = input.email.trim().toLowerCase();
         const db = loadDb();
@@ -367,7 +369,7 @@ export const api = {
           user.password = input.password;
           db.currentUserId = user.id;
           saveDb(db);
-          return { user: publicUser(user), message: 'Đã đồng bộ tài khoản của bạn.' };
+          return { user: publicUser(user), profile: db.profiles[user.id], message: 'Đã đồng bộ tài khoản của bạn.' };
         }
         user = {
           id: crypto.randomUUID(),
@@ -383,7 +385,7 @@ export const api = {
         db.currentUserId = user.id;
         ensureDefaultLocalWallets(db, user.id);
         saveDb(db);
-        return { user: publicUser(user), message: 'Tài khoản đã được tạo.' };
+        return { user: publicUser(user), profile: db.profiles[user.id], message: 'Tài khoản đã được tạo.' };
       },
     ),
 
@@ -391,7 +393,7 @@ export const api = {
     withFallback(
       async () => {
         try {
-          return await request<{ user: User }>('/auth/login', { method: 'POST', body: JSON.stringify(input) });
+          return await request<SignInResponse>('/auth/login', { method: 'POST', body: JSON.stringify(input) });
         } catch (error) {
           // A local-only account can be promoted to a server account without deleting its device data.
           // Only attempt this when the entered password matches the local account; an existing server
@@ -401,7 +403,7 @@ export const api = {
           const localUser = db.users.find(user => user.email === input.email.trim().toLowerCase() && user.password === input.password);
           if (!localUser) throw error;
           try {
-            return await request<{ user: User }>('/auth/register', {
+            return await request<SignInResponse>('/auth/register', {
               method: 'POST',
               body: JSON.stringify({ name: localUser.name, email: localUser.email, password: input.password, phone: localUser.phone }),
             });
@@ -435,7 +437,7 @@ export const api = {
         }
         db.currentUserId = user.id;
         saveDb(db);
-        return { user: publicUser(user) };
+        return { user: publicUser(user), profile: db.profiles[user.id] };
       },
     ),
 
@@ -774,7 +776,7 @@ export const api = {
       },
     ),
 
-  updateMe: (input: { name: string; phone: string; locale: string; currency: string; timezone: string }) =>
+  updateMe: (input: ProfileUpdate) =>
     withFallback(
       () => request<MeResponse>('/auth/me', { method: 'PATCH', body: JSON.stringify(input) }),
       () => {
@@ -786,12 +788,15 @@ export const api = {
           locale: input.locale || 'vi-VN',
           currency: (input.currency || 'VND').toUpperCase(),
           timezone: input.timezone || 'Asia/Ho_Chi_Minh',
+          avatarUrl: input.avatarUrl === undefined ? db.profiles[user.id]?.avatarUrl : input.avatarUrl ?? undefined,
         };
         db.profiles[user.id] = profile;
         saveDb(db);
         return { user: publicUser(user), profile };
       },
     ),
+
+  proCheckout: (createOrder: boolean) => request<ProCheckout>('/auth/pro', { method: createOrder ? 'POST' : 'GET' }),
 
   changePassword: (input: { currentPassword: string; newPassword: string }) =>
     withFallback(

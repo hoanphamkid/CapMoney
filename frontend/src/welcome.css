@@ -1,0 +1,130 @@
+.cm-welcome-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(460px, calc(100% - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #dbe5d9;
+  border-radius: 22px;
+  background: #f9faf6;
+  color: #1e352a;
+  box-shadow: 0 22px 76px #081b1459;
+}
+
+html:has(.cm-welcome-dialog[open]) { overflow: hidden; }
+
+.cm-welcome-dialog::backdrop {
+  background: #0b1a17a1;
+  backdrop-filter: blur(5px);
+}
+
+.cm-welcome-dialog[open] { animation: cm-welcome-enter 180ms ease-out both; }
+
+@keyframes cm-welcome-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cm-welcome-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #d4dfd3;
+  border-radius: 11px;
+  background: #f9faf6;
+  color: #426054;
+}
+
+.cm-welcome-intro {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 30px 24px 24px;
+  background: radial-gradient(ellipse at 50% 0%, #e6f0df, transparent 75%);
+  text-align: center;
+}
+
+.cm-welcome-icon {
+  display: grid;
+  place-items: center;
+  width: 70px;
+  height: 70px;
+  margin-bottom: 3px;
+  border: 1px solid #d4e3d0;
+  border-radius: 22px;
+  background: #edf4e8;
+}
+
+.cm-welcome-icon img { display: block; }
+
+.cm-welcome-intro h2 {
+  margin: 0;
+  font-size: clamp(22px, 5.9vw, 31px);
+  line-height: 1.17;
+  letter-spacing: -.045em;
+}
+
+.cm-welcome-intro h2 span { display: block; color: #235d44; }
+
+.cm-welcome-intro p {
+  max-width: 300px;
+  margin: 0;
+  color: #486154;
+  font-size: 14px;
+  line-height: 1.6;
+  text-wrap: balance;
+}
+
+.cm-welcome-intro .cm-welcome-credit {
+  color: #235d44;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cm-welcome-actions {
+  display: grid;
+  padding: 14px 18px 18px;
+  border-top: 1px solid #dbe5d9;
+}
+
+.cm-welcome-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #215740;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cm-welcome-primary svg { flex-shrink: 0; }
+
+.cm-welcome-primary:hover { background: #184633; }
+.cm-welcome-close:hover { background: #e3eddf; }
+
+.cm-welcome-dialog button:focus-visible {
+  outline: 2px solid #397258;
+  outline-offset: 2px;
+}
+
+@media (max-width: 380px) {
+  .cm-welcome-intro { padding-inline: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-welcome-dialog[open] { animation: none; }
+}

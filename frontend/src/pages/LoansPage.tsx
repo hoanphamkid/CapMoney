@@ -198,9 +198,10 @@ export function LoansPage() {
 function loanStatus(loan: Loan, remaining: number, today: string) {
   if (remaining === 0) return 'Đã hoàn tất';
   if (!loan.dueOn) return 'Chưa đặt hạn';
-  if (loan.dueOn < today) return 'Quá hạn ' + prettyDate(loan.dueOn);
   if (loan.dueOn === today) return 'Đến hạn hôm nay';
-  return 'Hạn ' + prettyDate(loan.dueOn);
+  const daysLeft = (Date.parse(loan.dueOn) - Date.parse(today)) / 86_400_000;
+  if (daysLeft < 0) return `Quá hạn ${-daysLeft} ngày (${prettyDate(loan.dueOn)})`;
+  return `Còn ${daysLeft} ngày đến hạn (${prettyDate(loan.dueOn)})`;
 }
 
 function LoanDetail({ loan, today, onClose, onAction }: {

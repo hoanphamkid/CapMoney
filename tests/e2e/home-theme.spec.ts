@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('applies a home theme on mobile and remembers it after reload', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 650 });

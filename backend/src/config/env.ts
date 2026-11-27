@@ -20,6 +20,12 @@ const envSchema = z.object({
   MBBANK_USER_ID: z.string().optional(),
   MBBANK_USER_EMAIL: z.string().email().optional(),
   MBBANK_ACCOUNT_NUMBER: z.string().optional(),
+  PRO_PRICE_VND: z.string().optional(),
+  PRO_PAYMENT_BANK_NAME: z.string().optional(),
+  PRO_PAYMENT_ACCOUNT_NUMBER: z.string().optional(),
+  PRO_PAYMENT_ACCOUNT_NAME: z.string().optional(),
+  PRO_PAYMENT_USE_MBBANK_SYNC: z.enum(['true', 'false', '']).optional(),
+  PRO_SEPAY_WEBHOOK_SECRET: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 const user = { id: 'owner', email: 'owner@example.test', name: 'Owner', role: 'user' };
 const transaction = { id: '507f1f77bcf86cd799439011', type: 'expense', amount: 10000, amountMinor: 1000000, note: 'Hóa đơn', categoryId: 'bills', walletId: '507f1f77bcf86cd799439012', dateKey: '2026-11-13', transactionTime: '00:50:00', source: 'manual', status: 'posted', imageUrl: null };

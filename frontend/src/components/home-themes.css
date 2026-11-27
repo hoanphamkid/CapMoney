@@ -675,46 +675,31 @@
    selected app theme instead of falling back to the dark shell.
    ========================================================= */
 .cm-app-shell[data-app-theme] .dashboard-page {
-  --cm-report-expense: var(--home-danger, #c9665d);
-  --cm-report-income: var(--home-success, #459d68);
+  --cm-report-expense: var(--home-danger, #a23f35);
+  --cm-report-income: var(--home-success, #1d744b);
   color: var(--home-ink);
 }
 
-.cm-app-shell[data-app-theme] .dashboard-page .page-heading h1,
-.cm-app-shell[data-app-theme] .dashboard-page .page-heading h1 em,
 .cm-app-shell[data-app-theme] .dashboard-page .panel-head h2,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-trend > strong {
   color: var(--home-ink) !important;
 }
 
-.cm-app-shell[data-app-theme] .dashboard-page .page-heading h1 em {
-  color: var(--home-accent) !important;
-}
-
-.cm-app-shell[data-app-theme] .dashboard-page .page-subtitle,
-.cm-app-shell[data-app-theme] .dashboard-page .eyebrow,
 .cm-app-shell[data-app-theme] .dashboard-page .panel-head p,
-.cm-app-shell[data-app-theme] .dashboard-page .metric-top,
-.cm-app-shell[data-app-theme] .dashboard-page .metric-card small,
-.cm-app-shell[data-app-theme] .dashboard-page .recent-empty p,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-periods-heading span,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-grid small,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-insights small,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-income-filter > p,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-category-filter > p,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-hint,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-trend small {
   color: var(--home-muted) !important;
 }
 
-.cm-app-shell[data-app-theme] .dashboard-page :is(.metric-card, .panel, .recent-panel, .cm-report) {
+.cm-app-shell[data-app-theme] .dashboard-page :is(.metric-card, .panel, .cm-report) {
   background: var(--home-panel) !important;
   border-color: var(--home-line) !important;
   color: var(--home-ink) !important;
 }
 
-.cm-app-shell[data-app-theme] .dashboard-page .metric-card strong,
-.cm-app-shell[data-app-theme] .dashboard-page .recent-empty strong,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-summary strong,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-insights strong,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-periods-heading strong,
@@ -724,39 +709,8 @@
   color: var(--home-ink) !important;
 }
 
-.cm-app-shell[data-app-theme] .dashboard-page .metric-top i,
-.cm-app-shell[data-app-theme] .dashboard-page .empty-circle {
-  color: var(--home-accent) !important;
-  background: var(--home-tint) !important;
-}
-
-.cm-app-shell[data-app-theme] .dashboard-page .recent-panel .panel-head,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-category-filter {
-  border-color: var(--home-line) !important;
-}
-
-.cm-app-shell[data-app-theme] .dashboard-page :is(.transaction-row, .cm-recent-row) {
-  background: transparent !important;
-  border-color: var(--home-line) !important;
-  color: var(--home-ink) !important;
-}
-
-.cm-app-shell[data-app-theme] .dashboard-page :is(.transaction-row, .cm-recent-row):hover {
-  background: color-mix(in srgb, var(--home-accent) 9%, var(--home-panel)) !important;
-}
-
-.cm-app-shell[data-app-theme] .dashboard-page .transaction-main strong {
-  color: var(--home-ink) !important;
-}
-
-.cm-app-shell[data-app-theme] .dashboard-page .transaction-main small,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-recent-scroll-hint {
-  color: var(--home-muted) !important;
-}
-
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-month button,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-flow-filter,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-income-filter,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-insights > div,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-periods,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-grid > :is(div, button),
@@ -766,9 +720,6 @@
   color: var(--home-ink) !important;
 }
 
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-flow-filter > span,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-filter-heading,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-filter-heading strong,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-category-row,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-grid > :is(div, button),
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-month strong {
@@ -777,30 +728,23 @@
 
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-month button,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-flow-filter button,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-category-chips button,
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-grid > button,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-filter-heading button,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-clear,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-recent-active-filter button {
+.cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-clear {
   border-color: var(--home-line) !important;
   background: var(--home-tint) !important;
   color: var(--home-accent) !important;
 }
 
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-flow-filter button[aria-pressed='true'],
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-category-chips button[aria-pressed='true'],
 .cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-grid > button[aria-pressed='true'] {
   border-color: var(--home-accent) !important;
   background: var(--home-accent) !important;
   color: var(--home-on-accent) !important;
 }
 
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-flow-filter button:hover,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-category-chips button:hover,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-grid > button:hover,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-filter-heading button:hover,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-clear:hover,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-recent-active-filter button:hover {
+.cm-app-shell[data-app-theme] .dashboard-page .cm-report-flow-filter button:hover:not([aria-pressed='true']),
+.cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-grid > button:hover:not([aria-pressed='true']),
+.cm-app-shell[data-app-theme] .dashboard-page .cm-report-period-clear:hover {
   border-color: var(--home-accent) !important;
   background: color-mix(in srgb, var(--home-accent) 16%, var(--home-tint)) !important;
 }
@@ -837,8 +781,7 @@
   color: var(--home-muted) !important;
 }
 
-.cm-app-shell[data-app-theme] .dashboard-page .cm-report-category-row:hover,
-.cm-app-shell[data-app-theme] .dashboard-page .cm-recent-active-filter {
+.cm-app-shell[data-app-theme] .dashboard-page .cm-report-category-row:hover {
   background: color-mix(in srgb, var(--home-accent) 8%, var(--home-panel)) !important;
 }
 
