@@ -17,15 +17,23 @@ function paymentConfig() {
   const amount = configuredPrice();
   if (amount === undefined) return null;
   const accountName = env.PRO_PAYMENT_ACCOUNT_NAME?.trim() || undefined;
-  const linkedBank = env.PRO_PAYMENT_USE_MBBANK_SYNC === 'true';
+  const dedicatedBankName = env.PRO_PAYMENT_BANK_NAME?.trim();
+  const dedicatedAccountNumber = env.PRO_PAYMENT_ACCOUNT_NUMBER?.trim();
+  const dedicatedSecret = env.PRO_SEPAY_WEBHOOK_SECRET?.trim();
+  const linkedBank = env.PRO_PAYMENT_USE_MBBANK_SYNC === 'true'
+    || (!env.PRO_PAYMENT_USE_MBBANK_SYNC && !dedicatedBankName && !dedicatedAccountNumber && !dedicatedSecret);
   const channel: ProPaymentChannel = linkedBank ? 'mbbank' : 'sepay';
-  const bankName = linkedBank ? 'MB Bank' : env.PRO_PAYMENT_BANK_NAME?.trim();
-  const accountNumber = (linkedBank ? env.MBBANK_ACCOUNT_NUMBER : env.PRO_PAYMENT_ACCOUNT_NUMBER)?.trim();
+  const bankName = linkedBank ? 'MB Bank' : dedicatedBankName;
+  const accountNumber = linkedBank ? env.MBBANK_ACCOUNT_NUMBER?.trim() : dedicatedAccountNumber;
   if (linkedBank && ((!env.MBBANK_USER_ID && !env.MBBANK_USER_EMAIL)
     || !(env.SEPAY_WEBHOOK_SECRET || env.MBBANK_WEBHOOK_SECRET)?.trim())) return null;
-  if (!linkedBank && !env.PRO_SEPAY_WEBHOOK_SECRET?.trim()) return null;
+  if (!linkedBank && !dedicatedSecret) return null;
   if (!bankName || !accountNumber) return null;
   return { amount, bankName, gateway: normalizeGateway(bankName), accountName, accountNumber, channel };
+}
+
+export function isProCheckoutConfigured() {
+  return paymentConfig() !== null;
 }
 
 function checkout(payment: ProPayment | null | undefined, config: ReturnType<typeof paymentConfig>) {

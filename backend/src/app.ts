@@ -13,6 +13,7 @@ import { backupsRouter } from './routes/backups.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { realtimeRouter } from './routes/realtime.js';
 import { loansRouter } from './routes/loans.js';
+import { isProCheckoutConfigured } from './controllers/proPayments.js';
 import { errorHandler, logger, notFound } from './middleware/error.js';
 
 export function createApp() {
@@ -23,7 +24,12 @@ export function createApp() {
   app.use(cookieParser());
   app.use((pinoHttp as any)({ logger }));
   app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeaders: 'draft-8', legacyHeaders: false }));
-  app.get('/api/health', (_request, response) => response.json({ status: 'ok', service: 'capmoney-api', timestamp: new Date().toISOString() }));
+  app.get('/api/health', (_request, response) => response.json({
+    status: 'ok',
+    service: 'capmoney-api',
+    timestamp: new Date().toISOString(),
+    proCheckoutConfigured: isProCheckoutConfigured(),
+  }));
   app.use('/api/backups', backupsRouter);
   app.use(express.json({ limit: '1mb' }));
   app.use('/api/auth', authRouter);

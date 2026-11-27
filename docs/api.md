@@ -4,7 +4,7 @@
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
-| `GET` | `/api/health` | No | Liveness check |
+| `GET` | `/api/health` | No | Liveness check and `proCheckoutConfigured` status |
 | `POST` | `/api/auth/register` | No | Create account and session |
 | `POST` | `/api/auth/login` | No | Authenticate account |
 | `POST` | `/api/auth/refresh` | Refresh cookie | Rotate access cookie |

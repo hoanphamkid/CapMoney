@@ -131,17 +131,40 @@ for (const [name, post] of [
       const unrelated = await WalletModel.findOne({ userId: owner, name: 'Vietcombank' }).lean();
       expect(unrelated!.balanceMinor).toBe(900000);
     });
-    it('confirms a Pro order through the linked MB Bank webhook', async () => {
-      const original = env.PRO_PAYMENT_USE_MBBANK_SYNC;
-      env.PRO_PAYMENT_USE_MBBANK_SYNC = 'true';
+    it('uses the configured MB Bank webhook for Pro without a separate checkout account', async () => {
+      const original = {
+        PRO_PAYMENT_USE_MBBANK_SYNC: env.PRO_PAYMENT_USE_MBBANK_SYNC,
+        PRO_PAYMENT_BANK_NAME: env.PRO_PAYMENT_BANK_NAME,
+        PRO_PAYMENT_ACCOUNT_NUMBER: env.PRO_PAYMENT_ACCOUNT_NUMBER,
+        PRO_SEPAY_WEBHOOK_SECRET: env.PRO_SEPAY_WEBHOOK_SECRET,
+        PRO_PRICE_VND: env.PRO_PRICE_VND,
+      };
+      Object.assign(env, {
+        PRO_PAYMENT_USE_MBBANK_SYNC: undefined,
+        PRO_PAYMENT_BANK_NAME: undefined,
+        PRO_PAYMENT_ACCOUNT_NUMBER: undefined,
+        PRO_SEPAY_WEBHOOK_SECRET: undefined,
+        PRO_PRICE_VND: undefined,
+      });
       try {
         const buyer = await UserModel.create({ email: `pro-${name.toLowerCase()}@example.test`, name: 'Pro buyer', passwordHash: 'test-only' });
         const cookie = `capmoney_access=${signAccessToken({ sub: String(buyer._id), role: 'user' })}`;
+        const status = () => request(app).get('/api/auth/pro').set('Cookie', cookie);
+        env.PRO_PAYMENT_USE_MBBANK_SYNC = 'false';
+        expect((await status()).body).toEqual({ status: 'unavailable', price: 5000 });
+        expect((await request(app).get('/api/health')).body.proCheckoutConfigured).toBe(false);
+
+        env.PRO_PAYMENT_USE_MBBANK_SYNC = undefined;
+        env.PRO_PAYMENT_BANK_NAME = 'Vietcombank';
+        expect((await status()).body).toEqual({ status: 'unavailable', price: 5000 });
+
+        env.PRO_PAYMENT_BANK_NAME = undefined;
+        expect((await status()).body).toEqual({ status: 'available', price: 5000 });
+        expect((await request(app).get('/api/health')).body.proCheckoutConfigured).toBe(true);
         const order = await request(app).post('/api/auth/pro').set('Cookie', cookie).send({});
         expect(order.body).toMatchObject({ status: 'pending', order: { bankName: 'MB Bank', accountNumber: account, amount: 5000 } });
 
         const receive = { ...payload(`${name}-pro`, 'in', 5000), content: order.body.order.code, id: 50_000 + ['Express', 'Vercel', 'VercelFrontend'].indexOf(name) };
-        const status = () => request(app).get('/api/auth/pro').set('Cookie', cookie);
         expect((await post(receive, false)).status).toBe(401);
         expect((await post({ ...receive, referenceCode: `${name}-pro-short`, transferAmount: 4999 })).status).toBe(200);
         expect((await status()).body.status).toBe('pending');
@@ -151,7 +174,7 @@ for (const [name, post] of [
         expect((await status()).body).toEqual({ status: 'paid' });
         expect(await TransactionModel.countDocuments({ userId: owner, amountMinor: 500000, note: receive.content })).toBe(1);
       } finally {
-        env.PRO_PAYMENT_USE_MBBANK_SYNC = original;
+        Object.assign(env, original);
       }
     });
     it('pushes committed income and expense once, only to the linked user devices', async () => {
