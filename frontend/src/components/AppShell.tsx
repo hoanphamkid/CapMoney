@@ -1,8 +1,9 @@
 import { HandCoins, Home, PieChart, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { readHomeTheme, saveHomeTheme, type HomeTheme } from './HomeThemePicker';
-import { ThemeContext } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useAppTheme } from '../contexts/ThemeContext';
+import { wallpaperFilter } from '../constants/appearance';
 import { useBankRealtime, type BankEvent } from '../hooks/useBankRealtime';
 
 const dockItems = [
@@ -13,16 +14,13 @@ const dockItems = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { registrationMessage, dismissRegistrationMessage } = useAuth();
   const location = useLocation();
   const activeIndex = dockItems.findIndex(item => item.matchPaths.includes(location.pathname));
   const [bankEvent, setBankEvent] = useState<BankEvent | null>(null);
-  const [theme, setThemeState] = useState<HomeTheme>(readHomeTheme);
+  const { theme, colorMode, wallpaper } = useAppTheme();
   const onTransaction = useCallback((event: BankEvent) => setBankEvent(event), []);
   useBankRealtime(onTransaction);
-  const setTheme = useCallback((nextTheme: HomeTheme) => {
-    setThemeState(nextTheme);
-    saveHomeTheme(nextTheme);
-  }, []);
   useEffect(() => {
     if (!bankEvent) return;
     const timer = setTimeout(() => setBankEvent(null), 8000);
@@ -30,11 +28,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [bankEvent]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
-      <div className="cm-app-shell" data-app-theme={theme}>
-      <main className="cm-app-content">{children}</main>
+    <div className="cm-app-shell" data-app-theme={theme} data-color-mode={colorMode}>
+      {wallpaper && <div className="cm-app-wallpaper" aria-hidden="true"><img src={wallpaper.src} alt="" style={{ filter: wallpaperFilter(wallpaper.filter) }} /></div>}
+      <main className="cm-app-content">
+        {registrationMessage && (
+          <div className="form-alert success registration-notice">
+            <span role="status">{registrationMessage}</span>
+            <button type="button" aria-label="Đóng thông báo tạo tài khoản" onClick={dismissRegistrationMessage}>
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        {children}
+      </main>
       {bankEvent && <div className="bank-notification-toast" role="status" aria-live="polite">
-        <Link to="/app/transactions" onClick={() => setBankEvent(null)}>
+        <Link to={`/app/transactions?transaction=${encodeURIComponent(bankEvent.id)}`} onClick={() => setBankEvent(null)}>
           <strong>MB Bank · {bankEvent.type === 'income' ? 'Nhận tiền' : 'Chuyển tiền'}</strong>
           <span>{bankEvent.type === 'income' ? '+' : '−'}{bankEvent.amount.toLocaleString('vi-VN')} ₫</span>
         </Link>
@@ -64,7 +72,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           );
         })}
       </nav>
-      </div>
-    </ThemeContext.Provider>
+    </div>
   );
 }

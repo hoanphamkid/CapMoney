@@ -1,3 +1,4 @@
+export const SHOW_CAPMONEY_PRO = (import.meta as { env?: { VITE_SHOW_PRO?: string } }).env?.VITE_SHOW_PRO === 'true';
 export const PRO_SETTINGS_PATH = '/app/settings?section=pro';
 
 export type ProOrder = {

@@ -1,4 +1,5 @@
 import { ApiError, authenticatedRequest, clearLocalAccountCache, readLocalBackup } from './api';
+import { APPEARANCE_RESTORED } from '../constants/appearance';
 
 export const PREFERENCE_KEYS = [
   'capmoney_budget_v1', 'capmoney_savings_jar_v1', 'capmoney_debts_v1', 'capmoney_subscriptions_v1',
@@ -40,7 +41,7 @@ async function imageForBackup(url: string | null) {
   if (!url) return undefined;
   try {
     if (url.startsWith('data:image/')) return url.length <= 12_000_000 ? url : undefined;
-    if (!/^\/api\/transactions\/[a-f\d]{24}\/image$/i.test(url)) return undefined;
+    if (!/^\/api\/transactions\/[a-f\d]{24}\/image(?:\?v=[a-f\d]{16})?$/i.test(url)) return undefined;
     const response = await fetch(url, { credentials: 'include' });
     if (!response.ok) return undefined;
     const blob = await response.blob();
@@ -98,7 +99,7 @@ function applyPreferences(values: Preferences) {
     }
     throw new Error('Dữ liệu web đã cập nhật nhưng bộ nhớ thiết bị đầy. Hãy giải phóng dung lượng rồi bấm “Thử lại” để áp dụng cài đặt.');
   }
-  document.documentElement.classList.toggle('dark-theme', values['capmoney-theme'] !== 'light');
+  window.dispatchEvent(new Event(APPEARANCE_RESTORED));
 }
 
 export async function recoverDeviceSettings(email: string) {

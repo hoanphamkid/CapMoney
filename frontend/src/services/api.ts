@@ -318,7 +318,9 @@ export function clearLocalAccountCache(email: string) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 }
 
-async function uploadOnce<T>(path: string, form: FormData, method: 'POST' | 'PUT'): Promise<T> {
+type UploadMethod = 'POST' | 'PUT' | 'PATCH';
+
+async function uploadOnce<T>(path: string, form: FormData, method: UploadMethod): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_ROOT}${path}`, { method, body: form, credentials: 'include' });
@@ -340,7 +342,7 @@ async function uploadOnce<T>(path: string, form: FormData, method: 'POST' | 'PUT
   return body as T;
 }
 
-function upload<T>(path: string, form: FormData, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
+function upload<T>(path: string, form: FormData, method: UploadMethod = 'POST'): Promise<T> {
   return withSessionRefresh(path, () => uploadOnce<T>(path, form, method));
 }
 
@@ -385,7 +387,7 @@ export const api = {
         db.currentUserId = user.id;
         ensureDefaultLocalWallets(db, user.id);
         saveDb(db);
-        return { user: publicUser(user), profile: db.profiles[user.id], message: 'Tài khoản đã được tạo.' };
+        return { user: publicUser(user), profile: db.profiles[user.id], message: 'Tạo tài khoản thành công.' };
       },
     ),
 
@@ -725,6 +727,25 @@ export const api = {
       },
     ),
 
+  replaceTransactionImage: (id: string, image: File) =>
+    withFallback(
+      () => {
+        const form = new FormData();
+        form.set('image', image);
+        return upload<{ imageUrl: string }>(`/transactions/${encodeURIComponent(id)}/image`, form, 'PATCH');
+      },
+      async () => {
+        const imageUrl = await fileToDataUrl(image);
+        const db = loadDb();
+        const user = requireLocalUser(db);
+        const existing = db.transactions.find(tx => tx.id === id && tx.userId === user.id && tx.type !== 'transfer');
+        if (!existing) throw new ApiError(404, 'TRANSACTION_NOT_FOUND', 'Không tìm thấy giao dịch có thể gắn ảnh.');
+        existing.imageUrl = imageUrl;
+        saveDb(db);
+        return { imageUrl };
+      },
+    ),
+
   deleteTransaction: (id: string) =>
     withFallback(
       () => request<void>(`/transactions/${id}`, { method: 'DELETE' }),
@@ -752,6 +773,11 @@ export const api = {
         saveDb(db);
       },
     ),
+
+  transaction: async (id: string) => {
+    const result = await authenticatedRequest<{ transaction: Transaction }>(`/transactions/${encodeURIComponent(id)}`);
+    return normalizeTransaction(result.transaction);
+  },
 
   transactions: (params: { from?: string; to?: string; walletId?: string } = {}) =>
     withFallback(

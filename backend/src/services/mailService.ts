@@ -10,6 +10,9 @@ export async function sendMail(input: { to: string; subject: string; text: strin
     const transport = nodemailer.createTransport({
       host: env.SMTP_HOST, port: env.SMTP_PORT, secure: env.SMTP_SECURE,
       auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
     });
     await transport.sendMail({ from: env.SMTP_FROM, ...input });
     return { mode: 'smtp' as const };

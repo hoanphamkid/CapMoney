@@ -195,14 +195,17 @@ for (const [name, post] of [
         expect(testNotification.status).toBe(200);
         expect(testNotification.body).toMatchObject({ sent: 1, removed: 0, failed: 0, configured: true });
         send.mockClear();
+        const transactionIds: string[] = [];
         for (const direction of ['in', 'out']) {
           const body = payload(`${name}-push-${direction}`, direction, 12345);
-          expect((await post(body)).status).toBe(200);
+          const received = await post(body);
+          expect(received.status).toBe(200);
+          transactionIds.push(received.body.transaction.id);
           expect((await post(body)).status).toBe(200);
         }
         expect(send).toHaveBeenCalledTimes(2);
         expect(send.mock.calls.every(call => call[0].endpoint === endpoint)).toBe(true);
-        expect(JSON.parse(send.mock.calls[0][1] as string)).toMatchObject({ title: 'MB Bank: Nhận tiền', body: '+12.345 ₫', url: '/app/transactions' });
+        expect(JSON.parse(send.mock.calls[0][1] as string)).toMatchObject({ title: 'MB Bank: Nhận tiền', body: '+12.345 ₫', transactionId: transactionIds[0] });
         expect(JSON.parse(send.mock.calls[1][1] as string).title).toBe('MB Bank: Chuyển tiền');
         send.mockRejectedValueOnce({ statusCode: 410 });
         expect((await post(payload(`${name}-push-expired`, 'in', 1000))).status).toBe(200);

@@ -31,6 +31,8 @@ export function ExpenseDetail({ event, wallets = [], onClose, onChanged }: { eve
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [updatingPhoto, setUpdatingPhoto] = useState(false);
+  const busy = deleting || updatingPhoto;
+  const [photoError, setPhotoError] = useState('');
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cancelDeleteRef = useRef<HTMLButtonElement>(null);
@@ -67,21 +69,12 @@ export function ExpenseDetail({ event, wallets = [], onClose, onChanged }: { eve
   const handleApplyCroppedPhoto = async (cropped: File) => {
     setPendingCropFile(null);
     setUpdatingPhoto(true);
+    setPhotoError('');
     try {
-      await api.updateTransaction(event.id, {
-        type: event.kind,
-        amount: event.amount ?? 0,
-        note: event.note ?? '',
-        categoryId: event.categoryId ?? 'other',
-        walletId: event.walletId ?? '',
-        transactionDate: event.dateKey,
-        transactionTime: event.transactionTime,
-        source: 'camera',
-        image: cropped,
-      });
+      await api.replaceTransactionImage(event.id, cropped);
       onChanged();
-    } catch {
-      alert('Không thể cập nhật ảnh.');
+    } catch (error) {
+      setPhotoError(error instanceof ApiError ? error.message : 'Không thể cập nhật ảnh. Vui lòng thử lại.');
     } finally {
       setUpdatingPhoto(false);
     }
@@ -130,9 +123,9 @@ export function ExpenseDetail({ event, wallets = [], onClose, onChanged }: { eve
   };
 
   return (
-    <div className="detail-overlay" onClick={deleting ? undefined : onClose}>
-      <section className="expense-detail cm-spring-pop" onClick={eventClick => eventClick.stopPropagation()}>
-        <button className="detail-close" disabled={deleting} onClick={onClose} aria-label="Đóng">
+    <div className="detail-overlay" onClick={busy ? undefined : onClose}>
+      <section className="expense-detail cm-spring-pop" aria-busy={busy} onClick={eventClick => eventClick.stopPropagation()}>
+        <button className="detail-close" disabled={busy} onClick={onClose} aria-label="Đóng">
           <X size={18} />
         </button>
 
@@ -174,16 +167,16 @@ export function ExpenseDetail({ event, wallets = [], onClose, onChanged }: { eve
           {!transfer && <button
             type="button"
             className="cm-detail-snap-btn"
-            disabled={updatingPhoto}
+            disabled={busy || confirmingDelete}
             onClick={() => fileInputRef.current?.click()}
-            title={event.imageUrl ? 'Chụp hoặc thay ảnh bill thật' : 'Chụp ảnh gắn vào giao dịch'}
+            title={event.imageUrl ? 'Thay ảnh hóa đơn' : 'Gắn ảnh hóa đơn vào giao dịch'}
           >
             {updatingPhoto ? (
               <LoaderCircle size={14} className="spin" />
             ) : (
               <>
                 <Camera size={14} />
-                <span>{event.imageUrl ? (isMbBank ? 'Thay bằng ảnh bill thật' : 'Thay ảnh') : 'Chụp / Gắn ảnh'}</span>
+                <span>{event.imageUrl ? (isMbBank ? 'Thay ảnh hóa đơn' : 'Thay ảnh') : 'Chụp / Gắn ảnh'}</span>
               </>
             )}
           </button>}
@@ -191,7 +184,8 @@ export function ExpenseDetail({ event, wallets = [], onClose, onChanged }: { eve
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
+            capture={isMbBank ? undefined : 'environment'}
+            aria-label="Tệp ảnh hóa đơn"
             style={{ display: 'none' }}
             onChange={e => {
               const f = e.target.files?.[0];
@@ -202,6 +196,7 @@ export function ExpenseDetail({ event, wallets = [], onClose, onChanged }: { eve
         </div>
 
         <div className="detail-content">
+          {photoError && <div className="capture-error" role="alert">{photoError}</div>}
           <span className={`detail-kind ${transfer ? 'transfer' : income ? 'income' : 'expense'}`}>
             {transfer ? <ArrowLeftRight size={14} /> : income ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
             {transfer ? 'Chuyển ví' : income ? 'Thu nhập' : 'Chi tiêu'}
@@ -246,10 +241,10 @@ export function ExpenseDetail({ event, wallets = [], onClose, onChanged }: { eve
             </div>
           ) : (
             <div className="detail-actions">
-              {!transfer && <button type="button" onClick={() => setEditing(true)}>
+              {!transfer && <button type="button" disabled={busy} onClick={() => setEditing(true)}>
                 <Edit3 size={14} /> Sửa chi tiết
               </button>}
-              <button type="button" className="danger" onClick={() => setConfirmingDelete(true)}>
+              <button type="button" className="danger" disabled={busy} onClick={() => setConfirmingDelete(true)}>
                 <Trash2 size={14} /> Xóa
               </button>
             </div>
@@ -339,7 +334,7 @@ function EditTransaction({
         walletId,
         transactionDate: event.dateKey,
         transactionTime: timeStr ? (timeStr.length === 5 ? `${timeStr}:00` : timeStr) : undefined,
-        source: image ? 'camera' : event.source === 'camera' || event.source === 'webhook_mbbank' ? event.source : 'manual',
+        source: event.source === 'webhook_mbbank' ? event.source : image || event.source === 'camera' ? 'camera' : 'manual',
         image,
         imageUrl: image ? undefined : imageUrl.trim() || undefined,
       });

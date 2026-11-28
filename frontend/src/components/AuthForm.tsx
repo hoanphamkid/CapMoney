@@ -19,7 +19,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
     setError(''); setSuccess('');
     try {
       if (isLogin) await login({ email: values.email, password: values.password, remember: values.remember });
-      else { const result = await register({ name: values.name, email: values.email, password: values.password }); setSuccess(`Chào mừng ${result.name.split(' ')[0]}, tài khoản của bạn đã sẵn sàng.`); }
+      else await register({ name: values.name, email: values.email, password: values.password });
       navigate((location.state as { from?: string } | null)?.from ?? '/app', { replace: true });
     } catch (caught) { setError(caught instanceof ApiError ? caught.message : 'Không thể kết nối. Vui lòng thử lại.'); }
   };
@@ -35,7 +35,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
       <Field label="Mật khẩu" error={fieldError('password')} hint={!isLogin ? 'Ít nhất 8 ký tự' : undefined}><div className="password-field"><input {...form.register('password')} type={showPassword ? 'text' : 'password'} placeholder="••••••••" autoComplete={isLogin ? 'current-password' : 'new-password'} /><button type="button" aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></Field>
       {!isLogin && <Field label="Nhập lại mật khẩu" error={fieldError('confirmPassword')}><input {...form.register('confirmPassword')} type={showPassword ? 'text' : 'password'} placeholder="••••••••" autoComplete="new-password" /></Field>}
       {isLogin ? <div className="form-row"><label className="checkbox-label"><input {...form.register('remember')} type="checkbox" /><span>Ghi nhớ đăng nhập</span></label><button type="button" className="text-button" onClick={() => setSuccess('Liên kết đặt lại mật khẩu sẽ được gửi tới email của bạn.')}>Quên mật khẩu?</button></div> : <label className="checkbox-label terms"><input {...form.register('agree')} type="checkbox" /><span>Tôi đồng ý với <button type="button" className="inline-link">Điều khoản sử dụng</button> và <button type="button" className="inline-link">Chính sách riêng tư</button>.</span></label>}
-      {error && <div className="form-alert error">{error}</div>}{success && <div className="form-alert success">{success}</div>}
+      {error && <div className="form-alert error" role="alert">{error}</div>}{success && <div className="form-alert success">{success}</div>}
       <button className="submit-button" type="submit" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? <LoaderCircle size={18} className="spin" /> : <>{isLogin ? 'Đăng nhập' : 'Tạo tài khoản'}<ArrowRight size={17} /></>}</button>
     </form>
     <p className="switch-prompt">{isLogin ? 'Chưa có tài khoản?' : 'Đã có tài khoản?'} <Link to={isLogin ? '/register' : '/login'}>{isLogin ? 'Tạo tài khoản' : 'Đăng nhập'}</Link></p>

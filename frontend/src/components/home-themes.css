@@ -17,14 +17,14 @@
 .cm-home-theme-launch svg { flex-shrink: 0; }
 
 .cm-home-theme-dialog {
-  width: min(calc(100% - 24px), 450px);
+  width: min(calc(100% - 24px), 480px);
   max-height: calc(100dvh - 24px);
   padding: 0;
   overflow: auto;
-  border: 1px solid #43394d;
-  border-radius: 24px;
-  background: #201b29;
-  color: #fff5ff;
+  border: 1px solid var(--home-line);
+  border-radius: 20px;
+  background: var(--home-panel);
+  color: var(--home-ink);
   box-shadow: 0 24px 80px #100b15a6;
 }
 
@@ -35,19 +35,18 @@
 
 .cm-home-theme-dialog-body {
   display: grid;
-  gap: 16px;
-  padding: 18px;
+  gap: 13px;
+  padding: 16px 16px 0;
 }
 
 .cm-home-theme-dialog-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
 .cm-home-theme-dialog-head h2 { margin: 0; font-size: 1.2rem; line-height: 1.25; }
-.cm-home-theme-dialog-head p { margin: 5px 0 0; color: #cfc0d8; font-size: .8125rem; }
 
 .cm-home-theme-dialog-head button {
   display: grid;
@@ -55,54 +54,53 @@
   height: 36px;
   place-items: center;
   padding: 0;
-  border: 1px solid #ffffff29;
+  border: 1px solid var(--home-line);
   border-radius: 50%;
-  background: #302637;
-  color: #fff5ff;
+  background: var(--home-tint);
+  color: var(--home-ink);
 }
 
 .cm-home-theme-options {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .cm-home-theme-option {
   position: relative;
   min-width: 0;
   padding: 4px;
-  border: 1px solid #ffffff21;
-  border-radius: 14px;
-  background: #2c2434;
-  color: #fff5ff;
+  border: 1px solid var(--home-line);
+  border-radius: 12px;
+  background: var(--home-panel);
+  color: var(--home-ink);
   text-align: left;
 }
 
 .cm-home-theme-option:hover,
-.cm-home-theme-option[aria-pressed='true'] { border-color: #dfb8ff; background: #3b2d48; }
+.cm-home-theme-option[aria-pressed='true'] { border-color: var(--home-accent); background: var(--home-tint); }
 
-.cm-home-theme-dialog button:focus-visible { outline: 2px solid #ead4ff; outline-offset: 2px; }
+.cm-home-theme-dialog button:focus-visible { outline: 2px solid var(--home-accent); outline-offset: 2px; }
 
 .cm-home-theme-launch:focus-visible {
   outline: 2px solid var(--home-accent, #e0c5ff);
   outline-offset: 2px;
 }
 
-.cm-home-theme-option-copy { display: grid; gap: 3px; padding: 8px 6px 6px; }
-.cm-home-theme-option-copy strong { font-size: .875rem; }
-.cm-home-theme-option-copy small { color: #d3c4de; font-size: .75rem; }
+.cm-home-theme-option-copy { display: block; padding: 6px 3px 4px; text-align: center; }
+.cm-home-theme-option-copy strong { font-size: .75rem; }
 
 .cm-home-theme-check {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   display: grid;
   width: 22px;
   height: 22px;
   place-items: center;
   border-radius: 50%;
-  background: #25192c;
-  color: #ffedff;
+  background: var(--home-accent);
+  color: var(--home-on-accent);
 }
 
 .cm-home-theme-sample {
@@ -111,8 +109,8 @@
   grid-template-columns: 1fr 1fr;
   align-items: center;
   justify-items: center;
-  min-height: 65px;
-  padding: 6px;
+  min-height: 63px;
+  padding: 5px;
   overflow: hidden;
   border-radius: 10px;
   background: linear-gradient(145deg, var(--home-glow, #2a3549), var(--home-bg, #12141b));
@@ -122,8 +120,8 @@
 .cm-home-theme-sample-calendar {
   display: grid;
   grid-template-columns: repeat(3, 7px);
-  gap: 4px;
-  padding: 12px 8px;
+  gap: 2px;
+  padding: 7px 4px;
   border: 1px solid var(--home-line, #485b76);
   border-radius: 9px;
   background: var(--home-panel, #17181d);
@@ -140,106 +138,86 @@
 .cm-home-theme-sample-calendar i:nth-child(6) { background: currentColor; }
 .cm-home-theme-sample-cat { width: min(100%, 86px); object-fit: contain; }
 
+.cm-home-theme-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-inline: -16px;
+  padding: 9px 16px 14px;
+  border-top: 1px solid var(--home-line);
+  background: var(--home-panel);
+}
+
 .cm-home-theme-done {
+  width: 100%;
   min-height: 42px;
   border: 0;
   border-radius: 11px;
-  background: #ead4ff;
-  color: #33223f;
+  background: var(--home-accent);
+  color: var(--home-on-accent);
   font-weight: 700;
 }
 
-.cm-app-shell[data-app-theme='classic'],
-[data-theme-sample='classic'] {
-  --home-bg: #12141b;
-  --home-glow: #2a3549;
-  --home-panel: #17181d;
-  --home-tint: #30415a;
-  --home-line: #485b76;
-  --home-ink: #f4f5f8;
-  --home-muted: #9ba5bc;
-  --home-accent: #91bbff;
-  --home-on-accent: #13223a;
-  --home-danger: #ff8e85;
-  --home-success: #7de89a;
+.cm-settings-appearance-title { margin: 0; font-size: 15px; }
+.cm-appearance-mode, .cm-appearance-tabs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.45fr);
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--home-line);
+  border-radius: 12px;
+  background: var(--home-tint);
 }
-
-.cm-app-shell[data-app-theme='sleepy-cat'],
-.cm-app-shell:has(> .cm-app-content > [data-home-theme='sleepy-cat']),
-[data-theme-sample='sleepy-cat'] {
-  --home-bg: #fff5e7;
-  --home-glow: #ffdcaf;
-  --home-panel: #fffaf3;
-  --home-tint: #f6e1cc;
-  --home-line: #e4c5a8;
-  --home-ink: #462c24;
-  --home-muted: #755a4d;
-  --home-accent: #954e32;
-  --home-on-accent: #fff9f2;
+.cm-appearance-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cm-appearance-mode button, .cm-appearance-tabs button, .cm-wallpaper-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--home-ink);
+  font-size: .75rem;
+  font-weight: 700;
+  text-align: center;
 }
-
-.cm-app-shell[data-app-theme='strawberry'],
-.cm-app-shell:has(> .cm-app-content > [data-home-theme='strawberry']),
-[data-theme-sample='strawberry'] {
-  --home-bg: #fff1f5;
-  --home-glow: #ffd3e0;
-  --home-panel: #fffbfc;
-  --home-tint: #fbe0e9;
-  --home-line: #edc1d1;
-  --home-ink: #512739;
-  --home-muted: #785466;
-  --home-accent: #a23964;
-  --home-on-accent: #fff8fa;
+.cm-appearance-mode button svg, .cm-appearance-tabs button svg, .cm-wallpaper-button svg { flex: none; }
+.cm-appearance-mode button[aria-pressed='true'], .cm-appearance-tabs button[aria-pressed='true'] {
+  border-color: var(--home-line);
+  background: var(--home-panel);
+  color: var(--home-accent);
 }
-
-.cm-app-shell[data-app-theme='matcha'],
-.cm-app-shell:has(> .cm-app-content > [data-home-theme='matcha']),
-[data-theme-sample='matcha'] {
-  --home-bg: #f3f6e7;
-  --home-glow: #d8e9b9;
-  --home-panel: #fcfdf5;
-  --home-tint: #e4edcf;
-  --home-line: #cad7ac;
-  --home-ink: #303c25;
-  --home-muted: #52624a;
-  --home-accent: #46662e;
-  --home-on-accent: #fcfff5;
+@media (max-width: 360px) {
+  .cm-appearance-mode { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cm-appearance-mode button { flex-direction: column; gap: 3px; }
 }
+.cm-wallpaper-picker { display: grid; gap: 10px; }
+.cm-wallpaper-picker p { margin: 0; color: var(--home-muted); font-size: .75rem; }
+.cm-wallpaper-picker p[role='alert'] { color: var(--home-danger); }
+.cm-wallpaper-picker p[role='status'] { color: var(--home-success); }
+.cm-wallpaper-preview { position: relative; height: 145px; overflow: hidden; border: 1px solid var(--home-line); border-radius: 12px; background: var(--home-bg); }
+.cm-wallpaper-preview img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.04); }
+.cm-wallpaper-preview::after, .cm-app-wallpaper::after { position: absolute; inset: 0; background: var(--wallpaper-scrim); content: ''; }
+.cm-wallpaper-preview-card { position: absolute; z-index: 1; left: 16px; bottom: 16px; display: grid; grid-template-columns: repeat(3, 13px); gap: 5px; padding: 9px; border: 1px solid var(--home-line); border-radius: 7px; background: var(--home-panel); }
+.cm-wallpaper-preview-card span { height: 9px; border-radius: 4px; background: var(--home-accent); }
+.cm-wallpaper-filters, .cm-wallpaper-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.cm-wallpaper-filters button, .cm-wallpaper-button { border: 1px solid var(--home-line); background: var(--home-panel); color: var(--home-ink); }
+.cm-wallpaper-filters button { min-height: 36px; padding: 3px 10px; border-radius: 999px; font-size: .75rem; }
+.cm-wallpaper-filters button[aria-pressed='true'], .cm-wallpaper-button.is-primary { border-color: var(--home-accent); background: var(--home-accent); color: var(--home-on-accent); }
+.cm-wallpaper-button { padding-inline: 10px; }
+.cm-wallpaper-button:disabled { cursor: default; opacity: .55; }
+.cm-wallpaper-actions .cm-wallpaper-button { flex: 1 1 120px; }
+.cm-wallpaper-actions:empty { display: none; }
 
-.cm-app-shell[data-app-theme='lavender'],
-.cm-app-shell:has(> .cm-app-content > [data-home-theme='lavender']),
-[data-theme-sample='lavender'] {
-  --home-bg: #f5f1ff;
-  --home-glow: #dfd4fb;
-  --home-panel: #fdfaff;
-  --home-tint: #eae1fa;
-  --home-line: #d4c6ee;
-  --home-ink: #392b50;
-  --home-muted: #615275;
-  --home-accent: #68439c;
-  --home-on-accent: #fff9ff;
-}
-
-.cm-app-shell[data-app-theme='moonlight'],
-.cm-app-shell:has(> .cm-app-content > [data-home-theme='moonlight']),
-[data-theme-sample='moonlight'] {
-  --home-bg: #15132a;
-  --home-glow: #332c58;
-  --home-panel: #211d38;
-  --home-tint: #30294a;
-  --home-line: #4e426d;
-  --home-ink: #fff4fd;
-  --home-muted: #c7badc;
-  --home-accent: #e0bcff;
-  --home-on-accent: #291735;
-  --home-danger: #ffaaa4;
-  --home-success: #8ce6ad;
-}
-
-.cm-app-shell[data-app-theme]:not([data-app-theme='classic']),
-.cm-app-shell:has(> .cm-app-content > [data-home-theme]:not([data-home-theme='classic'])) {
+.cm-app-shell[data-app-theme] {
   background: radial-gradient(ellipse 660px 480px at 50% 0, var(--home-glow), transparent), var(--home-bg);
   color: var(--home-ink);
+  isolation: isolate;
+  --home-soft: color-mix(in srgb, var(--home-accent) 12%, var(--home-panel));
+  --home-soft-strong: color-mix(in srgb, var(--home-accent) 22%, var(--home-panel));
 
   :is(.cm-calendar-board, .cm-summary-card, .cm-budget-home-card, .cm-search-bar,
     .cm-mode-switcher, .cm-bottom-dock) {
@@ -328,10 +306,8 @@
   .cm-toolkit-launch::after { display: none; }
 }
 
-.cm-app-shell[data-app-theme] {
-  background: var(--home-bg);
-  color: var(--home-ink);
-}
+.cm-app-wallpaper { position: fixed; z-index: -1; inset: 0; overflow: hidden; pointer-events: none; }
+.cm-app-wallpaper img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.04); }
 
 .cm-app-shell[data-app-theme] .cm-app-content {
   color: var(--home-ink);
@@ -345,20 +321,20 @@
 
 .cm-app-shell[data-app-theme] :is(.panel, .metric-card, .wallet-stat, .wallet-card,
   .wallet-add-card, .transaction-row, .transaction-summary > div, .settings-card,
-  .money-balance-panel, .money-wallet-section, .money-activity, .cm-sync-intro,
+  .money-balance-panel, .money-activity, .cm-sync-intro,
   .cm-sync-create, .cm-sync-history, .cm-sync-restore, .cm-sync-activity) {
   color: var(--home-ink);
   background: var(--home-panel) !important;
   border-color: var(--home-line) !important;
 }
 
-.cm-app-shell[data-app-theme] :is(input, textarea, select) {
+.cm-app-shell[data-app-theme] :is(input, textarea, select):where(:not(.cm-capture-modal *, .money-search input, .loans-search input, .cm-search-bar input, [type='range'], [type='color'], [type='file'])) {
   color: var(--home-ink) !important;
   background: var(--home-tint) !important;
   border-color: var(--home-line) !important;
 }
 
-.cm-app-shell[data-app-theme] :is(input, textarea, select)::placeholder {
+.cm-app-shell[data-app-theme] :is(input, textarea, select):where(:not(.cm-capture-modal *))::placeholder {
   color: var(--home-muted);
 }
 
@@ -426,14 +402,6 @@
   color: var(--home-on-accent);
 }
 
-.cm-app-shell[data-app-theme] .loans-dialog {
-  color-scheme: light;
-}
-
-.cm-app-shell[data-app-theme] .cm-home-screen {
-  --home-soft: color-mix(in srgb, var(--home-accent) 12%, var(--home-panel));
-  --home-soft-strong: color-mix(in srgb, var(--home-accent) 22%, var(--home-panel));
-}
 
 .cm-app-shell[data-app-theme] .cm-home-screen .cm-greeting-sub,
 .cm-app-shell[data-app-theme] .cm-home-screen .cm-mode-btn:not(.active),
@@ -575,7 +543,7 @@
 }
 
 .cm-app-shell[data-app-theme] .cm-home-screen .cm-calendar-board {
-  background: linear-gradient(145deg, var(--home-panel), var(--home-soft));
+  background: linear-gradient(145deg, var(--home-panel), var(--home-soft)) var(--home-panel);
   border-color: var(--home-line);
   box-shadow: 0 12px 28px color-mix(in srgb, var(--home-accent) 8%, transparent);
 }

@@ -3,11 +3,17 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import mongoose from 'mongoose';
-import { randomToken } from '../utils/crypto.js';
+import { hashToken, randomToken } from '../utils/crypto.js';
 
 // Existing local installations may still have receipts stored on disk.
 const uploadDir = path.resolve(process.cwd(), '..', '.local', 'uploads');
 const imagePrefix = 'gridfs:';
+
+export function publicTransactionImageUrl(row: { _id: unknown; imageKey?: string | null; externalImageUrl?: string | null }) {
+  return row.imageKey
+    ? `/api/transactions/${String(row._id)}/image?v=${hashToken(row.imageKey).slice(0, 16)}`
+    : row.externalImageUrl ?? null;
+}
 
 function imageBucket() {
   const db = mongoose.connection.db;

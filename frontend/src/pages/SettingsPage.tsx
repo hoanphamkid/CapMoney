@@ -1,15 +1,16 @@
 import { ArrowLeft, Bell, Camera, Check, ChevronRight, CloudUpload, Crown, Download, Globe2, KeyRound, LoaderCircle, LogOut, Monitor, Pencil, ShieldCheck, Smartphone } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, authenticatedRequest } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppTheme } from '../contexts/ThemeContext';
-import { HOME_THEMES, HomeThemePicker } from '../components/HomeThemePicker';
+import { AppearanceModeControls, HomeThemePicker } from '../components/HomeThemePicker';
+import { HOME_THEMES } from '../constants/appearance';
 import { AccountAvatar } from '../components/AccountAvatar';
 import { ProCheckout } from '../components/ProCheckout';
 import { bankPushEnabled, disableBankPush, enableBankPush, getBankPushConfig, isHomeScreenApp, type BankPushConfig } from '../services/bankNotifications';
 import { ALL_CATEGORY_LABELS } from '../constants/categories';
-import { PRO_SETTINGS_PATH } from '../constants/pro';
+import { PRO_SETTINGS_PATH, SHOW_CAPMONEY_PRO } from '../constants/pro';
 import { encodeAvatar } from '../services/avatarImage';
 import './settings-page.css';
 
@@ -33,7 +34,7 @@ export function SettingsPage() {
   const [searchParams] = useSearchParams();
   const section = (Object.keys(settingsSections) as SettingsSection[]).find(key => key === searchParams.get('section'));
   const heading = useRef<HTMLHeadingElement>(null);
-  const { theme, setTheme } = useAppTheme();
+  const { theme, wallpaper } = useAppTheme();
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
@@ -42,7 +43,6 @@ export function SettingsPage() {
   const avatarInput = useRef<HTMLInputElement>(null);
   const [avatarDraft, setAvatarDraft] = useState<string | null>();
   const [avatarBusy, setAvatarBusy] = useState(false);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('capmoney-theme') !== 'light');
   const [remindRecord, setRemindRecord] = useState(() => localStorage.getItem('capmoney-remind-record') !== 'false');
   const [remindBill, setRemindBill] = useState(() => localStorage.getItem('capmoney-remind-bill') !== 'false');
   const [sessions, setSessions] = useState<Array<{ id: string; deviceName: string; lastActiveAt: string; current: boolean }>>([]);
@@ -113,11 +113,6 @@ export function SettingsPage() {
       .then(result => setSessions(result.sessions))
       .catch(() => setSessions([]));
   }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark-theme', darkMode);
-    localStorage.setItem('capmoney-theme', darkMode ? 'dark' : 'light');
-  }, [darkMode]);
 
   const saveProfile = async (fields: 'profile' | 'appearance') => {
     if (!user || saving || avatarBusy) return;
@@ -222,6 +217,8 @@ export function SettingsPage() {
   const avatarPreview = avatarDraft === undefined ? profile?.avatarUrl : avatarDraft;
   const hasPro = user?.proEnabled === true;
 
+  if (section === 'pro' && !SHOW_CAPMONEY_PRO) return <Navigate to="/app/settings" replace />;
+
   return (
     <div className="cm-settings">
       <header className="cm-settings-header">
@@ -256,7 +253,7 @@ export function SettingsPage() {
             </span>
             <Pencil size={18} aria-hidden="true" />
           </Link>
-          <ProLink active={hasPro} />
+          {SHOW_CAPMONEY_PRO && <ProLink active={hasPro} />}
 
           <SettingsGroup title="Tùy chọn">
             <SettingsLink section="appearance" icon={<Globe2 size={19} />} detail={themeLabel} />
@@ -331,6 +328,10 @@ export function SettingsPage() {
 
       {section === 'appearance' && (
         <>
+          <section className="cm-settings-detail" aria-labelledby="cm-settings-appearance-mode">
+            <h2 id="cm-settings-appearance-mode" className="cm-settings-appearance-title">Chế độ hiển thị</h2>
+            <AppearanceModeControls />
+          </section>
           <div className="cm-settings-list">
             <button
               type="button"
@@ -339,10 +340,9 @@ export function SettingsPage() {
               aria-expanded={themePickerOpen}
               onClick={() => setThemePickerOpen(true)}
             >
-              <span className="cm-settings-copy"><strong>Chủ đề màu</strong><small>{themeLabel}</small></span>
+              <span className="cm-settings-copy"><strong>Chủ đề màu và ảnh nền</strong><small>{themeLabel}{wallpaper ? ' · Có ảnh nền' : ''}</small></span>
               <ChevronRight size={18} aria-hidden="true" />
             </button>
-            <SettingsSwitch label="Giao diện tối" checked={darkMode} onClick={() => setDarkMode(value => !value)} />
           </div>
           <form className="cm-settings-detail" onSubmit={event => { event.preventDefault(); void saveProfile('appearance'); }}>
             <label className="cm-settings-field">
@@ -364,7 +364,7 @@ export function SettingsPage() {
               {saving ? 'Đang lưu…' : 'Lưu khu vực'}
             </button>
           </form>
-          {themePickerOpen && <HomeThemePicker selected={theme} onSelect={setTheme} onClose={() => setThemePickerOpen(false)} />}
+          {themePickerOpen && <HomeThemePicker onClose={() => setThemePickerOpen(false)} />}
         </>
       )}
 
@@ -462,7 +462,7 @@ function ProLink({ active }: { active: boolean }) {
       <span className="cm-pro-icon"><Crown size={21} aria-hidden="true" /></span>
       <span className="cm-settings-copy">
         <strong>{active ? 'CapMoney Pro' : 'Mở khóa Pro'}</strong>
-        <small>{active ? 'Đã kích hoạt' : 'Trải nghiệm tất cả tiện ích'}</small>
+        <small>{active ? 'Đã kích hoạt' : 'Tự ghi bill từ MB Bank'}</small>
       </span>
       <ChevronRight size={18} aria-hidden="true" />
     </Link>

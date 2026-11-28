@@ -1,8 +1,9 @@
-import { Check, Copy, Crown, LockKeyhole } from 'lucide-react';
+import { Check, Copy, Crown, ReceiptText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PRO_FEATURES, type ProCheckout as Checkout } from '../constants/pro';
+import type { ProCheckout as Checkout } from '../constants/pro';
 import { useAuth } from '../contexts/AuthContext';
+import { BankReceiptDemo } from './BankReceiptDemo';
 
 const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
 
@@ -52,21 +53,23 @@ export function ProCheckout() {
   const order = checkout?.status === 'pending' ? checkout.order : null;
   const price = checkout?.status === 'available' || checkout?.status === 'unavailable' ? checkout.price : undefined;
 
-  return (
+  return <>
     <section className="cm-settings-detail cm-pro-detail" aria-labelledby="cm-pro-title">
       <span className="cm-pro-icon"><Crown size={25} aria-hidden="true" /></span>
       <h2 id="cm-pro-title">{hasPro ? 'Bạn đã mở khóa Pro' : 'Mở khóa Pro để trải nghiệm tất cả'}</h2>
-      <ul className="cm-pro-feature-list">
-        {Object.values(PRO_FEATURES).map(feature => (
-          <li key={feature.title}>
-            {hasPro ? <Check size={17} aria-hidden="true" /> : <LockKeyhole size={17} aria-hidden="true" />}
-            <span><strong>{feature.title}</strong><small>{feature.detail}</small></span>
-          </li>
-        ))}
-      </ul>
+      <div className="cm-pro-bank-feature">
+        {hasPro ? <Check size={20} aria-hidden="true" /> : <ReceiptText size={20} aria-hidden="true" />}
+        <div>
+          <h3>Tự nhận diện bill từ ngân hàng</h3>
+          <p>Khi MB Bank đã được liên kết, CapMoney tự tạo bill từ thông báo giao dịch. Bạn chỉ cần mở app và thay ảnh hóa đơn.</p>
+        </div>
+      </div>
 
       {hasPro ? (
-        <Link className="cm-settings-button is-primary" to="/app">Về trang chủ</Link>
+        <div className="cm-pro-bank-actions">
+          <Link className="cm-settings-button is-primary" to="/app/transactions">Mở giao dịch</Link>
+          <Link className="cm-settings-button" to="/app">Về trang chủ</Link>
+        </div>
       ) : (
         <>
           {price != null && (
@@ -96,7 +99,8 @@ export function ProCheckout() {
         </>
       )}
     </section>
-  );
+    <BankReceiptDemo />
+  </>;
 }
 
 function CopyButton({ label, onClick }: { label: string; onClick: () => void }) {

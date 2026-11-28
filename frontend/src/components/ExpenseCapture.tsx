@@ -24,8 +24,7 @@ import { scanReceiptImage } from '../utils/receiptOcr';
 import { CameraView } from './CameraView';
 import { ImageCropModal } from './ImageCropModal';
 import { useAuth } from '../contexts/AuthContext';
-import { useWorkPay } from '../hooks/useWorkPay';
-import { equivalentWorkHours, formatEquivalent, hourlyPay, SHIFT_PRESETS, type ShiftId } from '../utils/workPay';
+import { useSpendingReferencePrices } from '../hooks/useSpendingReferencePrices';
 
 const expenseCategories = [
   { id: 'food', label: 'Ăn uống' },
@@ -64,8 +63,7 @@ export function ExpenseCapture({
   onSaved,
 }: ExpenseCaptureProps) {
   const { user } = useAuth();
-  const { config: workPay, selectShift } = useWorkPay(user?.email ?? '');
-  const [payError, setPayError] = useState('');
+  const { phoPrice, milkTeaPrice } = useSpendingReferencePrices(user?.email ?? '');
   const [step, setStep] = useState<'camera' | 'form'>('camera');
   const [type, setType] = useState<'expense' | 'income'>(initialType);
   const [expr, setExpr] = useState(''); // calculator expression or plain digits
@@ -441,6 +439,7 @@ export function ExpenseCapture({
         {/* TOP ROUNDED PHOTO CARD WITH TRANSLUCENT FROSTED AMOUNT OVERLAY */}
         <div
           className={`cm-photo-stage ${type} ${ocrScanning ? 'scanning' : ''}`}
+          data-has-photo={Boolean(previewUrl)}
           style={previewUrl ? { backgroundImage: `url(${previewUrl})` } : undefined}
         >
           {ocrScanning && <div className="cm-ocr-laser-beam" aria-hidden="true" />}
@@ -492,21 +491,10 @@ export function ExpenseCapture({
             </div>
 
             {type === 'expense' && rawNumericAmount > 0 && (
-              <>
               <div className="cm-life-index-hint">
-                ≈ {formatEquivalent(rawNumericAmount / workPay.phoPrice)} bát phở 🍜 •{' '}
-                {formatEquivalent(rawNumericAmount / workPay.milkTeaPrice)} trà sữa 🧋 •{' '}
-                {formatEquivalent(equivalentWorkHours(rawNumericAmount, workPay))} giờ làm ⏱️
+                ≈ {formatEquivalent(rawNumericAmount / phoPrice)} bát phở 🍜 •{' '}
+                {formatEquivalent(rawNumericAmount / milkTeaPrice)} trà sữa 🧋
               </div>
-              <div className="cm-work-pay-inline" onClick={e => e.stopPropagation()}>
-                <label><Clock size={12} /><select aria-label="Ca dùng để quy đổi giờ làm" value={workPay.selectedShift} onFocus={() => setKeypadOpen(false)} onChange={e => {
-                  try { selectShift(e.target.value as ShiftId); setPayError(''); }
-                  catch { setPayError('Không lưu được lựa chọn ca trên thiết bị.'); }
-                }}>{SHIFT_PRESETS.map(shift => <option key={shift.id} value={shift.id}>{shift.label}</option>)}</select></label>
-                <small>{workPay.shifts[workPay.selectedShift].pay.toLocaleString('vi-VN')}đ / {workPay.shifts[workPay.selectedShift].hours.toLocaleString('vi-VN')} giờ ≈ {Math.round(hourlyPay(workPay)).toLocaleString('vi-VN')}đ/giờ</small>
-                {payError && <small role="alert">{payError}</small>}
-              </div>
-              </>
             )}
 
             <div
@@ -603,29 +591,29 @@ export function ExpenseCapture({
         </div>
 
         {/* Category & Wallet Select Pills */}
-        <div className="cm-Select-pills">
+        <div className="cm-capture-selects">
           <label className="cm-select-pill">
-            <ShoppingCart key={category} size={15} className="cm-selection-feedback" />
-            <select value={category} onChange={event => setCategory(event.target.value)}>
+            <ShoppingCart key={category} size={15} className="cm-selection-feedback" aria-hidden="true" />
+            <select aria-label="Danh mục giao dịch" value={category} onChange={event => setCategory(event.target.value)}>
               {categories.map(item => (
                 <option key={item.id} value={item.id}>
                   {item.label}
                 </option>
               ))}
             </select>
-            <ChevronDown size={14} />
+            <ChevronDown size={14} aria-hidden="true" />
           </label>
 
           <label className="cm-select-pill">
-            <ReceiptText key={walletId} size={15} className="cm-selection-feedback" />
-            <select value={walletId} onChange={event => setWalletId(event.target.value)}>
+            <ReceiptText key={walletId} size={15} className="cm-selection-feedback" aria-hidden="true" />
+            <select aria-label="Ví giao dịch" value={walletId} onChange={event => setWalletId(event.target.value)}>
               {wallets.map(wallet => (
                 <option key={wallet.id} value={wallet.id}>
                   {wallet.name}
                 </option>
               ))}
             </select>
-            <ChevronDown size={14} />
+            <ChevronDown size={14} aria-hidden="true" />
           </label>
         </div>
 
@@ -836,6 +824,11 @@ export function ExpenseCapture({
       </div>
     </div>
   );
+}
+
+function formatEquivalent(value: number) {
+  if (value > 0 && value < 0.1) return '<0,1';
+  return value.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
 }
 
 function todayKey() {

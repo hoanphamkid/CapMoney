@@ -91,6 +91,31 @@ describe('receipt transaction storage', () => {
     expect((await request(app).get(url).set('Cookie', otherCookie)).status).toBe(404);
   });
 
+  it('opens the linked bank transaction for its owner and replaces only its receipt image', async () => {
+    const url = `/api/transactions/${transactionId}`;
+    const imageUrl = `${url}/image`;
+    const replacement = Buffer.from('replacement receipt image');
+    const replace = (sessionCookie: string) => request(app).patch(imageUrl).set('Cookie', sessionCookie)
+      .attach('image', replacement, { filename: 'new-receipt.png', contentType: 'image/png' });
+    await TransactionModel.updateOne({ _id: transactionId }, { $set: { source: 'webhook_mbbank' } });
+    const before = await request(app).get(url).set('Cookie', cookie);
+    expect(before.status).toBe(200);
+    expect(before.body.transaction.source).toBe('webhook_mbbank');
+    expect((await request(app).get(url).set('Cookie', otherCookie)).status).toBe(404);
+    expect((await replace(otherCookie)).status).toBe(404);
+    const saved = await replace(cookie);
+    expect(saved.status).toBe(200);
+    expect(saved.body.imageUrl).not.toBe(before.body.transaction.imageUrl);
+
+    const after = await request(app).get(url).set('Cookie', cookie);
+    expect(after.body.transaction).toEqual({ ...before.body.transaction, imageUrl: saved.body.imageUrl, imageMimeType: 'image/png' });
+    expect((await request(app).get(saved.body.imageUrl).set('Cookie', cookie)).body).toEqual(replacement);
+    const calendar = await request(app).get(`/api/calendar/day/${after.body.transaction.dateKey}`).set('Cookie', cookie);
+    expect(calendar.body.transactions).toContainEqual(expect.objectContaining({ id: transactionId, source: 'webhook_mbbank', imageUrl: saved.body.imageUrl }));
+    expect((await WalletModel.findById(walletId).lean())!.balanceMinor).toBe(700000);
+    expect(await mongoose.connection.db!.collection('transaction_images.files').countDocuments()).toBe(1);
+  });
+
   it('deletes the receipt and restores the wallet balance with the transaction', async () => {
     expect((await request(app).delete(`/api/transactions/${transactionId}`).set('Cookie', cookie)).status).toBe(204);
     expect((await WalletModel.findById(walletId).lean())!.balanceMinor).toBe(1000000);
@@ -158,12 +183,15 @@ describe('receipt transaction storage', () => {
 for (const layout of ['', 'frontend/']) {
   it(`routes nested receipt and delete requests through the ${layout || 'root/'} Vercel configuration`, async () => {
     const config = JSON.parse(await fs.readFile(new URL(`../../../${layout}vercel.json`, import.meta.url), 'utf8'));
+    const matchingRewrite = (path: string) => config.rewrites.find((rule: { source: string }) => new RegExp(`^${rule.source}$`).test(path));
+    expect(matchingRewrite('/app/settings')?.destination).toBe('/index.html');
+    expect(matchingRewrite('/_vercel/insights/script.js')).toBeUndefined();
     const before = (await WalletModel.findById(walletId).lean())!.balanceMinor;
     const created = await postReceipt();
     expect(created.status).toBe(201);
     const id = created.body.transaction.id;
     const routed = async (path: string) => {
-      const rewrite = config.rewrites.find((rule: { source: string }) => new RegExp(`^${rule.source}$`).test(path));
+      const rewrite = matchingRewrite(path);
       const destination = path.replace(new RegExp(`^${rewrite.source}$`), rewrite.destination);
       // Import the function selected by the deployment config, preserving the public URL.
       const entry = `../../../${layout}${destination.slice(1)}.js`;

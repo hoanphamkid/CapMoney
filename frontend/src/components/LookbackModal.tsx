@@ -4,7 +4,6 @@ import {
   BarChart3,
   Calendar,
   Camera,
-  Check,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -20,12 +19,11 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Transaction } from '../services/api';
 import { ALL_CATEGORY_LABELS } from '../constants/categories';
+import { buildDateKeys, formatVNDate } from '../utils/lookbackDates';
+import { saveCanvasPng } from '../utils/saveCanvasPng';
+import { Photobooth } from './Photobooth';
 
 type LookbackPeriod = 1 | 3 | 7;
-type BoothPeriod = 1 | 7 | 30;
-type BoothLayout = '4x4' | '8x8';
-type BoothOrientation = 'portrait' | 'landscape';
-
 type LookbackModalProps = {
   initialPeriod?: LookbackPeriod;
   transactions: Transaction[];
@@ -51,14 +49,9 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   const [period, setPeriod] = useState<LookbackPeriod>(initialPeriod);
   const [slideIndex, setSlideIndex] = useState(0); // 0: Photo Reel, 1: Daily Rhythm, 2: Insights
   const [photoIdx, setPhotoIdx] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [isTouching, setIsTouching] = useState(false);
   const [fadeCount, setFadeCount] = useState(0);
-  const [boothTheme, setBoothTheme] = useState<'dark' | 'pink' | 'neon' | 'retro'>('dark');
-  const [boothPeriod, setBoothPeriod] = useState<BoothPeriod>(7);
-  const [boothLayout, setBoothLayout] = useState<BoothLayout>('4x4');
-  const [boothOrientation, setBoothOrientation] = useState<BoothOrientation>('portrait');
-  const [selectedBoothIds, setSelectedBoothIds] = useState<string[]>([]);
   const [exportError, setExportError] = useState('');
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -82,29 +75,6 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
     const withPhotos = source.filter(tx => Boolean(tx.imageUrl));
     return withPhotos.length > 0 ? [...withPhotos, ...source.filter(tx => !tx.imageUrl)] : source;
   }, [periodTxs, transactions]);
-
-  const boothDateKeys = useMemo(() => buildDateKeys(boothPeriod), [boothPeriod]);
-  const boothPhotos = useMemo(() => {
-    const minKey = boothDateKeys[0] ?? '';
-    const maxKey = boothDateKeys[boothDateKeys.length - 1] ?? '';
-    return transactions
-      .filter(tx => Boolean(tx.imageUrl) && tx.dateKey >= minKey && tx.dateKey <= maxKey)
-      .sort(compareTransactions);
-  }, [transactions, boothDateKeys]);
-  const boothPhotoIds = useMemo(() => boothPhotos.map(tx => tx.id), [boothPhotos]);
-  const boothSlots = boothLayout === '4x4' ? 4 : 8;
-  const selectedBoothTxs = useMemo(() => {
-    const byId = new Map(boothPhotos.map(tx => [tx.id, tx]));
-    return selectedBoothIds.map(id => byId.get(id)).filter((tx): tx is Transaction => Boolean(tx));
-  }, [boothPhotos, selectedBoothIds]);
-  const boothPeriodLabel = boothPeriod === 1 ? '1 ngày' : boothPeriod === 7 ? '7 ngày' : '1 tháng';
-
-  useEffect(() => {
-    setSelectedBoothIds(current => {
-      const valid = current.filter(id => boothPhotoIds.includes(id)).slice(0, boothSlots);
-      return valid;
-    });
-  }, [boothPhotoIds, boothSlots]);
 
   const stats = useMemo(() => {
     let income = 0;
@@ -159,7 +129,21 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   }, [currentPhotoId]);
 
   const stepPhoto = (direction: 1 | -1) => {
+    setPlaying(false);
     if (photoCount > 1) setPhotoIdx(index => (index + photoCount + direction) % photoCount);
+  };
+
+  const selectPhoto = (index: number) => {
+    setPlaying(false);
+    setPhotoIdx(index);
+  };
+
+  const selectSlide = (index: number) => {
+    setSlideIndex(index);
+    if (index !== 0) {
+      setPlaying(false);
+      setFadeCount(0);
+    }
   };
 
   // Auto-slide photos every 1 second (1000ms) when playing & not touching
@@ -195,140 +179,6 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
     period === 1 ? '24 Giờ Qua (1 Ngày)' : period === 3 ? '3 Ngày Gần Nhất' : 'Hành Trình 1 Tuần (7 Ngày)';
   const maxDayExpense = Math.max(1, ...Object.values(stats.dayTotals).map(d => Math.max(d.expense, d.income)));
   const barCount = slideIndex === 0 ? Math.max(1, Math.min(displayTxs.length, 12)) : 4;
-
-  const toggleBoothPhoto = (id: string) => {
-    setSelectedBoothIds(current => {
-      if (current.includes(id)) return current.filter(selectedId => selectedId !== id);
-      if (current.length >= boothSlots) return current;
-      return [...current, id];
-    });
-  };
-
-  const fillBoothSlots = () => {
-    setSelectedBoothIds(boothPhotoIds.slice(0, boothSlots));
-  };
-
-  // Export a Photobooth collage without stretching the source images.
-  const downloadPhotoboothStrip = async () => {
-    setExportError('');
-    const cuts = selectedBoothTxs.slice(0, boothSlots);
-    if (!cuts.length) {
-      setExportError(`Chưa có ảnh để xuất trong khoảng ${boothPeriodLabel}. Hãy chọn ảnh hoặc đổi khoảng thời gian.`);
-      return;
-    }
-
-    const columns = boothLayout === '4x4' ? 2 : boothOrientation === 'landscape' ? 4 : 2;
-    const rows = Math.ceil(boothSlots / columns);
-    const isLandscape = boothOrientation === 'landscape';
-    const width = boothLayout === '4x4' ? (isLandscape ? 1400 : 1000) : isLandscape ? 1800 : 1200;
-    const height = boothLayout === '4x4' ? (isLandscape ? 1000 : 1400) : isLandscape ? 1200 : 1800;
-    const padding = 42;
-    const headerHeight = 128;
-    const footerHeight = 72;
-    const gap = 22;
-    const gridWidth = width - padding * 2;
-    const gridHeight = height - headerHeight - footerHeight - padding;
-    const cellWidth = (gridWidth - gap * (columns - 1)) / columns;
-    const cellHeight = (gridHeight - gap * (rows - 1)) / rows;
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const themeColors = {
-      dark: { bg1: '#141722', bg2: '#0b0d13', text: '#ffffff', sub: '#9ba5bc', accent: '#c084fc' },
-      pink: { bg1: '#fce7f3', bg2: '#fbcfe8', text: '#831843', sub: '#be185d', accent: '#ec4899' },
-      neon: { bg1: '#1e1b4b', bg2: '#090d16', text: '#38bdf8', sub: '#f472b6', accent: '#a855f7' },
-      retro: { bg1: '#fef3c7', bg2: '#fde68a', text: '#451a03', sub: '#92400e', accent: '#d97706' },
-    }[boothTheme];
-
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, themeColors.bg1);
-    grad.addColorStop(1, themeColors.bg2);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.fillStyle = themeColors.text;
-    ctx.font = 'bold 34px sans-serif';
-    ctx.fillText('🎞️ CAPMONEY LIFE4CUTS', padding, 58);
-    ctx.fillStyle = themeColors.sub;
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText(
-      `${boothLayout} • ${isLandscape ? 'Ngang' : 'Dọc'} • ${boothPeriodLabel} • ${cuts.length}/${boothSlots} ảnh`,
-      padding,
-      94,
-    );
-
-    for (let i = 0; i < boothSlots; i++) {
-      const tx = cuts[i];
-      const column = i % columns;
-      const row = Math.floor(i / columns);
-      const boxX = padding + column * (cellWidth + gap);
-      const boxY = headerHeight + row * (cellHeight + gap);
-      ctx.fillStyle = 'rgba(0,0,0,0.28)';
-      ctx.fillRect(boxX, boxY, cellWidth, cellHeight);
-
-      if (tx?.imageUrl && canvasImageIsSafe(tx.imageUrl)) {
-        try {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          await new Promise<void>(resolve => {
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-            img.src = tx.imageUrl!;
-          });
-          if (img.width > 0 && img.height > 0) {
-            drawImageContain(ctx, img, boxX, boxY, cellWidth, cellHeight, themeColors.bg2);
-          }
-        } catch {
-          // fallback if image fails
-        }
-      }
-
-      // Dark bottom gradient for caption
-      const capGrad = ctx.createLinearGradient(0, boxY + cellHeight * 0.62, 0, boxY + cellHeight);
-      capGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      capGrad.addColorStop(1, 'rgba(0,0,0,0.82)');
-      ctx.fillStyle = capGrad;
-      ctx.fillRect(boxX, boxY + cellHeight * 0.62, cellWidth, cellHeight * 0.38);
-
-      if (tx) {
-        ctx.fillStyle = tx.type === 'income' ? '#7CE3A6' : '#FF8E88';
-        ctx.font = `bold ${Math.max(18, Math.round(cellWidth * 0.055))}px sans-serif`;
-        ctx.fillText(
-          `${tx.type === 'income' ? '+' : '−'}${tx.amount.toLocaleString('vi-VN')}đ`,
-          boxX + 18,
-          boxY + cellHeight - 42,
-        );
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `${Math.max(14, Math.round(cellWidth * 0.035))}px sans-serif`;
-        ctx.fillText(
-          `${tx.note || 'Kỷ niệm'} • ${formatVNDate(tx.dateKey)}`,
-          boxX + 18,
-          boxY + cellHeight - 16,
-        );
-      } else {
-        ctx.fillStyle = '#9ba5bc';
-        ctx.font = `${Math.max(16, Math.round(cellWidth * 0.045))}px sans-serif`;
-        ctx.fillText(`Khung ảnh #${i + 1}`, boxX + cellWidth * 0.32, boxY + cellHeight * 0.52);
-      }
-    }
-
-    ctx.fillStyle = themeColors.text;
-    ctx.font = 'bold 18px sans-serif';
-    ctx.fillText('✨ CapMoney • Ảnh gốc được giữ nguyên tỷ lệ', padding, height - 28);
-
-    try {
-      await saveCanvasPng(
-        canvas,
-        `capmoney-photobooth-${boothLayout}-${boothOrientation}-${boothPeriod}d.png`,
-        'CapMoney Photobooth',
-      );
-    } catch {
-      setExportError('Không thể lưu PNG trên trình duyệt này. Hãy thử nút chia sẻ hoặc chụp màn hình ảnh đang mở.');
-    }
-  };
 
   // Export Story Card as PNG Image
   const downloadStoryCard = async () => {
@@ -402,10 +252,10 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
   return (
     <div className="cm-story-overlay" onClick={onClose}>
       {fadeCount > 0 && <div key={fadeCount} className="cm-story-photo-fade" aria-hidden="true" />}
-      <div className="cm-story-card" onClick={e => e.stopPropagation()}>
+      <div className="cm-story-card" data-story-view={slideIndex === 3 ? 'photobooth' : undefined} onClick={e => e.stopPropagation()}>
 
         {/* 1-Second Story Progress Bars */}
-        <div
+        {slideIndex !== 3 && <div
           className="cm-story-bars"
           style={{ gridTemplateColumns: `repeat(${barCount}, 1fr)` }}
         >
@@ -417,8 +267,8 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
                 type="button"
                 className="cm-story-bar-track"
                 onClick={() => {
-                  if (slideIndex === 0) setPhotoIdx(idx);
-                  else setSlideIndex(idx);
+                  if (slideIndex === 0) selectPhoto(idx);
+                  else selectSlide(idx);
                 }}
                 aria-label={`Mục ${idx + 1}`}
               >
@@ -426,7 +276,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
               </button>
             );
           })}
-        </div>
+        </div>}
 
         {/* Top Header & Play/Pause + Download Story */}
         <header className="cm-story-header">
@@ -435,15 +285,15 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
               <Sparkles size={15} />
             </span>
             <div>
-              <strong>Nhìn lại kỷ niệm thu chi</strong>
-              <small>
-                {periodTitle} • {playing ? '⚡ Tự lướt 1s/ảnh' : 'Đang dừng (Vuốt tay)'}
-              </small>
+              <strong>{slideIndex === 3 ? 'Photobooth' : 'Nhìn lại kỷ niệm thu chi'}</strong>
+              {slideIndex !== 3 && <small>
+                {periodTitle}{slideIndex === 0 && photoCount > 1 ? (playing ? ' · 1 giây/ảnh' : ' · Vuốt để chuyển ảnh') : ''}
+              </small>}
             </div>
           </div>
 
           <div className="cm-story-header-actions">
-            <button
+            {slideIndex !== 3 && <button
               type="button"
               className="cm-story-icon-btn"
               onClick={downloadStoryCard}
@@ -451,16 +301,16 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
               aria-label="Tải ảnh Story"
             >
               <Download size={15} />
-            </button>
-            <button
+            </button>}
+            {slideIndex === 0 && photoCount > 1 && <button
               type="button"
-              className="cm-story-icon-btn"
+              className="cm-story-icon-btn cm-story-play"
               onClick={() => setPlaying(p => !p)}
-              title={playing ? 'Tạm dừng tự lướt' : 'Bật tự động lướt 1s'}
-              aria-label={playing ? 'Tạm dừng' : 'Phát tiếp'}
+              aria-pressed={playing}
             >
-              {playing ? <Pause size={15} /> : <Play size={15} />}
-            </button>
+              {playing ? <Pause size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
+              {playing ? 'Tạm dừng' : 'Phát'}
+            </button>}
             <button type="button" className="cm-story-icon-btn" onClick={onClose} aria-label="Đóng">
               <X size={17} />
             </button>
@@ -468,7 +318,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
         </header>
 
         {/* Period Switcher Pills (1 Ngày | 3 Ngày | 1 Tuần) */}
-        <div className="cm-story-period-tabs">
+        {slideIndex !== 3 && <div className="cm-story-period-tabs">
           {([1, 3, 7] as LookbackPeriod[]).map(p => (
             <button
               key={p}
@@ -477,13 +327,13 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
               onClick={() => {
                 if (p === period) return;
                 setPeriod(p);
-                setPhotoIdx(0);
+                selectPhoto(0);
               }}
             >
               {p === 1 ? 'Sau 1 ngày' : p === 3 ? 'Sau 3 ngày' : 'Sau 1 tuần'}
             </button>
           ))}
-        </div>
+        </div>}
 
         {/* Photo reel */}
         {slideIndex === 0 && (
@@ -583,7 +433,7 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
                       key={tx.id}
                       type="button"
                       className={`cm-polaroid-dot ${idx === activePhotoIndex ? 'active' : ''}`}
-                      onClick={() => setPhotoIdx(idx)}
+                          onClick={() => selectPhoto(idx)}
                       aria-label={`Ảnh ${idx + 1}`}
                     />
                   ))}
@@ -694,295 +544,41 @@ export function LookbackModal({ initialPeriod = 3, transactions, onClose }: Look
           </div>
         )}
 
-        {/* SLIDE 3: KOREAN PHOTOBOOTH / LOCKET 4-CUT COLLAGE */}
-        {slideIndex === 3 && (
-          <div className="cm-story-slide">
-            <section className="cm-photobooth-controls" aria-label="Tùy chỉnh Photobooth">
-              <div className="cm-photobooth-control-heading">
-                <div>
-                  <strong>Chọn ảnh theo khoảng thời gian</strong>
-                  <small>{boothPhotos.length} ảnh có bill trong {boothPeriodLabel}</small>
-                </div>
-                <span className="cm-photobooth-selection-count">
-                  {selectedBoothTxs.length}/{boothSlots} ảnh
-                </span>
-              </div>
-
-              <div className="cm-photobooth-period-tabs" role="tablist" aria-label="Khoảng thời gian ảnh">
-                {([1, 7, 30] as BoothPeriod[]).map(value => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="tab"
-                    aria-selected={boothPeriod === value}
-                    className={boothPeriod === value ? 'active' : ''}
-                    onClick={() => setBoothPeriod(value)}
-                  >
-                    {value === 1 ? '1 ngày' : value === 7 ? '1 tuần' : '1 tháng'}
-                  </button>
-                ))}
-              </div>
-
-              <div className="cm-photobooth-picker-head">
-                <span>Ảnh đã chọn sẽ được xếp theo thứ tự bạn bấm</span>
-                <div>
-                  <button type="button" onClick={fillBoothSlots} disabled={!boothPhotos.length}>
-                    Chọn đủ
-                  </button>
-                  <button type="button" onClick={() => setSelectedBoothIds([])} disabled={!selectedBoothIds.length}>
-                    Bỏ chọn
-                  </button>
-                </div>
-              </div>
-
-              <div className="cm-photobooth-photo-options">
-                {boothPhotos.map(tx => {
-                  const selectedIndex = selectedBoothIds.indexOf(tx.id);
-                  const isSelected = selectedIndex >= 0;
-                  return (
-                    <button
-                      key={tx.id}
-                      type="button"
-                      className={`cm-photobooth-photo-option ${isSelected ? 'selected' : ''}`}
-                      onClick={() => toggleBoothPhoto(tx.id)}
-                      disabled={!isSelected && selectedBoothIds.length >= boothSlots}
-                      aria-pressed={isSelected}
-                      title={tx.note || 'Ảnh giao dịch'}
-                    >
-                      <span className="cm-photobooth-photo-thumb">
-                        <img src={tx.imageUrl ?? ''} alt="" />
-                        {isSelected && <span className="cm-photobooth-photo-order"><Check size={11} />{selectedIndex + 1}</span>}
-                      </span>
-                      <strong>{formatVNDate(tx.dateKey)}</strong>
-                      <small>{tx.note || 'Giao dịch'}</small>
-                    </button>
-                  );
-                })}
-                {!boothPhotos.length && (
-                  <div className="cm-photobooth-no-photos">
-                    Chưa có ảnh giao dịch trong khoảng này. Hãy đổi bộ lọc hoặc chụp thêm bill.
-                  </div>
-                )}
-              </div>
-
-              <div className="cm-photobooth-layout-controls">
-                <div>
-                  <span>Kiểu bộ ảnh</span>
-                  <div className="cm-photobooth-choice-row">
-                    {(['4x4', '8x8'] as BoothLayout[]).map(layout => (
-                      <button
-                        key={layout}
-                        type="button"
-                        className={boothLayout === layout ? 'active' : ''}
-                        onClick={() => setBoothLayout(layout)}
-                      >
-                        <b>{layout.replace('x', ' × ')}</b>
-                        <small>{layout === '4x4' ? '4 khung' : '8 khung'}</small>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <span>Hướng ảnh</span>
-                  <div className="cm-photobooth-choice-row">
-                    {(['portrait', 'landscape'] as BoothOrientation[]).map(orientation => (
-                      <button
-                        key={orientation}
-                        type="button"
-                        className={boothOrientation === orientation ? 'active' : ''}
-                        onClick={() => setBoothOrientation(orientation)}
-                      >
-                        <b>{orientation === 'portrait' ? 'Dọc' : 'Ngang'}</b>
-                        <small>{orientation === 'portrait' ? '9:16' : '16:9'}</small>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <div className="cm-fx-selector-row">
-              {(
-                [
-                  { id: 'dark', label: '🖤 Film Đen' },
-                  { id: 'pink', label: '🌸 Đào Pastel' },
-                  { id: 'neon', label: '💜 Tím Neon' },
-                  { id: 'retro', label: '☕ Kem Retro' },
-                ] as const
-              ).map(th => (
-                <button
-                  key={th.id}
-                  type="button"
-                  className={`cm-fx-chip ${boothTheme === th.id ? 'active' : ''}`}
-                  onClick={() => setBoothTheme(th.id)}
-                >
-                  {th.label}
-                </button>
-              ))}
-            </div>
-
-            <div className={`cm-photobooth-frame theme-${boothTheme} layout-${boothLayout} orientation-${boothOrientation}`}>
-              <div className="cm-photobooth-head">
-                <strong>🎞️ CAPMONEY LIFE4CUTS</strong>
-                <span>{selectedBoothTxs.length}/{boothSlots} ảnh • {boothPeriodLabel}</span>
-              </div>
-              <div className="cm-photobooth-grid">
-                {Array.from({ length: boothSlots }, (_, idx) => {
-                  const tx = selectedBoothTxs[idx];
-                  return (
-                    <div key={idx} className="cm-photobooth-cell">
-                      {tx?.imageUrl ? (
-                        <img src={tx.imageUrl} alt={tx.note || 'Bill'} />
-                      ) : (
-                        <div className="cm-photobooth-empty">
-                          <span>#{idx + 1}</span>
-                        </div>
-                      )}
-                      {tx && (
-                        <div className="cm-photobooth-tag">
-                          <b>
-                            {tx.type === 'income' ? '+' : '−'}
-                            {tx.amount.toLocaleString('vi-VN')}đ
-                          </b>
-                          <small>{tx.note || formatVNDate(tx.dateKey)}</small>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <button
-                type="button"
-                className="cm-photobooth-dl-btn"
-                disabled={!selectedBoothTxs.length}
-                onClick={() => void downloadPhotoboothStrip()}
-              >
-                <Download size={14} /> Tải ảnh {boothLayout} {boothOrientation === 'portrait' ? 'dọc' : 'ngang'}
-              </button>
-              <p className="cm-photobooth-ratio-note">Ảnh xuất ra sẽ giữ nguyên tỷ lệ gốc, không kéo méo.</p>
-              {exportError && <p className="cm-photobooth-export-note" role="alert">{exportError}</p>}
-            </div>
-          </div>
-        )}
+        <div hidden={slideIndex !== 3}><Photobooth transactions={transactions} /></div>
 
         {/* Footer View Mode Switcher (Ảnh Kỷ Niệm | Photobooth | Biểu Đồ | Tổng Kết) */}
         <footer className="cm-story-footer">
           <button
             type="button"
             className={`cm-story-nav-btn ${slideIndex === 0 ? 'active' : ''}`}
-            onClick={() => setSlideIndex(0)}
+            onClick={() => selectSlide(0)}
           >
-            <Camera size={14} /> 1s Reel ({displayTxs.length})
+            <Camera size={14} /> Kỷ niệm
           </button>
           <button
             type="button"
             className={`cm-story-nav-btn ${slideIndex === 3 ? 'active' : ''}`}
-            onClick={() => setSlideIndex(3)}
+            onClick={() => selectSlide(3)}
           >
             <WandSparkles size={14} /> Photobooth
           </button>
           <button
             type="button"
             className={`cm-story-nav-btn ${slideIndex === 1 ? 'active' : ''}`}
-            onClick={() => setSlideIndex(1)}
+            onClick={() => selectSlide(1)}
           >
             <BarChart3 size={14} /> Biểu đồ
           </button>
           <button
             type="button"
             className={`cm-story-nav-btn ${slideIndex === 2 ? 'active' : ''}`}
-            onClick={() => setSlideIndex(2)}
+            onClick={() => selectSlide(2)}
           >
             <Trophy size={14} /> Điểm nhấn
           </button>
         </footer>
+        {exportError && <p className="cm-photobooth-export-note" role="alert">{exportError}</p>}
       </div>
     </div>
-  );
-}
-
-function canvasImageIsSafe(source: string) {
-  try {
-    const url = new URL(source, window.location.href);
-    return url.protocol === 'data:' || url.protocol === 'blob:' || url.origin === window.location.origin;
-  } catch {
-    return false;
-  }
-}
-
-function drawImageContain(
-  ctx: CanvasRenderingContext2D,
-  image: CanvasImageSource & { width: number; height: number },
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  background: string,
-) {
-  ctx.fillStyle = background;
-  ctx.fillRect(x, y, width, height);
-  const scale = Math.min(width / image.width, height / image.height);
-  const drawWidth = image.width * scale;
-  const drawHeight = image.height * scale;
-  ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
-}
-
-async function saveCanvasPng(canvas: HTMLCanvasElement, filename: string, title: string) {
-  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) throw new Error('PNG blob unavailable');
-
-  const file = new File([blob], filename, { type: 'image/png' });
-  if (typeof navigator.share === 'function' && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-    try {
-      await navigator.share({ title, files: [file] });
-      return;
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-    }
-  }
-
-  const url = URL.createObjectURL(blob);
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile) {
-    const opened = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!opened) {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    }
-  } else {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  }
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
-
-function formatVNDate(dateKey: string) {
-  const d = new Date(`${dateKey}T12:00:00`);
-  return `${d.getDate()} thg ${d.getMonth() + 1}`;
-}
-
-function buildDateKeys(days: number) {
-  const list: string[] = [];
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-    list.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-  }
-  return list;
-}
-
-function compareTransactions(a: Transaction, b: Transaction) {
-  return (
-    b.dateKey.localeCompare(a.dateKey) ||
-    (b.transactionTime ?? '').localeCompare(a.transactionTime ?? '') ||
-    (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
   );
 }

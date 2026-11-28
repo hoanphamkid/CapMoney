@@ -76,7 +76,7 @@ export async function sendBankNotifications(db: NotificationDatabase, userId: st
       const payload = JSON.stringify({
         title: income ? 'MB Bank: Nhận tiền' : 'MB Bank: Chuyển tiền',
         body: `${income ? '+' : '−'}${tx.amount.toLocaleString('vi-VN')} ₫`,
-        tag: `mbbank-${tx.id}`, url: '/app/transactions',
+        tag: `mbbank-${tx.id}`, url: '/app/transactions', transactionId: tx.id,
       });
       await sendPayload(db, userId, payload);
     }

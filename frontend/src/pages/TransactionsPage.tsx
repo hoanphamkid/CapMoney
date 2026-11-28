@@ -1,10 +1,11 @@
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Building2, CalendarDays, Check, ChevronDown, ChevronRight, Eye, EyeOff, Filter, ImageOff, Pencil, Plus, RefreshCw, Search, Smartphone, Tag, WalletCards, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ExpenseCapture } from '../components/ExpenseCapture';
 import { ExpenseDetail } from '../components/ExpenseDetail';
 import { TransferForm, WalletForm } from '../components/WalletForms';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
-import { api, type CalendarEvent, type Transaction, type Wallet } from '../services/api';
+import { ApiError, api, type CalendarEvent, type Transaction, type Wallet } from '../services/api';
 import { ALL_CATEGORY_LABELS } from '../constants/categories';
 import './money.css';
 
@@ -16,9 +17,13 @@ const emptyTransactions: Transaction[] = [];
 // Keep older category labels while adding the newer beauty/skincare labels.
 const labels: Record<string, string> = { food: 'Ăn uống', shopping: 'Mua sắm', transport: 'Di chuyển', bills: 'Hóa đơn', entertainment: 'Giải trí', health: 'Sức khỏe', other: 'Khác', salary: 'Lương', bonus: 'Thưởng', investment: 'Đầu tư', gift: 'Được tặng', transfer: 'Chuyển ví' };
 const walletLabels: Record<string, string> = { cash: 'Tiền mặt', bank: 'Ngân hàng', e_wallet: 'Ví điện tử', savings: 'Tiết kiệm', credit: 'Tín dụng', custom: 'Ví khác' };
+type LinkedTransaction = { id: string; transaction: Transaction } | { id: string; error: string };
 
 export function TransactionsPage() {
   Object.assign(labels, ALL_CATEGORY_LABELS);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedId = searchParams.get('transaction');
+  const [linkedResult, setLinkedResult] = useState<LinkedTransaction | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loadedRows, setLoadedRows] = useState<{ scope: string; transactions: Transaction[] } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,6 +75,16 @@ export function TransactionsPage() {
   };
   useAutoRefresh(() => load(true));
   useEffect(() => { void load(); return () => { requestVersion.current++; }; }, [walletId, from, to, invalidRange]);
+  useEffect(() => {
+    if (!linkedId) { setLinkedResult(null); return; }
+    let active = true;
+    void api.transaction(linkedId).then(transaction => {
+      if (active) setLinkedResult({ id: linkedId, transaction });
+    }).catch(error => {
+      if (active) setLinkedResult({ id: linkedId, error: error instanceof ApiError ? error.message : 'Không mở được giao dịch từ thông báo.' });
+    });
+    return () => { active = false; };
+  }, [linkedId]);
 
   const selectedWallet = wallets.find(wallet => wallet.id === walletId);
   const walletNames = useMemo(() => new Map(wallets.map(wallet => [wallet.id, wallet.name])), [wallets]);
@@ -122,7 +137,18 @@ export function TransactionsPage() {
   const toggleBalances = () => setHideBalances(value => !value);
   const displayMoney = (value: number) => hideBalances ? '••••••' : money(value);
   const asEvent = (row: Transaction): CalendarEvent => ({ ...row, kind: row.type, title: row.note || labels[row.categoryId] || 'Giao dịch', source: row.source ?? 'manual' });
-  const saved = () => { setCaptureType(null); setWalletForm(null); setTransferOpen(false); setDetail(null); void load(true); };
+  const closeDetail = () => {
+    setDetail(null);
+    if (!linkedId) return;
+    setSearchParams(params => {
+      const next = new URLSearchParams(params);
+      next.delete('transaction');
+      return next;
+    }, { replace: true });
+  };
+  const saved = () => { setCaptureType(null); setWalletForm(null); setTransferOpen(false); closeDetail(); void load(true); };
+  const linked = linkedId && linkedResult?.id === linkedId ? linkedResult : null;
+  const shownDetail = linkedId ? (linked && 'transaction' in linked ? asEvent(linked.transaction) : null) : detail;
 
   const amountOrder = sort === 'highest' || sort === 'lowest';
   const renderRow = (row: Transaction) => {
@@ -155,6 +181,8 @@ export function TransactionsPage() {
       </header>
 
       {error && <div className="page-alert" role="alert">{error}<button type="button" onClick={() => void load(true)} aria-label="Thử tải lại"><RefreshCw size={15} /></button></div>}
+      {linkedId && !linked && <p className="page-alert" role="status">Đang mở giao dịch từ thông báo…</p>}
+      {linked && 'error' in linked && <div className="page-alert" role="alert">{linked.error}<button type="button" onClick={closeDetail} aria-label="Đóng thông báo lỗi"><X size={15} /></button></div>}
 
       <section className="money-balance-panel" aria-label="Số dư ví">
         <div className="money-balance-heading">
@@ -312,7 +340,7 @@ export function TransactionsPage() {
       {captureType && <ExpenseCapture selectedDate={todayKey()} initialType={captureType} defaultWalletId={walletId === 'all' ? undefined : walletId} onClose={() => setCaptureType(null)} onSaved={saved} />}
       {walletForm && <WalletForm wallet={walletForm === 'new' ? undefined : walletForm} onClose={() => setWalletForm(null)} onSaved={saved} />}
       {transferOpen && <TransferForm wallets={wallets} initialWalletId={walletId === 'all' ? undefined : walletId} onClose={() => setTransferOpen(false)} onSaved={saved} />}
-      {detail && <ExpenseDetail event={detail} wallets={wallets} onClose={() => setDetail(null)} onChanged={saved} />}
+      {shownDetail && <ExpenseDetail key={shownDetail.id} event={shownDetail} wallets={wallets} onClose={closeDetail} onChanged={saved} />}
     </div>
   );
 }

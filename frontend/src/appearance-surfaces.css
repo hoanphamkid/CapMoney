@@ -1,0 +1,126 @@
+html[data-color-mode='light'] { color-scheme: light; --wallpaper-scrim: rgb(250 252 255 / 62%); }
+html[data-color-mode='dark'] { color-scheme: dark; --wallpaper-scrim: rgb(12 15 20 / 71%); }
+html[data-color-mode] body { background: var(--home-bg); color: var(--home-ink); }
+
+.auth-page { background: var(--home-bg); }
+.auth-showcase { --green: #163e36; --lime: #c9ed9c; }
+.auth-panel :is(.auth-heading h2, .field-label, .brand-mark) { color: var(--home-ink); }
+.auth-panel :is(.auth-kicker, .auth-heading > p:last-child, .auth-tabs a, .field-label small, .field-icon,
+  .password-field button, .checkbox-label, .terms span, .switch-prompt, .auth-footnote) { color: var(--home-muted); }
+.auth-panel .auth-tabs { border-color: var(--home-line); }
+.auth-panel :is(.auth-tabs a.active, .text-button, .inline-link, .switch-prompt a, .brand-accent) { color: var(--home-accent); }
+.auth-panel .auth-tabs a.active::after { background: var(--home-accent); }
+.auth-panel .field-control input { background: var(--home-panel); color: var(--home-ink); border-color: var(--home-line); }
+.auth-panel .field-control input::placeholder { color: var(--home-muted); }
+.auth-panel .field-control input:focus { border-color: var(--home-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--home-accent) 18%, transparent); }
+.auth-panel .has-error .field-control input { border-color: var(--home-danger); }
+.auth-panel .field-error { color: var(--home-danger); }
+.auth-panel :is(.brand-icon, .submit-button) { background: var(--home-accent); color: var(--home-on-accent); }
+.auth-panel .submit-button:hover { background: color-mix(in srgb, var(--home-accent) 88%, var(--home-on-accent)); }
+.auth-panel .checkbox-label input { accent-color: var(--home-accent); }
+
+.form-alert.error { color: var(--home-danger); background: color-mix(in srgb, var(--home-danger) 13%, var(--home-panel)); }
+.form-alert.success { color: var(--home-success); background: color-mix(in srgb, var(--home-success) 13%, var(--home-panel)); }
+
+.cm-welcome-dialog { border-color: var(--home-line); background: var(--home-panel); color: var(--home-ink); }
+.cm-welcome-intro { background: radial-gradient(ellipse at 50% 0%, var(--home-tint), transparent 75%); }
+.cm-welcome-dialog :is(.cm-welcome-close, .cm-welcome-icon) { background: var(--home-tint); border-color: var(--home-line); color: var(--home-accent); }
+.cm-welcome-dialog :is(h2 span, .cm-welcome-credit) { color: var(--home-accent); }
+.cm-welcome-intro p:not(.cm-welcome-credit) { color: var(--home-muted); }
+.cm-welcome-actions { border-color: var(--home-line); }
+.cm-welcome-dialog .cm-welcome-primary { background: var(--home-accent); color: var(--home-on-accent); }
+.cm-welcome-dialog .cm-welcome-primary:hover { background: color-mix(in srgb, var(--home-accent) 88%, var(--home-on-accent)); }
+.cm-welcome-dialog button:focus-visible { outline-color: var(--home-accent); }
+
+.cm-app-shell[data-app-theme] :is(.expense-detail, .reminder-modal, .wallet-modal, .edit-transaction) {
+  background: var(--home-panel) !important;
+  border-color: var(--home-line) !important;
+  color: var(--home-ink) !important;
+}
+.cm-app-shell[data-app-theme] :is(.detail-content h2, .reminder-modal h2, .wallet-modal h2, .detail-delete-confirm h3) { color: var(--home-ink) !important; }
+.cm-app-shell[data-app-theme] :is(.detail-note, .detail-meta, .detail-delete-confirm p,
+  .reminder-date, .reminder-modal .eyebrow, .amount-field > span, .note-field > span, .select-field > span) { color: var(--home-muted) !important; }
+.cm-app-shell[data-app-theme] :is(.detail-meta, .detail-delete-confirm) { border-color: var(--home-line) !important; }
+.cm-app-shell[data-app-theme] :is(.detail-delete-confirm, .detail-actions button) {
+  background: var(--home-tint);
+  color: var(--home-ink);
+  border-color: var(--home-line);
+}
+.cm-app-shell[data-app-theme] :is(.cm-detail-photo-stage, .detail-no-photo, .type-toggle button, .replace-image) { background: var(--home-tint) !important; color: var(--home-muted) !important; border-color: var(--home-line) !important; }
+.cm-app-shell[data-app-theme] :is(.detail-kind.income, .type-toggle button.active.income) { background: var(--home-good-surface) !important; color: var(--home-success) !important; border-color: var(--home-success) !important; }
+.cm-app-shell[data-app-theme] :is(.detail-kind.expense, .type-toggle button.active.expense, .detail-actions button.danger, .capture-error) { background: var(--home-bad-surface) !important; color: var(--home-danger) !important; border-color: var(--home-danger) !important; }
+.cm-app-shell[data-app-theme] .cm-detail-source-ribbon { padding: 10px 50px 10px 12px; }
+.cm-app-shell[data-app-theme] :is(.cm-source-badge, .cm-detail-time-chip) { background: var(--home-tint); color: var(--home-accent); border-color: var(--home-line); box-shadow: none; }
+.cm-app-shell[data-app-theme] .cm-source-badge.camera { background: var(--home-good-surface); color: var(--home-success); }
+.cm-app-shell[data-app-theme] .cm-detail-photo-stage:has(.detail-no-photo) .cm-detail-snap-btn { background: var(--home-panel); color: var(--home-accent); border-color: var(--home-line); box-shadow: none; }
+.cm-app-shell[data-app-theme] .save-expense { background: var(--home-accent); color: var(--home-on-accent); }
+.cm-app-shell[data-app-theme] .bank-notification-toast { background: var(--home-panel); color: var(--home-ink); border-color: var(--home-line); }
+
+.cm-app-shell {
+  --home-good-surface: color-mix(in srgb, var(--home-success) 14%, var(--home-panel));
+  --home-bad-surface: color-mix(in srgb, var(--home-danger) 14%, var(--home-panel));
+}
+.cm-app-shell[data-app-theme] :is(.cm-day-view-toggle, .cm-timeline-card, .cm-timeline-card-photo) { background: var(--home-panel); border-color: var(--home-line); }
+.cm-app-shell[data-app-theme] :is(.cm-day-view-empty, .cm-timeline-card-time, .cm-timeline-note) { color: var(--home-muted); }
+.cm-app-shell[data-app-theme] :is(.cm-timeline-card-content, .cm-timeline-card-time strong) { color: var(--home-ink); }
+
+.cm-app-shell[data-app-theme] :is(.cm-capture-modal, .cm-camera-modal) { background: var(--home-bg); color: var(--home-ink); }
+.cm-app-shell[data-app-theme] .cm-photo-stage[data-has-photo='false'] { background: var(--home-panel); border-color: var(--home-line); box-shadow: 0 10px 22px color-mix(in srgb, var(--home-ink) 10%, transparent); }
+.cm-photo-stage[data-has-photo='false']::before { background: none; }
+.cm-photo-stage[data-has-photo='false'] :is(.cm-pill-btn, .cm-quota-badge) { background: var(--home-tint); border-color: var(--home-line); color: var(--home-ink); }
+.cm-photo-stage[data-has-photo='false'] .cm-entry-card.frosted-glass { background: var(--home-bad-surface) !important; border-color: var(--home-line); box-shadow: none; }
+.cm-photo-stage[data-has-photo='false'] .cm-entry-card.frosted-glass.income { background: var(--home-good-surface) !important; }
+.cm-photo-stage[data-has-photo='false'] :is(.cm-amount-display, .cm-amount-currency, .cm-life-index-hint) { color: var(--home-ink); text-shadow: none; }
+.cm-photo-stage[data-has-photo='false'] .cm-amount-sign.expense { color: var(--home-danger); }
+.cm-photo-stage[data-has-photo='false'] .cm-amount-sign.income { color: var(--home-success); }
+.cm-photo-stage[data-has-photo='false'] .cm-entry-card.frosted-glass .cm-detail-input { background: var(--home-panel) !important; border-color: var(--home-line) !important; color: var(--home-ink) !important; }
+.cm-photo-stage[data-has-photo='false'] .cm-detail-input::placeholder,
+.cm-photo-stage[data-has-photo='false'] .cm-detail-angle { color: var(--home-muted) !important; }
+.cm-app-shell[data-app-theme] .cm-camera-card { border-color: var(--home-line); background: var(--home-tint); }
+.cm-app-shell[data-app-theme] :is(.cm-camera-fallback p, .cm-cam-side-btn, .cm-skip-camera) { color: var(--home-muted); }
+.cm-app-shell[data-app-theme] :is(.cm-camera-fallback strong, .cm-cam-side-btn:hover) { color: var(--home-ink); }
+.cm-app-shell[data-app-theme] :is(.cm-library-pill, .cm-capture-modal .cm-ocr-candidate-chip) { border-color: var(--home-line); background: var(--home-tint); color: var(--home-accent); }
+.cm-app-shell[data-app-theme] .cm-shutter-btn { background: var(--home-panel); border-color: var(--home-accent); }
+.cm-app-shell[data-app-theme] .cm-shutter-inner { background: var(--home-accent); }
+.cm-app-shell[data-app-theme] :is(.cm-auto-detect-pill, .cm-select-pill, .cm-type-switcher, .cm-date-pill, .cm-mood-stamp-chip, .cm-calc-key) {
+  color: var(--home-ink);
+  background: var(--home-panel);
+  border-color: var(--home-line);
+}
+.cm-app-shell[data-app-theme] .cm-select-pill select option { background: var(--home-panel); color: var(--home-ink); }
+.cm-app-shell[data-app-theme] .cm-select-pill:has(> select:focus-visible) { outline-color: var(--home-accent); }
+.cm-app-shell[data-app-theme] :is(.cm-auto-detect-pill.scanning, .cm-ocr-candidate-chip.active, .cm-mood-stamp-chip.active) { background: var(--home-soft); color: var(--home-accent); border-color: var(--home-accent); }
+.cm-app-shell[data-app-theme] .cm-type-btn:not(.active) { color: var(--home-muted); }
+.cm-app-shell[data-app-theme] .cm-calc-key.op-clear { color: var(--home-danger); }
+.cm-app-shell[data-app-theme] .cm-calc-key.op-tint { background: var(--home-bad-surface); color: var(--home-danger); }
+.cm-app-shell[data-app-theme] .cm-calc-key.done-tall.expense { background: var(--home-danger); color: var(--home-bg); }
+.cm-app-shell[data-app-theme] .cm-calc-key.done-tall.income { background: var(--home-success); color: var(--home-bg); }
+.cm-app-shell[data-app-theme] .cm-floating-mic-btn:not(.listening) { background: var(--home-accent); color: var(--home-on-accent); }
+
+.cm-app-shell[data-app-theme] :is(.cm-crop-modal, .cm-toolkit-redesign, .cm-story-card) { background: var(--home-panel); border-color: var(--home-line); color: var(--home-ink); }
+.cm-app-shell[data-app-theme] .cm-crop-header strong { color: var(--home-ink); }
+.cm-app-shell[data-app-theme] .cm-crop-header small { color: var(--home-muted); }
+.cm-app-shell[data-app-theme] :is(.cm-crop-icon-btn, .cm-crop-mini-btn, .cm-crop-tool-btn, .cm-story-icon-btn, .cm-story-nav-btn, .cm-story-period-btn) { background: var(--home-tint); color: var(--home-ink); border-color: var(--home-line); }
+.cm-app-shell[data-app-theme] :is(.cm-crop-confirm-top, .cm-crop-submit-btn, .cm-story-nav-btn.active, .cm-story-period-btn.active) { background: var(--home-accent); color: var(--home-on-accent); border-color: var(--home-accent); }
+.cm-app-shell[data-app-theme] .cm-crop-stage { border-color: var(--home-line); }
+.cm-app-shell[data-app-theme] .cm-crop-slider { accent-color: var(--home-accent); }
+
+.cm-app-shell[data-app-theme] .cm-toolkit-redesign :is(.cm-toolkit-new-nav button, .cm-toolkit-action-grid button, .cm-goal-quick-grid button, .cm-toolkit-outline-btn, .cm-challenge-cell) { background: var(--home-tint); border-color: var(--home-line); color: var(--home-ink); }
+.cm-app-shell[data-app-theme] .cm-toolkit-redesign :is(.cm-toolkit-new-nav button.active, .cm-toolkit-primary-btn, .cm-challenge-cell.done) { background: var(--home-accent); border-color: var(--home-accent); color: var(--home-on-accent); }
+.cm-app-shell[data-app-theme] :is(.cm-toolkit-kicker, .cm-toolkit-lock) { color: var(--home-accent); }
+.cm-app-shell[data-app-theme] :is(.cm-toolkit-overview-hero, .cm-week-hero, .cm-goal-card, .cm-challenge-hero, .cm-toolkit-next-card,
+  .cm-toolkit-stat-grid > div, .cm-story-stat-box, .cm-story-chart-box, .cm-goal-input-row, .cm-goal-edit, .cm-week-progress-card, .cm-toolkit-control-card, .cm-toolkit-pro-lock) {
+  background: var(--home-tint);
+  border-color: var(--home-line);
+  color: var(--home-ink);
+}
+.cm-app-shell[data-app-theme] :is(.cm-toolkit-new-header strong, .cm-toolkit-new-body strong, .cm-story-brand strong,
+  .cm-story-chart-head strong, .cm-toolkit-section-title span, .cm-goal-amount b) { color: var(--home-ink); }
+.cm-app-shell[data-app-theme] :is(.cm-toolkit-new-header small, .cm-toolkit-new-body small, .cm-toolkit-pro-lock p,
+  .cm-toolkit-next-card span, .cm-goal-amount span, .cm-goal-label, .cm-goal-edit label, .cm-toolkit-field, .cm-story-page-indicator, .cm-story-brand small) { color: var(--home-muted); }
+.cm-app-shell[data-app-theme] :is(.cm-challenge-hero span, .cm-toolkit-overview-hero span, .cm-week-hero span, .cm-toolkit-pro-lock > svg) { color: var(--home-accent); }
+.cm-app-shell[data-app-theme] :is(.cm-story-stat-box.income strong, .cm-goal-percent, .cm-challenge-progress-head strong, .cm-toolkit-stat-grid strong.income) { color: var(--home-success); }
+.cm-app-shell[data-app-theme] :is(.cm-story-stat-box.expense strong, .cm-toolkit-reset) { color: var(--home-danger); }
+.cm-app-shell[data-app-theme] .cm-toolkit-overview-ring { background: conic-gradient(var(--home-success) var(--ring-progress), var(--home-line) 0); }
+.cm-app-shell[data-app-theme] .cm-toolkit-overview-ring::after { background: var(--home-panel); }
+.cm-app-shell[data-app-theme] .cm-toolkit-overview-ring b { color: var(--home-ink); }

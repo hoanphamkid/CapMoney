@@ -107,9 +107,43 @@ test('opens income capture with the selected wallet already chosen', async ({ pa
   await page.getByRole('button', { name: 'Chọn ví MB Bank', exact: true }).click();
   await page.locator('.money-action.income').click();
   await page.locator('.cm-skip-camera').click();
-  await expect(page.locator('.cm-select-pill select').nth(1)).toHaveValue(bankId);
+  await expect(page.getByRole('combobox', { name: 'Ví giao dịch' })).toHaveValue(bankId);
   await expect(page.getByRole('button', { name: 'Khoản thu', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
+
+for (const { theme, dark } of [{ theme: 'classic', dark: true }, { theme: 'strawberry', dark: false }]) {
+  test(`keeps capture labels readable and skips work-hour conversion with the ${theme} theme`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(theme => {
+      localStorage.setItem('capmoney-home-theme', theme);
+      localStorage.setItem('capmoney_work_pay_v1', JSON.stringify({
+        version: 1, ownerEmail: 'owner@example.test', phoPrice: 25_000, milkTeaPrice: 10_000,
+      }));
+    }, theme);
+    await openWorkspace(page);
+    await page.locator('html').evaluate((element, dark) => element.classList.toggle('dark-theme', dark), dark);
+    await page.getByRole('button', { name: 'Ghi chi', exact: true }).click();
+    await page.locator('.cm-skip-camera').click();
+
+    const category = page.getByRole('combobox', { name: 'Danh mục giao dịch' });
+    const wallet = page.getByRole('combobox', { name: 'Ví giao dịch' });
+    for (const select of [category, wallet]) {
+      await expect(select).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      const pillColor = await select.evaluate(element => getComputedStyle(element.closest('label')!).color);
+      await expect(select).toHaveCSS('color', pillColor);
+    }
+    await category.selectOption('household');
+    await wallet.selectOption(bankId);
+    await expect(category).toHaveValue('household');
+    await expect(wallet).toHaveValue(bankId);
+
+    const capture = page.locator('.cm-capture-modal');
+    for (const key of ['5', '0', '000']) await capture.getByRole('button', { name: key, exact: true }).click();
+    await expect(capture.locator('.cm-amount-display')).toHaveText('50,000');
+    await expect(capture.getByText('≈ 2 bát phở 🍜 • 5 trà sữa 🧋')).toBeVisible();
+    await expect(capture).not.toContainText(/giờ làm|đ\/giờ|quy đổi giờ/);
+  });
+}
 
 test('transfers between selected wallets and refreshes their balances', async ({ page }) => {
   const state = await openWorkspace(page);

@@ -8,6 +8,8 @@ type AuthContextValue = {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  registrationMessage: string | null;
+  dismissRegistrationMessage: () => void;
   login: (input: { email: string; password: string; remember: boolean }) => Promise<User>;
   register: (input: { name: string; email: string; password: string; phone?: string }) => Promise<User>;
   logout: () => Promise<void>;
@@ -19,6 +21,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: PropsWithChildren) {
   const [account, setAccount] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [registrationMessage, setRegistrationMessage] = useState<string | null>(null);
   const userId = account?.user.id;
 
   useEffect(() => {
@@ -44,6 +47,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     user: account?.user ?? null,
     profile: account?.profile ?? null,
     loading,
+    registrationMessage,
+    dismissRegistrationMessage: () => setRegistrationMessage(null),
     login: async input => {
       const result = await api.login(input);
       setAccount({ user: result.user, profile: result.profile ?? null });
@@ -52,12 +57,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     register: async input => {
       const result = await api.register(input);
       setAccount({ user: result.user, profile: result.profile ?? null });
+      setRegistrationMessage(result.message);
       return result.user;
     },
     logout: async () => {
       await disableBankPush().catch(() => {});
       await api.logout();
       setAccount(null);
+      setRegistrationMessage(null);
     },
     updateProfile: async input => {
       const result = await api.updateMe(input);
@@ -66,7 +73,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         : current);
     },
     loadProCheckout,
-  }), [account, loading, loadProCheckout]);
+  }), [account, loading, registrationMessage, loadProCheckout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

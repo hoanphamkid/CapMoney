@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { UserModel } from '../models/User.js';
 import { ProfileModel } from '../models/Profile.js';
 import { SessionModel } from '../models/Session.js';
-import { AppError } from '../middleware/error.js';
+import { AppError, logger } from '../middleware/error.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { hashToken, randomToken } from '../utils/crypto.js';
 import { signAccessToken } from '../utils/jwt.js';
@@ -36,7 +36,14 @@ function publicUser(user: { _id: unknown; email: string; name: string; phone?: s
 async function createSession(request: Parameters<RequestHandler>[0], user: { _id: unknown; role?: string }, remember = true) {
   const refreshToken = randomToken();
   const maxAge = remember ? 1000 * 60 * 60 * 24 * 30 : 1000 * 60 * 60 * 24;
-  await SessionModel.create({ userId: user._id, tokenHash: hashToken(refreshToken), deviceName: request.get('sec-ch-ua-platform') ?? 'Trình duyệt', userAgent: request.get('user-agent')?.slice(0, 500), ipAddress: request.ip, expiresAt: new Date(Date.now() + maxAge) });
+  await SessionModel.create({
+    userId: user._id,
+    tokenHash: hashToken(refreshToken),
+    deviceName: request.get('sec-ch-ua-platform')?.slice(0, 120) ?? 'Trình duyệt',
+    userAgent: request.get('user-agent')?.slice(0, 500),
+    ipAddress: request.ip,
+    expiresAt: new Date(Date.now() + maxAge),
+  });
   request.res?.cookie(REFRESH_COOKIE, refreshToken, { ...cookieOptions, maxAge });
   request.res?.cookie(ACCESS_COOKIE, signAccessToken({ sub: String(user._id), role: (user.role ?? 'user') as 'user' | 'admin' }), { ...cookieOptions, maxAge: 1000 * 60 * 15 });
 }
@@ -44,13 +51,22 @@ async function createSession(request: Parameters<RequestHandler>[0], user: { _id
 export const register: RequestHandler = async (request, response) => {
   const input = registerSchema.parse(request.body);
   const email = input.email.toLowerCase();
-  if (await UserModel.exists({ email })) throw new AppError(409, 'Email này đã được đăng ký', 'EMAIL_EXISTS');
-  const user = await UserModel.create({ email, name: input.name, phone: input.phone || undefined, passwordHash: await hashPassword(input.password) });
+  const emailExists = () => new AppError(409, 'Email này đã được đăng ký', 'EMAIL_EXISTS');
+  if (await UserModel.exists({ email })) throw emailExists();
+  const passwordHash = await hashPassword(input.password);
+  const user = await UserModel.create({ email, name: input.name, phone: input.phone || undefined, passwordHash }).catch((error: unknown) => {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 11000) throw emailExists();
+    throw error;
+  });
   const profile = await ProfileModel.create({ userId: user._id });
-  const verifyToken = randomToken(32);
-  await sendMail({ to: email, subject: 'Xác minh email CapMoney', text: `Xin chào ${user.name},\n\nMã xác minh của bạn: ${verifyToken}\n\nBạn có thể xác minh email từ trang Cài đặt.` });
   await createSession(request, user, true);
-  response.status(201).json({ user: publicUser(user), profile, message: 'Tài khoản đã được tạo. Hãy xác minh email để bảo vệ tài khoản.' });
+  try {
+    const verifyToken = randomToken(32);
+    await sendMail({ to: email, subject: 'Xác minh email CapMoney', text: `Xin chào ${user.name},\n\nMã xác minh của bạn: ${verifyToken}\n\nBạn có thể xác minh email từ trang Cài đặt.` });
+  } catch (err) {
+    logger.warn({ err }, 'could not send registration verification email');
+  }
+  response.status(201).json({ user: publicUser(user), profile, message: 'Tạo tài khoản thành công.' });
 };
 
 export const login: RequestHandler = async (request, response) => {

@@ -23,7 +23,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import type { Transaction } from '../services/api';
 import { ALL_CATEGORY_LABELS } from '../constants/categories';
-import { PRO_FEATURES, PRO_SETTINGS_PATH } from '../constants/pro';
+import { PRO_FEATURES, PRO_SETTINGS_PATH, SHOW_CAPMONEY_PRO } from '../constants/pro';
 import { useAuth } from '../contexts/AuthContext';
 import { loadBudget } from './SpendingLimitModal';
 
@@ -91,8 +91,9 @@ type SmartToolkitModalProps = {
 export function SmartToolkitModal({ transactions, onClose }: SmartToolkitModalProps) {
   const { user } = useAuth();
   const hasPro = user?.proEnabled === true;
+  const showPaidTools = hasPro || SHOW_CAPMONEY_PRO;
   const [tab, setTab] = useState<ToolkitTab>('challenge');
-  const lockedFeature = !hasPro && (tab === 'week' || tab === 'split') ? PRO_FEATURES[tab] : null;
+  const lockedFeature = SHOW_CAPMONEY_PRO && !hasPro && (tab === 'week' || tab === 'split') ? PRO_FEATURES[tab] : null;
   const AccessIcon = hasPro ? ChevronRight : LockKeyhole;
   const [challengeDays, setChallengeDays] = useState<number[]>(loadChallenge);
   const [goal, setGoal] = useState<SavingsJarState>(loadSavingsJar);
@@ -197,7 +198,9 @@ export function SmartToolkitModal({ transactions, onClose }: SmartToolkitModalPr
 
         <div className="cm-toolkit-new-nav" role="tablist" aria-label="Tiện ích tài chính">
           {tabs.map(({ id, label, icon: Icon }) => {
-            const locked = !hasPro && (id === 'week' || id === 'split');
+            const paid = id === 'week' || id === 'split';
+            if (paid && !showPaidTools) return null;
+            const locked = paid && !hasPro;
             return (
               <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'active' : ''} aria-label={locked ? `${label} (Pro)` : undefined} onClick={() => setTab(id)}>
                 <Icon size={14} aria-hidden="true" /> {label}
@@ -223,8 +226,10 @@ export function SmartToolkitModal({ transactions, onClose }: SmartToolkitModalPr
             <div className="cm-toolkit-action-grid">
               <button type="button" onClick={() => setTab('challenge')}><Flame size={17} /><span>Thử thách 30 ngày</span><ChevronRight size={15} /></button>
               <button type="button" onClick={() => setTab('goal')}><PiggyBank size={17} /><span>Đặt mục tiêu tiết kiệm</span><ChevronRight size={15} /></button>
-              <button type="button" onClick={() => setTab('week')}><CalendarDays size={17} /><span>Lập kế hoạch tuần</span><AccessIcon size={15} /></button>
-              <button type="button" onClick={() => setTab('split')}><Users size={17} /><span>Chia bill nhóm</span><AccessIcon size={15} /></button>
+              {showPaidTools && <>
+                <button type="button" onClick={() => setTab('week')}><CalendarDays size={17} /><span>Lập kế hoạch tuần</span><AccessIcon size={15} /></button>
+                <button type="button" onClick={() => setTab('split')}><Users size={17} /><span>Chia bill nhóm</span><AccessIcon size={15} /></button>
+              </>}
             </div>
           </div>
         )}
@@ -277,7 +282,7 @@ export function SmartToolkitModal({ transactions, onClose }: SmartToolkitModalPr
           </div>
         )}
 
-        {tab === 'week' && !lockedFeature && (
+        {tab === 'week' && hasPro && (
           <div className="cm-toolkit-body cm-toolkit-new-body fade-in">
             <div className="cm-week-hero"><div><span>Kế hoạch tuần</span><strong>Giữ nhịp chi tiêu nhẹ nhàng.</strong><small>Bắt đầu từ {weekStats.from}</small></div><CalendarDays size={30} /></div>
             <div className="cm-toolkit-stat-grid cm-week-stat-grid"><div><small>Đã chi tuần này</small><strong>{weekStats.spent.toLocaleString('vi-VN')}đ</strong></div><div><small>Mục tiêu tuần</small><strong>{weekStats.target.toLocaleString('vi-VN')}đ</strong></div><div><small>Còn lại</small><strong className="income">{weekStats.remaining.toLocaleString('vi-VN')}đ</strong></div><div><small>Nên chi mỗi ngày</small><strong>{weekStats.safeDaily.toLocaleString('vi-VN')}đ</strong></div></div>
@@ -286,7 +291,7 @@ export function SmartToolkitModal({ transactions, onClose }: SmartToolkitModalPr
           </div>
         )}
 
-        {tab === 'split' && !lockedFeature && (
+        {tab === 'split' && hasPro && (
           <div className="cm-toolkit-body cm-toolkit-new-body fade-in">
             <div className="cm-split-result-box cm-split-result-new"><small>Mỗi người cần đóng</small><strong>{perPerson.toLocaleString('vi-VN')}đ</strong><span>Đã làm tròn đến hàng nghìn · {people} người</span></div>
             <label className="cm-toolkit-field"><span>Tổng hóa đơn</span><div><input inputMode="numeric" value={numericBill ? numericBill.toLocaleString('vi-VN') : ''} onChange={event => setBillTotal(event.target.value.replace(/[^0-9]/g, ''))} placeholder="450.000" /><b>đ</b></div></label>

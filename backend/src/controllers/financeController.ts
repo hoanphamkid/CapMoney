@@ -1,10 +1,10 @@
 import type { RequestHandler } from 'express';
 import mongoose from 'mongoose';
 import { z } from 'zod';
-import { AppError } from '../middleware/error.js';
+import { AppError, logger } from '../middleware/error.js';
 import { WalletModel } from '../models/Wallet.js';
 import { TransactionModel } from '../models/Transaction.js';
-import { deletePrivateImage, readPrivateImage, savePrivateImage } from '../services/storageService.js';
+import { deletePrivateImage, publicTransactionImageUrl, readPrivateImage, savePrivateImage } from '../services/storageService.js';
 
 const walletSchema = z.object({ name: z.string().trim().min(1).max(80), type: z.enum(['cash', 'bank', 'savings', 'e_wallet', 'credit', 'custom']).default('cash'), openingBalance: z.coerce.number().min(0).default(0), currency: z.string().length(3).default('VND'), color: z.string().regex(/^#[0-9a-f]{6}$/i).default('#163e36') });
 const walletUpdateSchema = z.object({
@@ -45,7 +45,7 @@ function toPublic(row: any) {
     transactionTime: timeStr,
     source: row.source ?? 'manual',
     status: row.status,
-    imageUrl: row.imageKey ? `/api/transactions/${String(row._id)}/image` : row.externalImageUrl ?? null,
+    imageUrl: publicTransactionImageUrl(row),
     imageMimeType: row.imageMimeType ?? null,
     createdAt: row.createdAt,
   };
@@ -60,6 +60,35 @@ export const deleteWallet: RequestHandler = async (request, response) => { const
 export const archiveWallet: RequestHandler = async (request, response) => { const wallet = await WalletModel.findOneAndUpdate({ _id: request.params.id, userId: request.user!.id, active: true }, { $set: { active: false } }, { new: true }); if (!wallet) throw new AppError(404, 'Không tìm thấy ví', 'WALLET_NOT_FOUND'); response.status(204).send(); };
 
 export const listTransactions: RequestHandler = async (request, response) => { const query: Record<string, unknown> = { userId: request.user!.id }; if (typeof request.query.from === 'string') query.dateKey = { ...(query.dateKey as object ?? {}), $gte: request.query.from }; if (typeof request.query.to === 'string') query.dateKey = { ...(query.dateKey as object ?? {}), $lte: request.query.to }; if (typeof request.query.walletId === 'string' && mongoose.isValidObjectId(request.query.walletId)) query.$or = [{ walletId: request.query.walletId }, { toWalletId: request.query.walletId }]; const rows = await TransactionModel.find(query).sort({ transactionDate: -1 }).limit(500).lean(); response.json({ transactions: rows.map(toPublic) }); };
+
+export const getTransaction: RequestHandler = async (request, response) => {
+  const transactionId = typeof request.params.id === 'string' ? id(request.params.id) : undefined;
+  const row = transactionId && await TransactionModel.findOne({ _id: transactionId, userId: request.user!.id }).lean();
+  if (!row) throw new AppError(404, 'Không tìm thấy giao dịch', 'TRANSACTION_NOT_FOUND');
+  response.json({ transaction: toPublic(row) });
+};
+
+export const replaceTransactionImage: RequestHandler = async (request, response) => {
+  const transactionId = typeof request.params.id === 'string' ? id(request.params.id) : undefined;
+  if (!transactionId) throw new AppError(404, 'Không tìm thấy giao dịch', 'TRANSACTION_NOT_FOUND');
+  const file = request.file;
+  if (!file) throw new AppError(400, 'Vui lòng chọn ảnh hóa đơn.', 'IMAGE_REQUIRED');
+  const imageKey = await savePrivateImage(file);
+  let previous;
+  try {
+    previous = await TransactionModel.findOneAndUpdate(
+      { _id: transactionId, userId: request.user!.id, type: { $ne: 'transfer' } },
+      { $set: { imageKey, imageMimeType: file.mimetype, imageSize: file.size }, $unset: { externalImageUrl: 1 } },
+      { returnDocument: 'before' },
+    ).select('imageKey').lean();
+    if (!previous) throw new AppError(404, 'Không tìm thấy giao dịch có thể gắn ảnh.', 'TRANSACTION_NOT_FOUND');
+  } catch (error) {
+    await deletePrivateImage(imageKey).catch(err => logger.warn({ err }, 'could not clean up unused transaction image'));
+    throw error;
+  }
+  await deletePrivateImage(previous.imageKey).catch(err => logger.warn({ err }, 'could not clean up replaced transaction image'));
+  response.json({ imageUrl: publicTransactionImageUrl({ _id: transactionId, imageKey }) });
+};
 
 export const createTransaction: RequestHandler = async (request, response) => {
   const input = transactionSchema.parse(request.body); const userId = new mongoose.Types.ObjectId(request.user!.id); const walletId = id(input.walletId); const toWalletId = id(input.toWalletId); const amountMinor = Math.round(input.amount * 100);
@@ -131,7 +160,7 @@ export const updateTransaction: RequestHandler = async (request, response) => {
         transactionDate: txDateTime,
         dateKey: input.transactionDate,
         transactionTime: timePart,
-        ...(input.source ? { source: input.source } : replacementKey ? { source: 'camera' } : {}),
+        ...(existing.source === 'webhook_mbbank' ? {} : input.source ? { source: input.source } : replacementKey ? { source: 'camera' } : {}),
         ...(replacementKey ? { imageKey: replacementKey, externalImageUrl: undefined, imageMimeType: request.file?.mimetype, imageSize: request.file?.size } : {}),
         ...(externalImageUpdate ? { imageKey: undefined, externalImageUrl: input.imageUrl, imageMimeType: undefined, imageSize: undefined } : {})
       });

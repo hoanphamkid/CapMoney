@@ -56,7 +56,7 @@ Object.assign(categoryNames, ALL_CATEGORY_LABELS);
 
 export function CalendarPage() {
   const { user, profile } = useAuth();
-  const { theme: homeTheme, setTheme: setHomeTheme } = useAppTheme();
+  const { theme: homeTheme } = useAppTheme();
   const navigate = useNavigate();
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(todayKey());
@@ -916,11 +916,7 @@ export function CalendarPage() {
         />
       )}
       {themePickerOpen && (
-        <HomeThemePicker
-          selected={homeTheme}
-          onSelect={setHomeTheme}
-          onClose={() => setThemePickerOpen(false)}
-        />
+        <HomeThemePicker onClose={() => setThemePickerOpen(false)} />
       )}
     </div>
   );

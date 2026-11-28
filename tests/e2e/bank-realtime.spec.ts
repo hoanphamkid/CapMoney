@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures';
 
 const user = { id: 'bank-owner', email: 'bank@example.test', name: 'Bank Owner', role: 'user' };
-type BankTransaction = { id: string; type: string; amount: number; amountMinor: number; note: string; categoryId: string; walletId: string; dateKey: string; transactionTime: string; source: string; status: string; imageUrl: null };
+type BankTransaction = { id: string; type: string; amount: number; amountMinor: number; note: string; categoryId: string; walletId: string; dateKey: string; transactionTime: string; source: string; status: string; imageUrl: string | null };
 
 async function fixture(page: Page) {
   await page.addInitScript(() => {
@@ -20,6 +20,11 @@ async function fixture(page: Page) {
     if (path === '/api/auth/me') await route.fulfill({ json: { user, profile: {} } });
     else if (path === '/api/wallets') await route.fulfill({ json: { wallets: [wallet] } });
     else if (path === '/api/transactions') await route.fulfill({ json: { transactions } });
+    else if (path.startsWith('/api/transactions/') && route.request().method() === 'GET') {
+      const transaction = transactions.find(row => path === `/api/transactions/${row.id}`);
+      if (transaction) await route.fulfill({ json: { transaction } });
+      else await route.fulfill({ status: 404, json: { error: { code: 'TRANSACTION_NOT_FOUND', message: 'Không tìm thấy giao dịch' } } });
+    }
     else if (path === '/api/auth/sessions') await route.fulfill({ json: { sessions: [] } });
     else await route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } });
   });
@@ -68,6 +73,46 @@ test('catches up after reconnecting without notifying about old transactions', a
   await expect(page.locator('.ledger-row')).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Chọn ví MB Bank' })).toContainText('70.000');
   await expect(page.locator('.bank-notification-toast')).toHaveCount(0);
+});
+
+test('opens the exact bank bill from the notification and replaces only its photo', async ({ page }) => {
+  const state = await fixture(page);
+  await page.goto('/app/dashboard');
+  await expect(page.getByRole('heading', { name: 'Thống kê', exact: true })).toBeVisible();
+  const png = await page.evaluate(() => {
+    const image = document.createElement('canvas');
+    image.width = image.height = 32;
+    return image.toDataURL();
+  });
+  state.add('expense', 10_000);
+  const transaction = state.add('expense', 68_000);
+  transaction.imageUrl = png;
+  await emit(page, 'bank-transaction', transaction);
+  await page.locator('.bank-notification-toast').getByRole('link').click();
+  await expect(page).toHaveURL(`/app/transactions?transaction=${transaction.id}`);
+  const detail = page.locator('.expense-detail');
+  await expect(detail).toContainText('68.000');
+  await expect(detail).toContainText('MB Bank Auto');
+  await expect(detail.getByRole('button', { name: 'Thay ảnh hóa đơn' })).toBeVisible();
+
+  let photoBody = '';
+  let finishUpload!: () => void;
+  const pendingUpload = new Promise<void>(resolve => { finishUpload = resolve; });
+  await page.route(`**/api/transactions/${transaction.id}/image`, async route => {
+    photoBody = route.request().postData() ?? '';
+    await pendingUpload;
+    return route.fulfill({ json: { imageUrl: png } });
+  });
+  await detail.getByLabel('Tệp ảnh hóa đơn').setInputFiles({ name: 'bank-bill.png', mimeType: 'image/png', buffer: Buffer.from(png.split(',')[1], 'base64') });
+  await expect(page.getByAltText('Ảnh cần cắt')).toBeVisible();
+  await page.getByRole('button', { name: 'Dùng ảnh này' }).click();
+  try {
+    await expect(detail.getByRole('button', { name: 'Sửa chi tiết' })).toBeDisabled();
+    await expect(detail.getByRole('button', { name: 'Xóa', exact: true })).toBeDisabled();
+  } finally { finishUpload(); }
+  await expect(page).toHaveURL('/app/transactions');
+  expect(photoBody).toContain('name="image"');
+  expect(photoBody).not.toMatch(/name="(amount|note|walletId|source)"/);
 });
 
 test('refreshes statistics when a bank event arrives', async ({ page }) => {

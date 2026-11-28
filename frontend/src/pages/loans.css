@@ -9,7 +9,6 @@
   --loan-borrow: #ffc9b8;
   --loan-lend: #a0ece0;
   color: var(--loan-text);
-  color-scheme: dark;
 }
 
 .loans-page { display: grid; gap: 18px; min-width: 0; }
@@ -115,8 +114,8 @@
   text-align: left;
 }
 .loans-row:last-child { border-bottom: 0; }
-.loans-row-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: #392a2b; color: var(--loan-borrow); }
-.loans-row-icon.lend { background: #203737; color: var(--loan-lend); }
+.loans-row-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: color-mix(in srgb, var(--loan-borrow) 17%, var(--loan-surface)); color: var(--loan-borrow); }
+.loans-row-icon.lend { background: color-mix(in srgb, var(--loan-lend) 17%, var(--loan-surface)); color: var(--loan-lend); }
 .loans-row-content, .loans-row-balance { display: grid; gap: 4px; min-width: 0; }
 .loans-row-balance { text-align: right; }
 .loans-row strong { font-size: .875rem; overflow-wrap: anywhere; }
